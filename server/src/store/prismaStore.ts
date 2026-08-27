@@ -301,7 +301,7 @@ export class PrismaStore implements AppStore {
 
   private async audit(actorUserId: string | undefined, workspaceId: string, eventType: string, entityType: string, entityId: string, metadata: Record<string, unknown>): Promise<AuditEvent> {
     const event = await this.prisma.auditEvent.create({
-      data: { workspaceId, actorUserId, eventType, entityType, entityId, metadata: metadata as Prisma.InputJsonObject }
+      data: { workspaceId, actorUserId, eventType, entityType, entityId, metadata: metadata as unknown as Prisma.InputJsonValue }
     });
     return {
       id: event.id,
