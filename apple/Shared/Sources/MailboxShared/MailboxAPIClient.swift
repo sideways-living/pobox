@@ -1,0 +1,39 @@
+import Foundation
+
+public actor MailboxAPIClient {
+    private let baseURL: URL
+    private let session: URLSession
+    private let decoder = JSONDecoder()
+
+    public init(baseURL: URL, session: URLSession = .shared) {
+        self.baseURL = baseURL
+        self.session = session
+    }
+
+    public func dashboard(workspaceId: String) async throws -> MailboxDashboardSnapshot {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/dashboard")
+        let (data, response) = try await session.data(from: url)
+        try validate(response)
+        return try decoder.decode(MailboxDashboardSnapshot.self, from: data)
+    }
+
+    public func collectMailbox(workspaceId: String, mailboxId: String, source: MailboxCollectionSource) async throws {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/mailboxes/\(mailboxId)/collect")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["source": source.rawValue])
+        let (_, response) = try await session.data(for: request)
+        try validate(response)
+    }
+
+    private func validate(_ response: URLResponse) throws {
+        guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
+            throw MailboxAPIError.requestFailed
+        }
+    }
+}
+
+public enum MailboxAPIError: Error {
+    case requestFailed
+}

@@ -1,0 +1,267 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum MemberStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+enum CollectionSource {
+  IPHONE
+  MACOS
+  WEB
+  ADMIN
+  NOTIFICATION
+}
+
+model User {
+  id                String              @id @default(uuid())
+  email             String              @unique
+  passwordHash      String
+  emailVerified     Boolean             @default(false)
+  active            Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  lastLoginAt       DateTime?
+  profile           UserProfile?
+  memberships       WorkspaceMember[]
+  collectedEvents   CollectionEvent[]
+  devices           Device[]
+  passkeyCredentials PasskeyCredential[]
+}
+
+model UserProfile {
+  userId      String   @id
+  displayName String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Workspace {
+  id                      String                   @id @default(uuid())
+  name                    String
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  members                 WorkspaceMember[]
+  invitations             Invitation[]
+  postOffices             PostOffice[]
+  mailboxes               Mailbox[]
+  mailEvents              MailEvent[]
+  collectionEvents        CollectionEvent[]
+  emailConnections        EmailConnection[]
+  parsingRules            ParsingRule[]
+  devices                 Device[]
+  notificationPreferences NotificationPreference[]
+  auditEvents             AuditEvent[]
+}
+
+model WorkspaceMember {
+  id          String       @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        Role
+  status      MemberStatus @default(INVITED)
+  invitedBy   String?
+  joinedAt    DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+model Invitation {
+  id          String    @id @default(uuid())
+  workspaceId String
+  email       String
+  role        Role
+  tokenHash   String
+  invitedBy   String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([email])
+}
+
+model PostOffice {
+  id              String    @id @default(uuid())
+  workspaceId     String
+  name            String
+  address         String
+  latitude        Decimal
+  longitude       Decimal
+  geofenceRadius  Int       @default(200)
+  active          Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id])
+  mailboxes       Mailbox[]
+
+  @@index([workspaceId])
+}
+
+model Mailbox {
+  id                   String            @id @default(uuid())
+  workspaceId           String
+  postOfficeId          String
+  name                 String
+  boxNumber            String
+  active               Boolean           @default(true)
+  mailWaiting          Boolean           @default(false)
+  latestNotificationAt DateTime?
+  lastCollectedAt      DateTime?
+  lastCollectedBy      String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  workspace            Workspace         @relation(fields: [workspaceId], references: [id])
+  postOffice           PostOffice        @relation(fields: [postOfficeId], references: [id])
+  mailEvents           MailEvent[]
+  collectionEvents     CollectionEvent[]
+
+  @@unique([workspaceId, boxNumber])
+  @@index([workspaceId, postOfficeId])
+}
+
+model MailEvent {
+  id                String    @id @default(uuid())
+  workspaceId       String
+  mailboxId         String
+  provider          String
+  providerMessageId String
+  sender            String
+  subject           String
+  receivedAt        DateTime
+  parserConfidence  Float
+  parserRuleId      String?
+  processedAt       DateTime  @default(now())
+  workspace         Workspace @relation(fields: [workspaceId], references: [id])
+  mailbox           Mailbox   @relation(fields: [mailboxId], references: [id])
+
+  @@unique([workspaceId, provider, providerMessageId])
+  @@index([workspaceId, mailboxId])
+}
+
+model CollectionEvent {
+  id          String           @id @default(uuid())
+  workspaceId String
+  mailboxId   String
+  collectedBy String
+  collectedAt DateTime         @default(now())
+  deviceId    String?
+  source      CollectionSource
+  method      String
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id])
+  mailbox     Mailbox          @relation(fields: [mailboxId], references: [id])
+  user        User             @relation(fields: [collectedBy], references: [id])
+
+  @@index([workspaceId, mailboxId])
+}
+
+model ManualStatusEvent {
+  id          String   @id @default(uuid())
+  workspaceId String
+  mailboxId   String
+  actorUserId String
+  oldState    String
+  newState    String
+  createdAt   DateTime @default(now())
+}
+
+model EmailConnection {
+  id                           String    @id @default(uuid())
+  workspaceId                  String
+  provider                     String
+  accountEmail                 String
+  encryptedCredentialReference String
+  status                       String
+  active                       Boolean   @default(true)
+  lastSuccessfulConnection     DateTime?
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+  workspace                    Workspace @relation(fields: [workspaceId], references: [id])
+}
+
+model ParsingRule {
+  id             String    @id @default(uuid())
+  workspaceId    String
+  senderPattern  String?
+  subjectPattern String?
+  bodyPattern    String?
+  extractionRule String
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id])
+}
+
+model Device {
+  id          String    @id @default(uuid())
+  workspaceId String
+  userId      String
+  platform    String
+  pushToken   String
+  name        String?
+  lastSeenAt  DateTime?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([workspaceId, userId])
+}
+
+model NotificationPreference {
+  id               String    @id @default(uuid())
+  workspaceId      String
+  userId           String
+  newMailEnabled   Boolean   @default(true)
+  locationEnabled  Boolean   @default(false)
+  activityEnabled  Boolean   @default(false)
+  workspace        Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, userId])
+}
+
+model PasskeyCredential {
+  id           String    @id @default(uuid())
+  userId       String
+  credentialId String    @unique
+  publicKey    Bytes
+  counter      BigInt    @default(0)
+  transports   String[]
+  friendlyName String?
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+  user         User      @relation(fields: [userId], references: [id])
+}
+
+model AuditEvent {
+  id          String    @id @default(uuid())
+  workspaceId String
+  actorUserId String?
+  eventType   String
+  entityType  String
+  entityId    String
+  metadata    Json
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, createdAt])
+}

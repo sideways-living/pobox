@@ -1,0 +1,20 @@
+[Unit]
+Description=Mailbox Node API
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=mailboxapp
+Group=mailboxapp
+WorkingDirectory=/opt/mailbox/current/server
+EnvironmentFile=/etc/mailbox/mailbox.env
+ExecStart=/usr/bin/node dist/src/index.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
