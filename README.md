@@ -16,11 +16,27 @@ Demo accounts use `Password123!`:
 - `sarah@example.com` Member
 - `john@example.com` Member
 
-The development MVP runs with `MAILBOX_STORAGE=memory` by default and includes simulation controls in the web app. PostgreSQL production schema is in `server/prisma/schema.prisma`.
+The development MVP runs with `MAILBOX_STORAGE=memory` by default and includes simulation controls in the web app.
+
+## PostgreSQL Mode
+
+For durable local development:
+
+```bash
+createdb mailbox
+cp .env.example .env
+# set DATABASE_URL and MAILBOX_STORAGE=prisma in .env
+npm run prisma:migrate --workspace server
+npm run prisma:seed --workspace server
+MAILBOX_STORAGE=prisma npm run dev:server
+```
+
+The checked-in initial migration lives at `server/prisma/migrations/000001_init/migration.sql`. Demo seeding is explicit in production; `PrismaStore.seedDemo()` does not create demo accounts when `NODE_ENV=production` unless `MAILBOX_SEED_DEMO=true`.
 
 ## Current MVP Slice
 
 - Fastify TypeScript API with secure HTTP-only session cookie login.
+- Store boundary with memory mode for fast local tests and Prisma/PostgreSQL mode for durable runtime persistence.
 - Shared workspace state for post offices and mailboxes.
 - Deterministic parser for PO Box wording variants.
 - Provider message dedupe by `workspace + provider + providerMessageId`.

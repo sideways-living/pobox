@@ -14,23 +14,10 @@ import type {
   WorkspaceMember
 } from "../domain.js";
 import { parseMailNotification } from "../parser/mailParser.js";
+import type { AppStore, IncomingMailResult, IncomingProviderMessage } from "./types.js";
+import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "./types.js";
 
-export class ForbiddenError extends Error {}
-export class UnauthorizedError extends Error {}
-export class ConflictError extends Error {}
-export class NotFoundError extends Error {}
-
-export interface IncomingProviderMessage {
-  workspaceId: string;
-  provider: string;
-  providerMessageId: string;
-  sender: string;
-  subject: string;
-  bodyPreview?: string;
-  receivedAt?: string;
-}
-
-export class MemoryStore {
+export class MemoryStore implements AppStore {
   users = new Map<string, User>();
   workspaces = new Map<string, Workspace>();
   members = new Map<string, WorkspaceMember>();
@@ -140,7 +127,7 @@ export class MemoryStore {
     return session;
   }
 
-  getSession(sessionId?: string): Session {
+  async getSession(sessionId?: string): Promise<Session> {
     if (!sessionId) throw new UnauthorizedError("Missing session.");
     const session = this.sessions.get(sessionId);
     if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
@@ -149,7 +136,7 @@ export class MemoryStore {
     return session;
   }
 
-  requireMember(session: Session, workspaceId: string, role?: "ADMIN"): WorkspaceMember {
+  async requireMember(session: Session, workspaceId: string, role?: "ADMIN"): Promise<WorkspaceMember> {
     const member = [...this.members.values()].find(
       (candidate) =>
         candidate.userId === session.userId &&
@@ -161,8 +148,8 @@ export class MemoryStore {
     return member;
   }
 
-  dashboard(session: Session, workspaceId: string): DashboardSnapshot {
-    const member = this.requireMember(session, workspaceId);
+  async dashboard(session: Session, workspaceId: string): Promise<DashboardSnapshot> {
+    const member = await this.requireMember(session, workspaceId);
     const user = this.users.get(session.userId);
     const workspace = this.workspaces.get(workspaceId);
     if (!user || !workspace) throw new NotFoundError("Workspace not found.");
@@ -183,17 +170,17 @@ export class MemoryStore {
     return {
       workspace,
       currentUser: { id: user.id, email: user.email, displayName: user.displayName, role: member.role },
-      outstandingMailboxCount: this.outstandingMailboxCount(workspaceId),
+      outstandingMailboxCount: await this.outstandingMailboxCount(workspaceId),
       postOffices,
       history
     };
   }
 
-  outstandingMailboxCount(workspaceId: string): number {
+  async outstandingMailboxCount(workspaceId: string): Promise<number> {
     return [...this.mailboxes.values()].filter((box) => box.workspaceId === workspaceId && box.active && box.mailWaiting).length;
   }
 
-  processIncomingMail(input: IncomingProviderMessage): { kind: "processed" | "duplicate" | "needs_review"; mailboxId?: string } {
+  async processIncomingMail(input: IncomingProviderMessage): Promise<IncomingMailResult> {
     const duplicateKey = `${input.provider}:${input.providerMessageId}`;
     const duplicate = [...this.mailEvents.values()].find(
       (event) => `${event.provider}:${event.providerMessageId}` === duplicateKey && event.workspaceId === input.workspaceId
@@ -242,8 +229,8 @@ export class MemoryStore {
     return { kind: "processed", mailboxId: mailbox.id };
   }
 
-  collectMailbox(session: Session, workspaceId: string, mailboxId: string, source: CollectionSource): CollectionEvent {
-    this.requireMember(session, workspaceId);
+  async collectMailbox(session: Session, workspaceId: string, mailboxId: string, source: CollectionSource): Promise<CollectionEvent> {
+    await this.requireMember(session, workspaceId);
     const mailbox = this.mailboxes.get(mailboxId);
     if (!mailbox || mailbox.workspaceId !== workspaceId) throw new NotFoundError("Mailbox not found.");
     if (!mailbox.mailWaiting) {
@@ -276,8 +263,8 @@ export class MemoryStore {
     return event;
   }
 
-  inviteMember(session: Session, workspaceId: string, email: string, role: "ADMIN" | "MEMBER") {
-    this.requireMember(session, workspaceId, "ADMIN");
+  async inviteMember(session: Session, workspaceId: string, email: string, role: "ADMIN" | "MEMBER") {
+    await this.requireMember(session, workspaceId, "ADMIN");
     const event = this.audit(session.userId, workspaceId, "member.invited", "workspace", workspaceId, { email, role });
     return { invitationId: event.id, email, role, status: "PENDING_EMAIL_DELIVERY" };
   }
@@ -297,5 +284,3 @@ export class MemoryStore {
     return event;
   }
 }
-
-export const store = new MemoryStore();

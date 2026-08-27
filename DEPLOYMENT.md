@@ -36,7 +36,14 @@ CREATE USER mailboxapp WITH ENCRYPTED PASSWORD 'replace-me';
 GRANT ALL PRIVILEGES ON DATABASE mailbox TO mailboxapp;
 ```
 
-Set `DATABASE_URL` in `/etc/mailbox/mailbox.env`, then run Prisma migrations with `deploy/scripts/migrate-db.sh`.
+Set `DATABASE_URL` in `/etc/mailbox/mailbox.env` with:
+
+```text
+MAILBOX_STORAGE=prisma
+MAILBOX_SEED_DEMO=false
+```
+
+Then run Prisma migrations with `deploy/scripts/migrate-db.sh`. Do not seed demo users in production unless intentionally standing up a disposable test environment.
 
 ## Node Server
 

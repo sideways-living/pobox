@@ -37,9 +37,20 @@ model User {
   lastLoginAt       DateTime?
   profile           UserProfile?
   memberships       WorkspaceMember[]
+  sessions          Session[]
   collectedEvents   CollectionEvent[]
   devices           Device[]
   passkeyCredentials PasskeyCredential[]
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, expiresAt])
 }
 
 model UserProfile {
