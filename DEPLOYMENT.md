@@ -56,7 +56,7 @@ sudo systemctl enable --now mailbox-api
 
 ## Web
 
-Build and copy static assets with `deploy/scripts/deploy-web.sh`.
+For a plain Nginx/systemd deployment, build and copy static assets with `deploy/scripts/deploy-web.sh`. For CloudPanel Node.js sites, the Node server can serve `web/dist` directly after `npm run build`; set the app port to `4175` and startup command to `bash -lc 'set -a; source .env; set +a; npm run start --workspace server'`.
 
 ## Nginx And TLS
 

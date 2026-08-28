@@ -2,8 +2,11 @@ import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
+import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
 import Fastify from "fastify";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { z } from "zod";
 import { realtimeHub } from "../realtime/hub.js";
 import { MemoryStore } from "../store/memoryStore.js";
@@ -117,6 +120,21 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     realtimeHub.add(workspaceId, socket);
     socket.send(JSON.stringify({ type: "connected", workspaceId }));
   });
+
+  const webDistPath =
+    process.env.WEB_DIST_PATH ||
+    [path.resolve(process.cwd(), "web/dist"), path.resolve(process.cwd(), "../web/dist")].find((candidate) =>
+      existsSync(candidate)
+    );
+  if (process.env.NODE_ENV === "production" && webDistPath && existsSync(webDistPath)) {
+    await app.register(fastifyStatic, {
+      root: webDistPath
+    });
+    app.setNotFoundHandler(async (request, reply) => {
+      if (request.url.startsWith("/api/")) return reply.code(404).send({ error: "Not found." });
+      return reply.sendFile("index.html");
+    });
+  }
 
   return app;
 }

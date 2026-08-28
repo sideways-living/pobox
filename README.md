@@ -37,6 +37,7 @@ The checked-in initial migration lives at `server/prisma/migrations/000001_init/
 
 - Fastify TypeScript API with secure HTTP-only session cookie login.
 - Store boundary with memory mode for fast local tests and Prisma/PostgreSQL mode for durable runtime persistence.
+- In production, the Node server serves the built React app from `web/dist` as well as `/api`, so a CloudPanel Node.js site can run on one app port.
 - Shared workspace state for post offices and mailboxes.
 - Deterministic parser for PO Box wording variants.
 - Provider message dedupe by `workspace + provider + providerMessageId`.
@@ -54,3 +55,16 @@ Passkeys, APNs, provider OAuth, SMTP delivery, and full Prisma-backed repository
 npm test
 npm run build
 ```
+
+## CloudPanel Runtime
+
+After `npm run build`, start one Node.js app:
+
+```bash
+set -a
+source .env
+set +a
+npm run start --workspace server
+```
+
+Use app port `4175`. In production, `/api/...` routes go to Fastify and all other browser routes fall back to `web/dist/index.html`.

@@ -19,6 +19,7 @@
     "@fastify/cors": "^11.1.0",
     "@fastify/helmet": "^13.0.1",
     "@fastify/rate-limit": "^10.3.0",
+    "@fastify/static": "^10.1.3",
     "@fastify/websocket": "^11.2.0",
     "@prisma/client": "6.12.0",
     "@simplewebauthn/server": "^13.1.2",
