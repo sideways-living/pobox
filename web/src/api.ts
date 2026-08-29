@@ -1,6 +1,6 @@
 import type { DashboardSnapshot } from "./types";
 
-const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4175";
+const apiBase = import.meta.env.VITE_API_BASE_URL ?? window.location.origin;
 export const workspaceId = "ws_company";
 
 export async function login(email: string, password: string) {
