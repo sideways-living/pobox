@@ -1,14 +1,39 @@
 import SwiftUI
 import MailboxShared
+import AppKit
 
 @main
 struct MailboxMacOSApp: App {
+    @NSApplicationDelegateAdaptor(MailboxMacOSAppDelegate.self) private var appDelegate
+
     var body: some Scene {
-        WindowGroup {
-            MacOverviewView()
-                .frame(minWidth: 900, minHeight: 600)
+        Settings {
+            EmptyView()
         }
-        .defaultSize(width: 1100, height: 720)
+    }
+}
+
+final class MailboxMacOSAppDelegate: NSObject, NSApplicationDelegate {
+    private var window: NSWindow?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Mailbox"
+        window.contentMinSize = NSSize(width: 900, height: 600)
+        window.contentView = NSHostingView(rootView: MacOverviewView())
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        self.window = window
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
     }
 }
 
