@@ -17,6 +17,9 @@ import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from 
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
 const twoFactorSchema = z.object({ challengeId: z.string().min(16), code: z.string().min(6).max(32) });
 const totpConfirmSchema = z.object({ code: z.string().min(6).max(32) });
+const passkeyRegistrationSchema = z.object({ response: z.any(), friendlyName: z.string().min(1).max(80).optional() });
+const passkeyAuthenticationOptionsSchema = z.object({ email: z.string().email().optional() });
+const passkeyAuthenticationSchema = z.object({ response: z.any() });
 const collectSchema = z.object({ source: z.enum(["IPHONE", "MACOS", "WEB", "ADMIN", "NOTIFICATION"]).default("WEB") });
 const simulateSchema = z.object({
   mailboxNumber: z.string().min(2),
@@ -113,10 +116,34 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     return { ok: true };
   });
 
-  app.post("/api/v1/auth/passkeys/registration-options", async () => ({
-    status: "NOT_CONFIGURED",
-    message: "WebAuthn dependency and schema are present; production RP settings must be configured before enabling registration."
-  }));
+  app.post("/api/v1/auth/passkeys/registration-options", async (request) => {
+    const session = await store.getSession(sessionCookie(request.cookies));
+    return store.beginPasskeyRegistration(session);
+  });
+
+  app.post("/api/v1/auth/passkeys/register", async (request) => {
+    const body = passkeyRegistrationSchema.parse(request.body);
+    const session = await store.getSession(sessionCookie(request.cookies));
+    return store.verifyPasskeyRegistration(session, body.response, body.friendlyName);
+  });
+
+  app.post("/api/v1/auth/passkeys/authentication-options", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request) => {
+    const body = passkeyAuthenticationOptionsSchema.parse(request.body ?? {});
+    return store.beginPasskeyAuthentication(body.email);
+  });
+
+  app.post("/api/v1/auth/passkeys/authenticate", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const body = passkeyAuthenticationSchema.parse(request.body);
+    const session = await store.verifyPasskeyAuthentication(body.response);
+    reply.setCookie(sessionCookieName, session.id, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      expires: new Date(session.expiresAt)
+    });
+    return { ok: true, expiresAt: session.expiresAt, previousLoginAt: session.previousLoginAt };
+  });
 
   app.get("/api/v1/auth/security", async (request) => {
     const session = await store.getSession(sessionCookie(request.cookies));

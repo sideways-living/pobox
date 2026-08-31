@@ -1,8 +1,17 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import {
+  generateAuthenticationOptions,
+  generateRegistrationOptions,
+  verifyAuthenticationResponse,
+  verifyRegistrationResponse,
+  type AuthenticationResponseJSON,
+  type RegistrationResponseJSON
+} from "@simplewebauthn/server";
 import argon2 from "argon2";
 import { createHash, randomBytes } from "node:crypto";
 import { decryptSecret, encryptSecret, generateRecoveryCodes, generateTotpSecret, hashRecoveryCode, recoveryCodeMatches, totpUri, verifyTotp } from "../auth/totp.js";
+import { challengeFromClientData, webAuthnConfig } from "../auth/webauthn.js";
 import type {
   AuditEvent,
   CollectionEvent,
@@ -26,6 +35,8 @@ import type {
   IncomingMailResult,
   IncomingProviderMessage,
   LoginResult,
+  PasskeyAuthenticationOptions,
+  PasskeyRegistrationOptions,
   SecurityStatus,
   TeamMemberSummary
 } from "./types.js";
@@ -161,7 +172,7 @@ export class PrismaStore implements AppStore {
       this.prisma.recoveryCode.count({ where: { userId: session.userId, usedAt: null } })
     ]);
     if (!user) throw new UnauthorizedError("Missing user.");
-    return { passkeysAvailable: false, passkeyCount, totpEnabled: user.totpEnabled, recoveryCodesRemaining };
+    return { passkeysAvailable: this.passkeysAvailable(), passkeyCount, totpEnabled: user.totpEnabled, recoveryCodesRemaining };
   }
 
   async beginTotpSetup(session: Session) {
@@ -210,6 +221,133 @@ export class PrismaStore implements AppStore {
     ]);
   }
 
+  async beginPasskeyRegistration(session: Session): Promise<PasskeyRegistrationOptions> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: session.userId },
+      include: { profile: true, passkeyCredentials: true }
+    });
+    if (!user) throw new UnauthorizedError("Missing user.");
+    const config = webAuthnConfig();
+    const options = await generateRegistrationOptions({
+      rpName: config.rpName,
+      rpID: config.rpID,
+      userName: user.email,
+      userID: Uint8Array.from(Buffer.from(user.id)),
+      userDisplayName: user.profile?.displayName ?? user.email,
+      attestationType: "none",
+      excludeCredentials: user.passkeyCredentials.map((credential) => ({
+        id: credential.credentialId,
+        transports: credential.transports as Array<"ble" | "cable" | "hybrid" | "internal" | "nfc" | "smart-card" | "usb">
+      })),
+      authenticatorSelection: { residentKey: "required", userVerification: "required" }
+    });
+    await this.prisma.webAuthnChallenge.create({
+      data: {
+        userId: user.id,
+        type: "registration",
+        challenge: options.challenge,
+        expiresAt: new Date(Date.now() + 1000 * 60 * 10)
+      }
+    });
+    return { options };
+  }
+
+  async verifyPasskeyRegistration(session: Session, response: RegistrationResponseJSON, friendlyName?: string): Promise<SecurityStatus> {
+    const responseChallenge = challengeFromClientData(response.response.clientDataJSON);
+    const [user, challenge] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: session.userId } }),
+      this.prisma.webAuthnChallenge.findFirst({
+        where: { userId: session.userId, type: "registration", challenge: responseChallenge, expiresAt: { gt: new Date() } }
+      })
+    ]);
+    if (!user || !challenge) throw new UnauthorizedError("Passkey registration expired.");
+    const config = webAuthnConfig();
+    const verification = await verifyRegistrationResponse({
+      response,
+      expectedChallenge: challenge.challenge,
+      expectedOrigin: config.origin,
+      expectedRPID: config.rpID
+    });
+    if (!verification.verified) throw new UnauthorizedError("Passkey registration could not be verified.");
+    await this.prisma.$transaction([
+      this.prisma.passkeyCredential.create({
+        data: {
+          userId: user.id,
+          credentialId: verification.registrationInfo.credential.id,
+          publicKey: Buffer.from(verification.registrationInfo.credential.publicKey),
+          counter: verification.registrationInfo.credential.counter,
+          transports: verification.registrationInfo.credential.transports ?? [],
+          friendlyName: friendlyName?.trim() || "Passkey"
+        }
+      }),
+      this.prisma.webAuthnChallenge.deleteMany({ where: { userId: user.id, type: "registration" } })
+    ]);
+    return this.securityStatus(session);
+  }
+
+  async beginPasskeyAuthentication(email?: string): Promise<PasskeyAuthenticationOptions> {
+    const user = email ? await this.prisma.user.findUnique({ where: { email: email.toLowerCase() }, include: { passkeyCredentials: true } }) : null;
+    const allowedCredentials = user?.passkeyCredentials.map((credential) => ({
+      id: credential.credentialId,
+      transports: credential.transports as Array<"ble" | "cable" | "hybrid" | "internal" | "nfc" | "smart-card" | "usb">
+    }));
+    const config = webAuthnConfig();
+    const options = await generateAuthenticationOptions({
+      rpID: config.rpID,
+      allowCredentials: allowedCredentials && allowedCredentials.length > 0 ? allowedCredentials : undefined,
+      userVerification: "required"
+    });
+    await this.prisma.webAuthnChallenge.create({
+      data: {
+        userId: user?.id,
+        type: "authentication",
+        challenge: options.challenge,
+        expiresAt: new Date(Date.now() + 1000 * 60 * 10)
+      }
+    });
+    return { options };
+  }
+
+  async verifyPasskeyAuthentication(response: AuthenticationResponseJSON): Promise<Session> {
+    const credential = await this.prisma.passkeyCredential.findUnique({
+      where: { credentialId: response.id },
+      include: { user: true }
+    });
+    if (!credential || !credential.user.active) throw new UnauthorizedError("Passkey is not registered.");
+    const responseChallenge = challengeFromClientData(response.response.clientDataJSON);
+    const challenge = await this.prisma.webAuthnChallenge.findFirst({
+      where: {
+        type: "authentication",
+        challenge: responseChallenge,
+        OR: [{ userId: null }, { userId: credential.userId }],
+        expiresAt: { gt: new Date() }
+      }
+    });
+    if (!challenge) throw new UnauthorizedError("Passkey sign-in expired.");
+    const config = webAuthnConfig();
+    const verification = await verifyAuthenticationResponse({
+      response,
+      expectedChallenge: challenge.challenge,
+      expectedOrigin: config.origin,
+      expectedRPID: config.rpID,
+      credential: {
+        id: credential.credentialId,
+        publicKey: new Uint8Array(credential.publicKey).slice(),
+        counter: Number(credential.counter),
+        transports: credential.transports as Array<"ble" | "cable" | "hybrid" | "internal" | "nfc" | "smart-card" | "usb">
+      }
+    });
+    if (!verification.verified) throw new UnauthorizedError("Passkey sign-in could not be verified.");
+    await this.prisma.$transaction([
+      this.prisma.passkeyCredential.update({
+        where: { id: credential.id },
+        data: { counter: verification.authenticationInfo.newCounter, lastUsedAt: new Date() }
+      }),
+      this.prisma.webAuthnChallenge.delete({ where: { id: challenge.id } })
+    ]);
+    return this.createSession(credential.userId, credential.user.lastLoginAt?.toISOString());
+  }
+
   private async createSession(userId: string, previousLoginAt?: string): Promise<Session> {
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
     const session = await this.prisma.session.create({
@@ -217,6 +355,15 @@ export class PrismaStore implements AppStore {
     });
     await this.prisma.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } });
     return { ...this.toSession(session), previousLoginAt };
+  }
+
+  private passkeysAvailable() {
+    try {
+      const config = webAuthnConfig();
+      return Boolean(config.rpID && config.origin);
+    } catch {
+      return false;
+    }
   }
 
   async getSession(sessionId?: string): Promise<Session> {

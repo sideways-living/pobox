@@ -1,3 +1,5 @@
+import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
+
 export interface Mailbox {
   id: string;
   name: string;
@@ -72,6 +74,14 @@ export interface SecurityStatus {
 export interface TotpSetup {
   secret: string;
   otpauthUrl: string;
+}
+
+export interface PasskeyRegistrationOptions {
+  options: PublicKeyCredentialCreationOptionsJSON;
+}
+
+export interface PasskeyAuthenticationOptions {
+  options: PublicKeyCredentialRequestOptionsJSON;
 }
 
 export interface AppChange {

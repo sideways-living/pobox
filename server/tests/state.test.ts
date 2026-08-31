@@ -106,6 +106,22 @@ describe("shared mailbox state", () => {
     await expect(store.verifySecondFactor(secondChallenge.challengeId, recovery.recoveryCodes[0])).rejects.toThrow("Invalid two-factor code.");
   });
 
+  it("generates passkey registration and authentication options", async () => {
+    const john = await loginSession("john@example.com");
+    const registration = await store.beginPasskeyRegistration(john);
+    expect(registration.options.rp.id).toBe("localhost");
+    expect(registration.options.user.name).toBe("john@example.com");
+    expect(registration.options.challenge).toBeTruthy();
+
+    const authentication = await store.beginPasskeyAuthentication("john@example.com");
+    expect(authentication.options.rpId).toBe("localhost");
+    expect(authentication.options.challenge).toBeTruthy();
+
+    const status = await store.securityStatus(john);
+    expect(status.passkeysAvailable).toBe(true);
+    expect(status.passkeyCount).toBe(0);
+  });
+
   it("rejects member-only admin operations", async () => {
     const sarah = await loginSession("sarah@example.com");
     await expect(store.inviteMember(sarah, "ws_company", "alex@example.com", "MEMBER")).rejects.toThrow("Admin role required.");

@@ -1,3 +1,9 @@
+import type {
+  AuthenticationResponseJSON,
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+  RegistrationResponseJSON
+} from "@simplewebauthn/server";
 import type { CollectionEvent, CollectionSource, DashboardSnapshot, Mailbox, PostOffice, Session, WorkspaceMember } from "../domain.js";
 
 export class ForbiddenError extends Error {}
@@ -70,6 +76,14 @@ export interface ConfirmTotpResult {
   recoveryCodes: string[];
 }
 
+export interface PasskeyRegistrationOptions {
+  options: PublicKeyCredentialCreationOptionsJSON;
+}
+
+export interface PasskeyAuthenticationOptions {
+  options: PublicKeyCredentialRequestOptionsJSON;
+}
+
 export interface AppStore {
   seedDemo(): Promise<void>;
   login(email: string, password: string): Promise<LoginResult>;
@@ -79,6 +93,10 @@ export interface AppStore {
   beginTotpSetup(session: Session): Promise<TotpSetup>;
   confirmTotpSetup(session: Session, code: string): Promise<ConfirmTotpResult>;
   disableTotp(session: Session, code: string): Promise<void>;
+  beginPasskeyRegistration(session: Session): Promise<PasskeyRegistrationOptions>;
+  verifyPasskeyRegistration(session: Session, response: RegistrationResponseJSON, friendlyName?: string): Promise<SecurityStatus>;
+  beginPasskeyAuthentication(email?: string): Promise<PasskeyAuthenticationOptions>;
+  verifyPasskeyAuthentication(response: AuthenticationResponseJSON): Promise<Session>;
   requireMember(session: Session, workspaceId: string, role?: "ADMIN"): Promise<WorkspaceMember>;
   dashboard(session: Session, workspaceId: string): Promise<DashboardSnapshot>;
   outstandingMailboxCount(workspaceId: string): Promise<number>;

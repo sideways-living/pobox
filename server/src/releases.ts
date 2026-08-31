@@ -1,4 +1,4 @@
-export const appVersion = "0.3.0";
+export const appVersion = "0.4.0";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.4.0-passkeys",
+    version: "0.4.0",
+    releasedAt: "2026-09-01T11:00:00.000Z",
+    title: "Passkey sign-in",
+    summary:
+      "pobox.watch now supports adding a passkey from Settings and signing in with that passkey from the login screen on compatible browsers and devices.",
+    audience: "ALL"
+  },
   {
     id: "0.3.0-two-factor-auth",
     version: "0.3.0",

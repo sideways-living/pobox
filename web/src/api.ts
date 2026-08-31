@@ -1,4 +1,16 @@
-import type { AppChangesResponse, CreateMailboxInput, CreatePostOfficeInput, CreateUserInput, DashboardSnapshot, LoginResult, SecurityStatus, TeamMember, TotpSetup } from "./types";
+import type {
+  AppChangesResponse,
+  CreateMailboxInput,
+  CreatePostOfficeInput,
+  CreateUserInput,
+  DashboardSnapshot,
+  LoginResult,
+  PasskeyAuthenticationOptions,
+  PasskeyRegistrationOptions,
+  SecurityStatus,
+  TeamMember,
+  TotpSetup
+} from "./types";
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? window.location.origin;
 export const workspaceId = "ws_company";
@@ -27,6 +39,48 @@ export async function verifySecondFactor(challengeId: string, code: string): Pro
 
 export async function loadSecurityStatus(): Promise<SecurityStatus> {
   const response = await fetch(`${apiBase}/api/v1/auth/security`, { credentials: "include" });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function beginPasskeyRegistration(): Promise<PasskeyRegistrationOptions> {
+  const response = await fetch(`${apiBase}/api/v1/auth/passkeys/registration-options`, {
+    method: "POST",
+    credentials: "include"
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function registerPasskey(responseJson: unknown, friendlyName?: string): Promise<SecurityStatus> {
+  const response = await fetch(`${apiBase}/api/v1/auth/passkeys/register`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ response: responseJson, friendlyName })
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function beginPasskeyAuthentication(email?: string): Promise<PasskeyAuthenticationOptions> {
+  const response = await fetch(`${apiBase}/api/v1/auth/passkeys/authentication-options`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(email ? { email } : {})
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function authenticatePasskey(responseJson: unknown): Promise<LoginResult> {
+  const response = await fetch(`${apiBase}/api/v1/auth/passkeys/authenticate`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ response: responseJson })
+  });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
 }

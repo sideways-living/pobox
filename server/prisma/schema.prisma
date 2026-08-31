@@ -43,6 +43,7 @@ model User {
   memberships       WorkspaceMember[]
   sessions          Session[]
   authChallenges    AuthChallenge[]
+  webAuthnChallenges WebAuthnChallenge[]
   recoveryCodes     RecoveryCode[]
   collectedEvents   CollectionEvent[]
   devices           Device[]
@@ -78,6 +79,19 @@ model RecoveryCode {
   user      User      @relation(fields: [userId], references: [id])
 
   @@index([userId, usedAt])
+}
+
+model WebAuthnChallenge {
+  id        String   @id @default(uuid())
+  userId    String?
+  type      String
+  challenge String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId, type, expiresAt])
+  @@index([challenge, type])
 }
 
 model UserProfile {

@@ -1,6 +1,15 @@
 import argon2 from "argon2";
+import {
+  generateAuthenticationOptions,
+  generateRegistrationOptions,
+  verifyAuthenticationResponse,
+  verifyRegistrationResponse,
+  type AuthenticationResponseJSON,
+  type RegistrationResponseJSON
+} from "@simplewebauthn/server";
 import { nanoid } from "nanoid";
 import { decryptSecret, encryptSecret, generateRecoveryCodes, generateTotpSecret, hashRecoveryCode, recoveryCodeMatches, totpUri, verifyTotp } from "../auth/totp.js";
+import { challengeFromClientData, webAuthnConfig } from "../auth/webauthn.js";
 import type {
   AuthChallenge,
   AuditEvent,
@@ -25,6 +34,8 @@ import type {
   IncomingMailResult,
   IncomingProviderMessage,
   LoginResult,
+  PasskeyAuthenticationOptions,
+  PasskeyRegistrationOptions,
   SecurityStatus,
   TeamMemberSummary
 } from "./types.js";
@@ -42,6 +53,8 @@ export class MemoryStore implements AppStore {
   sessions = new Map<string, Session>();
   authChallenges = new Map<string, AuthChallenge>();
   recoveryCodes = new Map<string, { id: string; userId: string; codeHash: string; usedAt?: string }>();
+  webAuthnChallenges = new Map<string, { id: string; userId?: string; type: "registration" | "authentication"; challenge: string; expiresAt: string; createdAt: string }>();
+  passkeyCredentials = new Map<string, { id: string; userId: string; credentialId: string; publicKey: ReturnType<Uint8Array["slice"]>; counter: number; transports: string[]; friendlyName: string; lastUsedAt?: string }>();
 
   async seedDemo() {
     if (this.users.size > 0) return;
@@ -164,8 +177,8 @@ export class MemoryStore implements AppStore {
     const user = this.users.get(session.userId);
     if (!user) throw new UnauthorizedError("Missing user.");
     return {
-      passkeysAvailable: false,
-      passkeyCount: 0,
+      passkeysAvailable: this.passkeysAvailable(),
+      passkeyCount: [...this.passkeyCredentials.values()].filter((credential) => credential.userId === user.id).length,
       totpEnabled: user.totpEnabled ?? false,
       recoveryCodesRemaining: [...this.recoveryCodes.values()].filter((code) => code.userId === user.id && !code.usedAt).length
     };
@@ -212,6 +225,104 @@ export class MemoryStore implements AppStore {
     }
   }
 
+  async beginPasskeyRegistration(session: Session): Promise<PasskeyRegistrationOptions> {
+    const user = this.users.get(session.userId);
+    if (!user) throw new UnauthorizedError("Missing user.");
+    const config = webAuthnConfig();
+    const existing = [...this.passkeyCredentials.values()].filter((credential) => credential.userId === user.id);
+    const options = await generateRegistrationOptions({
+      rpName: config.rpName,
+      rpID: config.rpID,
+      userName: user.email,
+      userID: Uint8Array.from(Buffer.from(user.id)),
+      userDisplayName: user.displayName,
+      attestationType: "none",
+      excludeCredentials: existing.map((credential) => ({
+        id: credential.credentialId,
+        transports: credential.transports as Array<"ble" | "cable" | "hybrid" | "internal" | "nfc" | "smart-card" | "usb">
+      })),
+      authenticatorSelection: { residentKey: "required", userVerification: "required" }
+    });
+    const id = nanoid();
+    this.webAuthnChallenges.set(id, { id, userId: user.id, type: "registration", challenge: options.challenge, expiresAt: new Date(Date.now() + 1000 * 60 * 10).toISOString(), createdAt: new Date().toISOString() });
+    return { options };
+  }
+
+  async verifyPasskeyRegistration(session: Session, response: RegistrationResponseJSON, friendlyName?: string): Promise<SecurityStatus> {
+    const responseChallenge = challengeFromClientData(response.response.clientDataJSON);
+    const user = this.users.get(session.userId);
+    const challenge = [...this.webAuthnChallenges.values()]
+      .find((candidate) => candidate.userId === session.userId && candidate.type === "registration" && candidate.challenge === responseChallenge && new Date(candidate.expiresAt).getTime() > Date.now());
+    if (!user || !challenge) throw new UnauthorizedError("Passkey registration expired.");
+    const config = webAuthnConfig();
+    const verification = await verifyRegistrationResponse({
+      response,
+      expectedChallenge: challenge.challenge,
+      expectedOrigin: config.origin,
+      expectedRPID: config.rpID
+    });
+    if (!verification.verified) throw new UnauthorizedError("Passkey registration could not be verified.");
+    const credential = verification.registrationInfo.credential;
+    this.passkeyCredentials.set(credential.id, {
+      id: nanoid(),
+      userId: user.id,
+      credentialId: credential.id,
+      publicKey: credential.publicKey.slice(),
+      counter: credential.counter,
+      transports: credential.transports ?? [],
+      friendlyName: friendlyName?.trim() || "Passkey"
+    });
+    for (const existing of [...this.webAuthnChallenges.values()].filter((candidate) => candidate.userId === user.id && candidate.type === "registration")) {
+      this.webAuthnChallenges.delete(existing.id);
+    }
+    return this.securityStatus(session);
+  }
+
+  async beginPasskeyAuthentication(email?: string): Promise<PasskeyAuthenticationOptions> {
+    const user = email ? [...this.users.values()].find((candidate) => candidate.email.toLowerCase() === email.toLowerCase()) : undefined;
+    const credentials = user ? [...this.passkeyCredentials.values()].filter((credential) => credential.userId === user.id) : undefined;
+    const allowedCredentials = credentials?.map((credential) => ({
+      id: credential.credentialId,
+      transports: credential.transports as Array<"ble" | "cable" | "hybrid" | "internal" | "nfc" | "smart-card" | "usb">
+    }));
+    const config = webAuthnConfig();
+    const options = await generateAuthenticationOptions({
+      rpID: config.rpID,
+      allowCredentials: allowedCredentials && allowedCredentials.length > 0 ? allowedCredentials : undefined,
+      userVerification: "required"
+    });
+    const id = nanoid();
+    this.webAuthnChallenges.set(id, { id, userId: user?.id, type: "authentication", challenge: options.challenge, expiresAt: new Date(Date.now() + 1000 * 60 * 10).toISOString(), createdAt: new Date().toISOString() });
+    return { options };
+  }
+
+  async verifyPasskeyAuthentication(response: AuthenticationResponseJSON): Promise<Session> {
+    const credential = this.passkeyCredentials.get(response.id);
+    const user = credential ? this.users.get(credential.userId) : undefined;
+    if (!credential || !user?.active) throw new UnauthorizedError("Passkey is not registered.");
+    const responseChallenge = challengeFromClientData(response.response.clientDataJSON);
+    const challenge = [...this.webAuthnChallenges.values()]
+      .find((candidate) => candidate.type === "authentication" && candidate.challenge === responseChallenge && (!candidate.userId || candidate.userId === credential.userId) && new Date(candidate.expiresAt).getTime() > Date.now());
+    if (!challenge) throw new UnauthorizedError("Passkey sign-in expired.");
+    const config = webAuthnConfig();
+    const verification = await verifyAuthenticationResponse({
+      response,
+      expectedChallenge: challenge.challenge,
+      expectedOrigin: config.origin,
+      expectedRPID: config.rpID,
+      credential: {
+        id: credential.credentialId,
+        publicKey: credential.publicKey,
+        counter: credential.counter,
+        transports: credential.transports as Array<"ble" | "cable" | "hybrid" | "internal" | "nfc" | "smart-card" | "usb">
+      }
+    });
+    if (!verification.verified) throw new UnauthorizedError("Passkey sign-in could not be verified.");
+    this.passkeyCredentials.set(credential.credentialId, { ...credential, counter: verification.authenticationInfo.newCounter, lastUsedAt: new Date().toISOString() });
+    this.webAuthnChallenges.delete(challenge.id);
+    return this.createSession(user);
+  }
+
   private async createSession(user: User): Promise<Session> {
     const previousLoginAt = user.lastLoginAt;
     const now = new Date().toISOString();
@@ -224,6 +335,15 @@ export class MemoryStore implements AppStore {
     this.users.set(user.id, { ...user, lastLoginAt: now });
     this.sessions.set(session.id, session);
     return session;
+  }
+
+  private passkeysAvailable() {
+    try {
+      const config = webAuthnConfig();
+      return Boolean(config.rpID && config.origin);
+    } catch {
+      return false;
+    }
   }
 
   async getSession(sessionId?: string): Promise<Session> {

@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import { Bell, Check, KeyRound, LogIn, Mail, MapPin, Plus, RefreshCw, Shield, Users } from "lucide-react";
 import {
+  authenticatePasskey,
+  beginPasskeyAuthentication,
+  beginPasskeyRegistration,
   beginTotpSetup,
   collectMailbox,
   confirmTotpSetup,
@@ -14,6 +18,7 @@ import {
   loadMembers,
   loadSecurityStatus,
   login,
+  registerPasskey,
   realtimeUrl,
   simulateMail,
   verifySecondFactor
@@ -186,6 +191,20 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
     }
   }
 
+  async function signInWithPasskey() {
+    try {
+      setBusy(true);
+      const options = await beginPasskeyAuthentication(email.includes("@") ? email : undefined);
+      const response = await startAuthentication({ optionsJSON: options.options });
+      const result = await authenticatePasskey(response);
+      if (result.ok) await onLogin(result.previousLoginAt);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to sign in with passkey.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="login-shell">
       <form className="login-panel" onSubmit={submit}>
@@ -205,7 +224,7 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
         {error && <div className="alert">{error}</div>}
         <button className="primary" disabled={busy}><LogIn size={18} />{challengeId ? "Verify Code" : "Sign In"}</button>
         {challengeId && <button type="button" className="secondary" onClick={() => setChallengeId(null)}>Use Password Instead</button>}
-        {!challengeId && <button type="button" className="secondary"><KeyRound size={18} />Sign in with Passkey</button>}
+        {!challengeId && <button type="button" className="secondary" disabled={busy} onClick={signInWithPasskey}><KeyRound size={18} />Sign in with Passkey</button>}
         <button type="button" className="link-button">Forgot Password?</button>
       </form>
     </main>
@@ -412,13 +431,29 @@ function SecurityPanel({ setError }: { setError: (value: string | null) => void 
     }
   }
 
+  async function addPasskey() {
+    try {
+      setBusy(true);
+      const options = await beginPasskeyRegistration();
+      const response = await startRegistration({ optionsJSON: options.options });
+      setStatus(await registerPasskey(response, "Passkey"));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to add passkey.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Panel title="Security">
       <div className="security-list">
-        <span><KeyRound size={17} />Passkeys: {status?.passkeysAvailable ? `${status.passkeyCount} registered; browser setup is next.` : "Not available on this server."}</span>
+        <span><KeyRound size={17} />Passkeys: {status?.passkeysAvailable ? `${status.passkeyCount} registered.` : "Not available in this browser or server configuration."}</span>
         <span><Shield size={17} />2FA: {status?.totpEnabled ? `On, with ${status.recoveryCodesRemaining} recovery codes left.` : "Off"}</span>
         <span><RefreshCw size={17} />Version updates: users see plain-English changes after sign-in.</span>
       </div>
+
+      <button className="primary security-action" disabled={busy || !status?.passkeysAvailable} onClick={addPasskey}><KeyRound size={17} />Add Passkey</button>
 
       {!status?.totpEnabled && !setup && <button className="primary security-action" disabled={busy} onClick={startSetup}><Shield size={17} />Set Up Authenticator App</button>}
 
