@@ -23,7 +23,7 @@ final class MailboxMacOSAppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Mailbox"
+        window.title = "pobox.watch"
         window.contentMinSize = NSSize(width: 900, height: 600)
         window.contentView = NSHostingView(rootView: MacRootView())
         window.center()
@@ -100,7 +100,7 @@ struct MacLoginView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Mailbox")
+            Text("pobox.watch")
                 .font(.largeTitle.bold())
             Text("Sign in to pobox.watch")
                 .foregroundStyle(.secondary)
@@ -142,14 +142,14 @@ struct MacLoginView: View {
 struct MacOverviewView: View {
     @ObservedObject var model: MacMailboxViewModel
     @State private var selection = "Overview"
-    private let items = ["Overview", "Mailboxes", "Map", "History", "Activity", "Needs Review", "Team", "Settings"]
+    private let items = ["Overview", "PO Boxes", "Map", "History", "Activity", "Needs Review", "Team", "Settings"]
 
     var body: some View {
         NavigationSplitView {
             List(items, id: \.self, selection: $selection) { item in
                 Label(item, systemImage: icon(for: item))
             }
-            .navigationTitle("Mailbox")
+            .navigationTitle("pobox.watch")
         } detail: {
             detailView(for: selection)
                 .toolbar {
@@ -169,14 +169,14 @@ struct MacOverviewView: View {
         case "Overview":
             MacSectionView(
                 title: snapshot?.workspace.name ?? "Overview",
-                subtitle: snapshot.map { "Signed in as \($0.currentUser.displayName)" } ?? "Live summary of all shared mailbox locations.",
+                subtitle: snapshot.map { "Signed in as \($0.currentUser.displayName)" } ?? "Live summary of all shared PO box locations.",
                 rows: [
-                    ("Outstanding", "\(snapshot?.outstandingMailboxCount ?? 0) mailboxes need checking."),
+                    ("Outstanding", "\(snapshot?.outstandingMailboxCount ?? 0) PO boxes need checking."),
                     ("Post offices", "\(snapshot?.postOffices.count ?? 0) locations loaded from pobox.watch."),
-                    ("Mailboxes", "\(snapshot?.postOffices.flatMap(\.mailboxes).count ?? 0) shared boxes are configured.")
+                    ("PO Boxes", "\(snapshot?.postOffices.flatMap(\.mailboxes).count ?? 0) shared boxes are configured.")
                 ]
             )
-        case "Mailboxes":
+        case "PO Boxes":
             MacMailboxListView(snapshot: snapshot, busyMailboxId: model.busyMailboxId) { mailbox in
                 await model.collect(mailbox)
             }
@@ -238,7 +238,7 @@ struct MacOverviewView: View {
     private func historyRow(_ event: MailboxHistoryEvent) -> (String, String) {
         switch event {
         case .mail(let mail):
-            return (mail.subject, "Mailbox \(mail.mailboxId) from \(mail.sender)")
+            return (mail.subject, "PO box \(mail.mailboxId) from \(mail.sender)")
         case .collection(let collection):
             return ("Collected from \(collection.source.rawValue)", "By \(collection.collectedBy) at \(collection.collectedAt)")
         }
@@ -267,7 +267,7 @@ struct MacMailboxListView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Mailboxes")
+                    Text("PO Boxes")
                         .font(.largeTitle.bold())
                     Text("Current shared state from pobox.watch")
                         .foregroundStyle(.secondary)

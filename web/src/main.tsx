@@ -56,10 +56,10 @@ function App() {
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><Mail size={22} />Mailbox</div>
+        <div className="brand"><Mail size={22} />pobox.watch</div>
         <nav>
           <NavItem icon={<Bell size={17} />} label="Overview" active={section === "Overview"} onClick={() => setSection("Overview")} />
-          <NavItem icon={<Mail size={17} />} label="Mailboxes" active={section === "Mailboxes"} onClick={() => setSection("Mailboxes")} />
+          <NavItem icon={<Mail size={17} />} label="PO Boxes" active={section === "Mailboxes"} onClick={() => setSection("Mailboxes")} />
           <NavItem icon={<MapPin size={17} />} label="Map" active={section === "Map"} onClick={() => setSection("Map")} />
           <NavItem icon={<RefreshCw size={17} />} label="History" active={section === "History"} onClick={() => setSection("History")} />
           <NavItem icon={<Users size={17} />} label="Team" active={section === "Team"} onClick={() => setSection("Team")} />
@@ -70,7 +70,7 @@ function App() {
         <header className="topbar">
           <div>
             <p className="workspace">{snapshot.workspace.name}</p>
-            <h1>{snapshot.outstandingMailboxCount === 0 ? "All Clear" : `${snapshot.outstandingMailboxCount} Mailboxes Need Checking`}</h1>
+            <h1>{snapshot.outstandingMailboxCount === 0 ? "All Clear" : `${snapshot.outstandingMailboxCount} PO Boxes Need Checking`}</h1>
           </div>
           <div className={connected ? "live is-live" : "live"}>{connected ? "Live" : "Live connection unavailable"}</div>
         </header>
@@ -80,7 +80,7 @@ function App() {
         <section className="summary-band">
           <div>
             <span className="metric">{snapshot.outstandingMailboxCount}</span>
-            <span className="metric-label">Outstanding physical mailboxes</span>
+            <span className="metric-label">Outstanding PO boxes</span>
           </div>
           <div className="dev-controls">
             <button onClick={() => mutate(() => simulateMail("1234"))}>Simulate New Mail 1234</button>
@@ -103,7 +103,7 @@ function App() {
   );
 }
 
-function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: Section; active: boolean; onClick: () => void }) {
+function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
   return <button className={active ? "nav-item active" : "nav-item"} onClick={onClick}>{icon}{label}</button>;
 }
 
@@ -153,7 +153,7 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: () => Promise<void
   return (
     <main className="login-shell">
       <form className="login-panel" onSubmit={submit}>
-        <div className="brand large"><Mail size={26} />Mailbox</div>
+        <div className="brand large"><Mail size={26} />pobox.watch</div>
         <label>Email<input value={email} onChange={(event) => setEmail(event.target.value)} /></label>
         <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
         {error && <div className="alert">{error}</div>}
@@ -175,14 +175,14 @@ function OverviewSection({ snapshot, busyId, mutate }: { snapshot: DashboardSnap
         <Panel title="History"><History snapshot={snapshot} limit={8} /></Panel>
         <Panel title="Team"><p className="small">Signed in as {snapshot.currentUser.displayName} ({snapshot.currentUser.role}). Server authorization applies to every request.</p></Panel>
       </aside>
-      {waitingBoxes.length === 0 && <div className="empty-state"><Check size={22} />No mailboxes currently need checking.</div>}
+      {waitingBoxes.length === 0 && <div className="empty-state"><Check size={22} />No PO boxes currently need checking.</div>}
     </div>
   );
 }
 
 function MailboxSection({ snapshot, busyId, mutate, compact = false }: { snapshot: DashboardSnapshot; busyId: string | null; compact?: boolean; mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void> }) {
   return (
-    <Panel title={compact ? "Overview" : "Mailboxes"} aside={new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}>
+    <Panel title={compact ? "Overview" : "PO Boxes"} aside={new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}>
       <div className="office-list">
         {snapshot.postOffices.map((office) => (
           <article className="office" key={office.id}>
@@ -362,7 +362,7 @@ function AddMailboxForm({ snapshot, refresh, setError }: { snapshot: DashboardSn
       setBoxNumber("");
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to create mailbox.");
+      setError(err instanceof Error ? err.message : "Unable to create PO box.");
     }
   }
 
@@ -395,7 +395,7 @@ function MailboxRow({ box, busy, onCollect }: { box: Mailbox; busy: boolean; onC
     <div className={box.mailWaiting ? "mailbox waiting" : "mailbox"}>
       <div>
         <strong>{box.name}</strong>
-        <span>{box.mailWaiting ? "Red status: Mail Waiting" : "Green status: Clear"}</span>
+        <span>{box.mailWaiting ? "Red status: Mail waiting" : "Green status: Clear"}</span>
         {box.latestNotificationAt && <small>Detected {new Date(box.latestNotificationAt).toLocaleString()}</small>}
       </div>
       {box.mailWaiting && <button disabled={busy} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button>}

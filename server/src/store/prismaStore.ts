@@ -35,8 +35,8 @@ export class PrismaStore implements AppStore {
     const passwordHash = await argon2.hash("Password123!");
     await this.prisma.workspace.upsert({
       where: { id: "ws_company" },
-      update: {},
-      create: { id: "ws_company", name: "Company Mailboxes" }
+      update: { name: "pobox.watch Workspace" },
+      create: { id: "ws_company", name: "pobox.watch Workspace" }
     });
 
     const users = [
@@ -266,10 +266,10 @@ export class PrismaStore implements AppStore {
       });
       if (updated.count !== 1) {
         const mailbox = await tx.mailbox.findFirst({ where: { id: mailboxId, workspaceId } });
-        if (!mailbox) throw new NotFoundError("Mailbox not found.");
+        if (!mailbox) throw new NotFoundError("PO box not found.");
         const existing = await tx.collectionEvent.findFirst({ where: { mailboxId }, orderBy: { collectedAt: "desc" } });
         throw new ConflictError(
-          existing ? `Already collected at ${existing.collectedAt.toISOString()} by ${existing.collectedBy}.` : "Mailbox is already clear."
+          existing ? `Already collected at ${existing.collectedAt.toISOString()} by ${existing.collectedBy}.` : "PO box is already clear."
         );
       }
       const collection = await tx.collectionEvent.create({
@@ -385,7 +385,7 @@ export class PrismaStore implements AppStore {
       return this.toMailbox(mailbox);
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new ConflictError("Mailbox number already exists.");
+        throw new ConflictError("PO box number already exists.");
       }
       throw error;
     }

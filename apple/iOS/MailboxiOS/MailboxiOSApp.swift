@@ -104,7 +104,7 @@ struct iPhoneLoginView: View {
                     }
                 }
             }
-            .navigationTitle("Mailbox")
+            .navigationTitle("pobox.watch")
         }
     }
 }
@@ -116,7 +116,7 @@ struct iPhoneDashboardView: View {
         TabView {
             NavigationStack {
                 iPhoneOverviewList(model: model)
-                    .navigationTitle("Mailbox")
+                    .navigationTitle("pobox.watch")
                     .toolbar {
                         Button {
                             Task { await model.refresh() }
@@ -152,7 +152,7 @@ struct iPhoneOverviewList: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("\(snapshot.outstandingMailboxCount)")
                             .font(.system(size: 44, weight: .bold))
-                        Text(snapshot.outstandingMailboxCount == 1 ? "mailbox needs checking" : "mailboxes need checking")
+                        Text(snapshot.outstandingMailboxCount == 1 ? "PO box needs checking" : "PO boxes need checking")
                             .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 8)

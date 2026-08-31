@@ -63,7 +63,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
 
   app.get("/api/health", async () => ({
     ok: true,
-    service: "mailbox-api",
+    service: "pobox-watch-api",
     storage: process.env.MAILBOX_STORAGE || "memory",
     timestamp: new Date().toISOString()
   }));

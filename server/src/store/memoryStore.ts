@@ -38,7 +38,7 @@ export class MemoryStore implements AppStore {
 
   async seedDemo() {
     if (this.users.size > 0) return;
-    const workspace: Workspace = { id: "ws_company", name: "Company Mailboxes" };
+    const workspace: Workspace = { id: "ws_company", name: "pobox.watch Workspace" };
     this.workspaces.set(workspace.id, workspace);
     const demoUsers = [
       ["usr_daniel", "daniel@example.com", "Daniel", "ADMIN"],
@@ -223,7 +223,7 @@ export class MemoryStore implements AppStore {
     };
     this.mailEvents.set(event.id, event);
     const mailbox = this.mailboxes.get(parsed.mailboxId);
-    if (!mailbox) throw new NotFoundError("Mailbox not found.");
+    if (!mailbox) throw new NotFoundError("PO box not found.");
     this.mailboxes.set(mailbox.id, {
       ...mailbox,
       mailWaiting: true,
@@ -240,13 +240,13 @@ export class MemoryStore implements AppStore {
   async collectMailbox(session: Session, workspaceId: string, mailboxId: string, source: CollectionSource): Promise<CollectionEvent> {
     await this.requireMember(session, workspaceId);
     const mailbox = this.mailboxes.get(mailboxId);
-    if (!mailbox || mailbox.workspaceId !== workspaceId) throw new NotFoundError("Mailbox not found.");
+    if (!mailbox || mailbox.workspaceId !== workspaceId) throw new NotFoundError("PO box not found.");
     if (!mailbox.mailWaiting) {
       const existing = [...this.collectionEvents.values()]
         .filter((event) => event.mailboxId === mailboxId)
         .sort((a, b) => b.collectedAt.localeCompare(a.collectedAt))[0];
       throw new ConflictError(
-        existing ? `Already collected at ${existing.collectedAt} by ${existing.collectedBy}.` : "Mailbox is already clear."
+        existing ? `Already collected at ${existing.collectedAt} by ${existing.collectedBy}.` : "PO box is already clear."
       );
     }
     const now = new Date().toISOString();
@@ -338,7 +338,7 @@ export class MemoryStore implements AppStore {
     const office = this.postOffices.get(input.postOfficeId);
     if (!office || office.workspaceId !== workspaceId) throw new NotFoundError("Post office not found.");
     if ([...this.mailboxes.values()].some((mailbox) => mailbox.workspaceId === workspaceId && mailbox.boxNumber === input.boxNumber)) {
-      throw new ConflictError("Mailbox number already exists.");
+      throw new ConflictError("PO box number already exists.");
     }
     const now = new Date().toISOString();
     const mailbox: Mailbox = {

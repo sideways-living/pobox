@@ -40,7 +40,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		BA623A716C187C5CA97AC072 /* Mailbox.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mailbox.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BA623A716C187C5CA97AC072 /* pobox.watch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "pobox.watch.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		54BAC908F278B9E5641724F2 /* MailboxShared.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = MailboxShared.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5EA029BAA74B6AEAA2A8B7B6 /* MailboxMacOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailboxMacOSApp.swift; sourceTree = "<group>"; };
 		1699F8903E81A884E231D1A5 /* LocationReminderPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationReminderPolicy.swift; sourceTree = "<group>"; };
@@ -79,7 +79,7 @@
 		618456F2879A9861CBC16692 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				BA623A716C187C5CA97AC072 /* Mailbox.app */,
+				BA623A716C187C5CA97AC072 /* pobox.watch.app */,
 				54BAC908F278B9E5641724F2 /* MailboxShared.framework */,
 			);
 			name = Products;
@@ -137,7 +137,7 @@
 			);
 			name = Mailbox;
 			productName = Mailbox;
-			productReference = BA623A716C187C5CA97AC072 /* Mailbox.app */;
+			productReference = BA623A716C187C5CA97AC072 /* pobox.watch.app */;
 			productType = "com.apple.product-type.application";
 		};
 		AFC342D6E51FC59F04135EA3 /* MailboxShared */ = {
@@ -344,15 +344,15 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Mailbox;
+				INFOPLIST_KEY_CFBundleDisplayName = "pobox.watch";
 								MACOSX_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.mailbox.macos";
-				PRODUCT_NAME = Mailbox;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch.macos";
+				PRODUCT_NAME = "pobox.watch";
 				SUPPORTED_PLATFORMS = "macosx";
 								SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
@@ -367,15 +367,15 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Mailbox;
+				INFOPLIST_KEY_CFBundleDisplayName = "pobox.watch";
 								MACOSX_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.mailbox.macos";
-				PRODUCT_NAME = Mailbox;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch.macos";
+				PRODUCT_NAME = "pobox.watch";
 				SUPPORTED_PLATFORMS = "macosx";
 								SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
@@ -400,7 +400,7 @@
 					"@loader_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.mailbox.macos.macos.shared";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch.macos.shared";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "macosx";
@@ -427,7 +427,7 @@
 					"@loader_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.mailbox.macos.macos.shared";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch.macos.shared";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "macosx";

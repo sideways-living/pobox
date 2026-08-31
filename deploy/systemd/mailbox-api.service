@@ -1,5 +1,5 @@
 [Unit]
-Description=Mailbox Node API
+Description=pobox.watch Node API
 After=network.target postgresql.service
 
 [Service]

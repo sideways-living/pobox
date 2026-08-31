@@ -1,4 +1,4 @@
-# Starlight VPS Deployment
+# pobox.watch VPS Deployment
 
 ## Initial Server
 
@@ -60,10 +60,10 @@ For a plain Nginx/systemd deployment, build and copy static assets with `deploy/
 
 ## Nginx And TLS
 
-Point DNS for `mailbox.example.com` at the VPS. Install `deploy/nginx/mailbox.conf`, replace the domain, then request a certificate:
+Point DNS for `pobox.watch` at the VPS. Install `deploy/nginx/mailbox.conf`, replace the example domain, then request a certificate:
 
 ```bash
-sudo certbot --nginx -d mailbox.example.com
+sudo certbot --nginx -d pobox.watch
 sudo certbot renew --dry-run
 ```
 

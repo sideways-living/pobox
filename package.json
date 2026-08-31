@@ -2,7 +2,7 @@
   "name": "mailbox-monorepo",
   "private": true,
   "version": "0.1.0",
-  "description": "Multi-user shared mailbox monitoring system.",
+  "description": "pobox.watch shared PO box monitoring system.",
   "workspaces": [
     "server",
     "web"

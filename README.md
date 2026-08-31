@@ -1,6 +1,6 @@
-# Mailbox
+# pobox.watch
 
-Mailbox is a multi-user shared mailbox monitoring system. A central Node.js backend monitors incoming mail notifications, updates one authoritative workspace mailbox state, and syncs iPhone, macOS, and web clients.
+pobox.watch is a multi-user shared PO box monitoring system. A central Node.js backend monitors incoming mail notifications, updates one authoritative workspace PO box state, and syncs iPhone, macOS, and web clients.
 
 ## Local Development
 
@@ -38,7 +38,7 @@ The checked-in initial migration lives at `server/prisma/migrations/000001_init/
 - Fastify TypeScript API with secure HTTP-only session cookie login.
 - Store boundary with memory mode for fast local tests and Prisma/PostgreSQL mode for durable runtime persistence.
 - In production, the Node server serves the built React app from `web/dist` as well as `/api`, so a CloudPanel Node.js site can run on one app port.
-- Shared workspace state for post offices and mailboxes.
+- Shared workspace state for post offices and PO boxes.
 - Deterministic parser for PO Box wording variants.
 - Provider message dedupe by `workspace + provider + providerMessageId`.
 - Explicit collection mutation with authenticated actor attribution.
