@@ -25,7 +25,7 @@ final class MailboxMacOSAppDelegate: NSObject, NSApplicationDelegate {
         )
         window.title = "Mailbox"
         window.contentMinSize = NSSize(width: 900, height: 600)
-        window.contentView = NSHostingView(rootView: MacOverviewView())
+        window.contentView = NSHostingView(rootView: MacRootView())
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -37,7 +37,110 @@ final class MailboxMacOSAppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+@MainActor
+final class MacMailboxViewModel: ObservableObject {
+    @Published var email = "daniel@example.com"
+    @Published var password = "Password123!"
+    @Published var snapshot: MailboxDashboardSnapshot?
+    @Published var errorMessage: String?
+    @Published var isLoading = false
+    @Published var busyMailboxId: String?
+
+    private let client = MailboxAPIClient.live
+    private let workspaceId = "ws_company"
+
+    func signIn() async {
+        await run {
+            try await client.login(email: email, password: password)
+            snapshot = try await client.dashboard(workspaceId: workspaceId)
+        }
+    }
+
+    func refresh() async {
+        await run {
+            snapshot = try await client.dashboard(workspaceId: workspaceId)
+        }
+    }
+
+    func collect(_ mailbox: Mailbox) async {
+        busyMailboxId = mailbox.id
+        defer { busyMailboxId = nil }
+        await run {
+            try await client.collectMailbox(workspaceId: workspaceId, mailboxId: mailbox.id, source: .macOS)
+            snapshot = try await client.dashboard(workspaceId: workspaceId)
+        }
+    }
+
+    private func run(_ operation: () async throws -> Void) async {
+        isLoading = true
+        errorMessage = nil
+        do {
+            try await operation()
+        } catch {
+            errorMessage = "Load failed. Check your connection and login details."
+        }
+        isLoading = false
+    }
+}
+
+struct MacRootView: View {
+    @StateObject private var model = MacMailboxViewModel()
+
+    var body: some View {
+        if model.snapshot == nil {
+            MacLoginView(model: model)
+        } else {
+            MacOverviewView(model: model)
+        }
+    }
+}
+
+struct MacLoginView: View {
+    @ObservedObject var model: MacMailboxViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Mailbox")
+                .font(.largeTitle.bold())
+            Text("Sign in to pobox.watch")
+                .foregroundStyle(.secondary)
+
+            TextField("Email", text: $model.email)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 360)
+            SecureField("Password", text: $model.password)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 360)
+
+            HStack {
+                Button {
+                    Task { await model.signIn() }
+                } label: {
+                    Label("Sign In", systemImage: "person.crop.circle.badge.checkmark")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.isLoading)
+
+                if model.isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            if let errorMessage = model.errorMessage {
+                Text(errorMessage)
+                    .foregroundStyle(.red)
+            }
+
+            Spacer()
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
 struct MacOverviewView: View {
+    @ObservedObject var model: MacMailboxViewModel
     @State private var selection = "Overview"
     private let items = ["Overview", "Mailboxes", "Map", "History", "Activity", "Needs Review", "Team", "Settings"]
 
@@ -49,80 +152,72 @@ struct MacOverviewView: View {
             .navigationTitle("Mailbox")
         } detail: {
             detailView(for: selection)
+                .toolbar {
+                    Button {
+                        Task { await model.refresh() }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                }
         }
     }
 
     @ViewBuilder
     private func detailView(for item: String) -> some View {
+        let snapshot = model.snapshot
         switch item {
         case "Overview":
             MacSectionView(
-                title: "Overview",
-                subtitle: "Live summary of all shared mailbox locations.",
+                title: snapshot?.workspace.name ?? "Overview",
+                subtitle: snapshot.map { "Signed in as \($0.currentUser.displayName)" } ?? "Live summary of all shared mailbox locations.",
                 rows: [
-                    ("Outstanding", "Shows how many physical boxes need checking."),
-                    ("Realtime", "Will update immediately when web, iPhone, or Mac users collect mail."),
-                    ("Next step", "Wire this panel to https://pobox.watch dashboard data.")
+                    ("Outstanding", "\(snapshot?.outstandingMailboxCount ?? 0) mailboxes need checking."),
+                    ("Post offices", "\(snapshot?.postOffices.count ?? 0) locations loaded from pobox.watch."),
+                    ("Mailboxes", "\(snapshot?.postOffices.flatMap(\.mailboxes).count ?? 0) shared boxes are configured.")
                 ]
             )
         case "Mailboxes":
-            MacSectionView(
-                title: "Mailboxes",
-                subtitle: "Mailbox-by-mailbox operational state.",
-                rows: [
-                    ("Box number", "List each configured mailbox and whether mail is waiting."),
-                    ("Collect action", "Mark a box collected from the Mac app."),
-                    ("Audit trail", "Record who collected it and when.")
-                ]
-            )
+            MacMailboxListView(snapshot: snapshot, busyMailboxId: model.busyMailboxId) { mailbox in
+                await model.collect(mailbox)
+            }
         case "Map":
             MacSectionView(
                 title: "Map",
-                subtitle: "Post office locations and collection context.",
-                rows: [
-                    ("Locations", "Display each post office attached to the workspace."),
-                    ("Directions", "Open the selected post office in Maps."),
-                    ("Geofence", "Use the shared radius settings for reminder logic.")
-                ]
+                subtitle: "Post office locations configured for this workspace.",
+                rows: snapshot?.postOffices.map { ($0.name, "\($0.address) - \($0.geofenceRadius)m geofence") } ?? []
             )
         case "History":
             MacSectionView(
                 title: "History",
                 subtitle: "Recent mail detections and collection events.",
-                rows: [
-                    ("Mail arrived", "Show provider notification matches."),
-                    ("Collected", "Show user, device source, and collection time."),
-                    ("Duplicates", "Keep duplicate provider messages from creating extra work.")
-                ]
+                rows: snapshot?.history.prefix(30).map(historyRow) ?? []
             )
         case "Activity":
             MacSectionView(
                 title: "Activity",
                 subtitle: "Operational feed for the shared workspace.",
-                rows: [
-                    ("Team actions", "Invites, role changes, and manual corrections."),
-                    ("System events", "Parser matches, provider sync, and delivery status."),
-                    ("Review", "Surface anything that needs admin attention.")
-                ]
+                rows: snapshot?.history.prefix(30).map(historyRow) ?? []
             )
         case "Needs Review":
+            let reviewRows = snapshot?.history.compactMap { event -> (String, String)? in
+                if case .mail(let mail) = event, mail.parserConfidence < 0.8 {
+                    return (mail.subject, "Parser confidence \(Int(mail.parserConfidence * 100))%")
+                }
+                return nil
+            } ?? []
             MacSectionView(
                 title: "Needs Review",
-                subtitle: "Items that should not be auto-applied.",
-                rows: [
-                    ("Ambiguous mail", "Messages that matched weakly or need human confirmation."),
-                    ("Failed sync", "Provider or notification failures requiring retry."),
-                    ("Security", "Suspicious login or invitation events.")
-                ]
+                subtitle: "Low-confidence mail detection events.",
+                rows: reviewRows.isEmpty ? [("Clear", "No review items returned by the live dashboard.")] : reviewRows
             )
         case "Team":
             MacSectionView(
                 title: "Team",
-                subtitle: "Workspace users and roles.",
+                subtitle: "Current authenticated user.",
                 rows: [
-                    ("Admins", "Can invite users and manage workspace settings."),
-                    ("Members", "Can view and collect assigned mailboxes."),
-                    ("Invitations", "Pending invitations will appear here.")
+                    ("Name", snapshot?.currentUser.displayName ?? "Unknown"),
+                    ("Email", snapshot?.currentUser.email ?? "Unknown"),
+                    ("Role", snapshot?.currentUser.role ?? "Unknown")
                 ]
             )
         case "Settings":
@@ -131,12 +226,21 @@ struct MacOverviewView: View {
                 subtitle: "Configuration for the native Mac client.",
                 rows: [
                     ("Server", "https://pobox.watch"),
-                    ("Workspace", "Company Mailboxes"),
-                    ("Authentication", "Login wiring is the next native app milestone.")
+                    ("Workspace", snapshot?.workspace.name ?? "Unknown"),
+                    ("Storage", "Prisma/PostgreSQL through the VPS API.")
                 ]
             )
         default:
             MacSectionView(title: item, subtitle: "Section pending.", rows: [])
+        }
+    }
+
+    private func historyRow(_ event: MailboxHistoryEvent) -> (String, String) {
+        switch event {
+        case .mail(let mail):
+            return (mail.subject, "Mailbox \(mail.mailboxId) from \(mail.sender)")
+        case .collection(let collection):
+            return ("Collected from \(collection.source.rawValue)", "By \(collection.collectedBy) at \(collection.collectedAt)")
         }
     }
 
@@ -150,6 +254,56 @@ struct MacOverviewView: View {
         case "Team": "person.2"
         case "Settings": "gearshape"
         default: "mail.stack"
+        }
+    }
+}
+
+struct MacMailboxListView: View {
+    let snapshot: MailboxDashboardSnapshot?
+    let busyMailboxId: String?
+    let collect: (Mailbox) async -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Mailboxes")
+                        .font(.largeTitle.bold())
+                    Text("Current shared state from pobox.watch")
+                        .foregroundStyle(.secondary)
+                }
+
+                ForEach(snapshot?.postOffices ?? []) { office in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(office.name)
+                            .font(.title3.bold())
+                        ForEach(office.mailboxes) { mailbox in
+                            HStack {
+                                Image(systemName: mailbox.mailWaiting ? "tray.full.fill" : "checkmark.circle")
+                                    .foregroundStyle(mailbox.mailWaiting ? .orange : .green)
+                                VStack(alignment: .leading) {
+                                    Text(mailbox.name)
+                                        .font(.headline)
+                                    Text(mailbox.mailWaiting ? "Mail waiting" : "Clear")
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if mailbox.mailWaiting {
+                                    Button("Collect") {
+                                        Task { await collect(mailbox) }
+                                    }
+                                    .disabled(busyMailboxId == mailbox.id)
+                                }
+                            }
+                            .padding(12)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                    .frame(maxWidth: 780, alignment: .leading)
+                }
+            }
+            .padding(28)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

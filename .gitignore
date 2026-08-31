@@ -10,3 +10,5 @@ coverage/
 *.log
 work/
 *.tsbuildinfo
+**/*.xcodeproj/xcuserdata/
+**/*.xcodeproj/project.xcworkspace/xcuserdata/

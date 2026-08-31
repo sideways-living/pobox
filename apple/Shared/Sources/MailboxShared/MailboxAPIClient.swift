@@ -4,10 +4,31 @@ public actor MailboxAPIClient {
     private let baseURL: URL
     private let session: URLSession
     private let decoder = JSONDecoder()
+    private let encoder = JSONEncoder()
+
+    public static let live = MailboxAPIClient(baseURL: URL(string: "https://pobox.watch")!)
 
     public init(baseURL: URL, session: URLSession = .shared) {
         self.baseURL = baseURL
         self.session = session
+    }
+
+    public func login(email: String, password: String) async throws {
+        let url = baseURL.appending(path: "/api/v1/auth/login")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(LoginRequest(email: email, password: password))
+        let (_, response) = try await session.data(for: request)
+        try validate(response)
+    }
+
+    public func logout() async throws {
+        let url = baseURL.appending(path: "/api/v1/auth/logout")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        let (_, response) = try await session.data(for: request)
+        try validate(response)
     }
 
     public func dashboard(workspaceId: String) async throws -> MailboxDashboardSnapshot {
@@ -22,7 +43,7 @@ public actor MailboxAPIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(["source": source.rawValue])
+        request.httpBody = try encoder.encode(["source": source.rawValue])
         let (_, response) = try await session.data(for: request)
         try validate(response)
     }
@@ -36,4 +57,9 @@ public actor MailboxAPIClient {
 
 public enum MailboxAPIError: Error {
     case requestFailed
+}
+
+private struct LoginRequest: Encodable {
+    let email: String
+    let password: String
 }
