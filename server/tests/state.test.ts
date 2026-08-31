@@ -62,6 +62,42 @@ describe("shared mailbox state", () => {
   it("rejects member-only admin operations", async () => {
     const sarah = await store.login("sarah@example.com", "Password123!");
     await expect(store.inviteMember(sarah, "ws_company", "alex@example.com", "MEMBER")).rejects.toThrow("Admin role required.");
+    await expect(
+      store.createUser(sarah, "ws_company", {
+        email: "ops@example.com",
+        displayName: "Ops",
+        password: "Temporary123!",
+        role: "MEMBER"
+      })
+    ).rejects.toThrow("Admin role required.");
+  });
+
+  it("allows admins to create users, post offices, and mailboxes", async () => {
+    const daniel = await store.login("daniel@example.com", "Password123!");
+    const user = await store.createUser(daniel, "ws_company", {
+      email: "ops@example.com",
+      displayName: "Ops Lead",
+      password: "Temporary123!",
+      role: "MEMBER"
+    });
+    expect(user.email).toBe("ops@example.com");
+
+    const office = await store.createPostOffice(daniel, "ws_company", {
+      name: "Carlton Post Office",
+      address: "123 Lygon Street, Carlton VIC",
+      latitude: -37.8001,
+      longitude: 144.9671,
+      geofenceRadius: 180
+    });
+    const mailbox = await store.createMailbox(daniel, "ws_company", {
+      postOfficeId: office.id,
+      name: "PO Box 9001",
+      boxNumber: "9001"
+    });
+
+    const snapshot = await store.dashboard(daniel, "ws_company");
+    expect(snapshot.postOffices.some((candidate) => candidate.id === office.id)).toBe(true);
+    expect(snapshot.postOffices.flatMap((candidate) => candidate.mailboxes).some((candidate) => candidate.id === mailbox.id)).toBe(true);
   });
 
   it("makes simultaneous collection idempotent", async () => {

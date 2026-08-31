@@ -20,6 +20,24 @@ const simulateSchema = z.object({
   providerMessageId: z.string().optional()
 });
 const inviteSchema = z.object({ email: z.string().email(), role: z.enum(["ADMIN", "MEMBER"]) });
+const createUserSchema = z.object({
+  email: z.string().email(),
+  displayName: z.string().min(1).max(120),
+  password: z.string().min(12).max(200),
+  role: z.enum(["ADMIN", "MEMBER"])
+});
+const createPostOfficeSchema = z.object({
+  name: z.string().min(1).max(160),
+  address: z.string().min(1).max(240),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  geofenceRadius: z.number().int().min(25).max(5000).default(200)
+});
+const createMailboxSchema = z.object({
+  postOfficeId: z.string().min(1),
+  name: z.string().min(1).max(160),
+  boxNumber: z.string().min(1).max(40)
+});
 
 export async function buildServer(store: AppStore = new MemoryStore()) {
   await store.seedDemo();
@@ -93,6 +111,39 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const body = inviteSchema.parse(request.body);
     const session = await store.getSession(request.cookies.mailbox_session);
     return store.inviteMember(session, workspaceId, body.email, body.role);
+  });
+
+  app.get("/api/v1/workspaces/:workspaceId/team/members", async (request) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const session = await store.getSession(request.cookies.mailbox_session);
+    return store.listMembers(session, workspaceId);
+  });
+
+  app.post("/api/v1/workspaces/:workspaceId/team/users", async (request) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const body = createUserSchema.parse(request.body);
+    const session = await store.getSession(request.cookies.mailbox_session);
+    const member = await store.createUser(session, workspaceId, body);
+    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    return member;
+  });
+
+  app.post("/api/v1/workspaces/:workspaceId/post-offices", async (request) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const body = createPostOfficeSchema.parse(request.body);
+    const session = await store.getSession(request.cookies.mailbox_session);
+    const postOffice = await store.createPostOffice(session, workspaceId, body);
+    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    return postOffice;
+  });
+
+  app.post("/api/v1/workspaces/:workspaceId/mailboxes", async (request) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const body = createMailboxSchema.parse(request.body);
+    const session = await store.getSession(request.cookies.mailbox_session);
+    const mailbox = await store.createMailbox(session, workspaceId, body);
+    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    return mailbox;
   });
 
   app.post("/api/v1/workspaces/:workspaceId/dev/simulate-mail", async (request) => {

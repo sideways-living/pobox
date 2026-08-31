@@ -16,7 +16,15 @@ import type {
   WorkspaceMember
 } from "../domain.js";
 import { parseMailNotification } from "../parser/mailParser.js";
-import type { AppStore, IncomingMailResult, IncomingProviderMessage } from "./types.js";
+import type {
+  AppStore,
+  CreateMailboxInput,
+  CreatePostOfficeInput,
+  CreateUserInput,
+  IncomingMailResult,
+  IncomingProviderMessage,
+  TeamMemberSummary
+} from "./types.js";
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "./types.js";
 
 export class PrismaStore implements AppStore {
@@ -280,6 +288,107 @@ export class PrismaStore implements AppStore {
       return collection;
     });
     return this.toCollectionEvent(event);
+  }
+
+  async listMembers(session: Session, workspaceId: string): Promise<TeamMemberSummary[]> {
+    await this.requireMember(session, workspaceId);
+    const members = await this.prisma.workspaceMember.findMany({
+      where: { workspaceId },
+      orderBy: { createdAt: "asc" },
+      include: { user: { include: { profile: true } } }
+    });
+    return members
+      .map((member) => ({
+        id: member.user.id,
+        email: member.user.email,
+        displayName: member.user.profile?.displayName ?? member.user.email,
+        role: member.role,
+        status: member.status,
+        active: member.user.active
+      }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }
+
+  async createUser(session: Session, workspaceId: string, input: CreateUserInput): Promise<TeamMemberSummary> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const email = input.email.toLowerCase();
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          email,
+          passwordHash: await argon2.hash(input.password),
+          emailVerified: true,
+          active: true,
+          profile: { create: { displayName: input.displayName } },
+          memberships: {
+            create: {
+              workspaceId,
+              role: input.role,
+              status: "ACTIVE",
+              invitedBy: session.userId,
+              joinedAt: new Date()
+            }
+          }
+        },
+        include: { profile: true, memberships: { where: { workspaceId } } }
+      });
+      await this.audit(session.userId, workspaceId, "member.created", "user", user.id, { email, role: input.role });
+      return {
+        id: user.id,
+        email: user.email,
+        displayName: user.profile?.displayName ?? user.email,
+        role: user.memberships[0]?.role ?? input.role,
+        status: user.memberships[0]?.status ?? "ACTIVE",
+        active: user.active
+      };
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new ConflictError("User email already exists.");
+      }
+      throw error;
+    }
+  }
+
+  async createPostOffice(session: Session, workspaceId: string, input: CreatePostOfficeInput): Promise<PostOffice> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const office = await this.prisma.postOffice.create({
+      data: {
+        workspaceId,
+        name: input.name,
+        address: input.address,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        geofenceRadius: input.geofenceRadius,
+        active: true
+      }
+    });
+    await this.audit(session.userId, workspaceId, "post_office.created", "post_office", office.id, { name: office.name });
+    return this.toPostOffice(office);
+  }
+
+  async createMailbox(session: Session, workspaceId: string, input: CreateMailboxInput): Promise<Mailbox> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const office = await this.prisma.postOffice.findFirst({ where: { id: input.postOfficeId, workspaceId } });
+    if (!office) throw new NotFoundError("Post office not found.");
+    try {
+      const mailbox = await this.prisma.mailbox.create({
+        data: {
+          workspaceId,
+          postOfficeId: input.postOfficeId,
+          name: input.name,
+          boxNumber: input.boxNumber,
+          active: true,
+          mailWaiting: false
+        }
+      });
+      await this.audit(session.userId, workspaceId, "mailbox.created", "mailbox", mailbox.id, { boxNumber: mailbox.boxNumber });
+      return this.toMailbox(mailbox);
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new ConflictError("Mailbox number already exists.");
+      }
+      throw error;
+    }
   }
 
   async inviteMember(session: Session, workspaceId: string, email: string, role: "ADMIN" | "MEMBER") {

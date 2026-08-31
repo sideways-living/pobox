@@ -14,7 +14,15 @@ import type {
   WorkspaceMember
 } from "../domain.js";
 import { parseMailNotification } from "../parser/mailParser.js";
-import type { AppStore, IncomingMailResult, IncomingProviderMessage } from "./types.js";
+import type {
+  AppStore,
+  CreateMailboxInput,
+  CreatePostOfficeInput,
+  CreateUserInput,
+  IncomingMailResult,
+  IncomingProviderMessage,
+  TeamMemberSummary
+} from "./types.js";
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "./types.js";
 
 export class MemoryStore implements AppStore {
@@ -261,6 +269,91 @@ export class MemoryStore implements AppStore {
     });
     this.audit(session.userId, workspaceId, "mailbox.collected", "mailbox", mailbox.id, { source });
     return event;
+  }
+
+  async listMembers(session: Session, workspaceId: string): Promise<TeamMemberSummary[]> {
+    await this.requireMember(session, workspaceId);
+    return [...this.members.values()]
+      .filter((member) => member.workspaceId === workspaceId)
+      .map((member) => {
+        const user = this.users.get(member.userId);
+        if (!user) throw new NotFoundError("User not found.");
+        return {
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+          role: member.role,
+          status: member.status,
+          active: user.active
+        };
+      })
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }
+
+  async createUser(session: Session, workspaceId: string, input: CreateUserInput): Promise<TeamMemberSummary> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const email = input.email.toLowerCase();
+    if ([...this.users.values()].some((user) => user.email.toLowerCase() === email)) {
+      throw new ConflictError("User email already exists.");
+    }
+    const user: User = {
+      id: nanoid(),
+      email,
+      displayName: input.displayName,
+      passwordHash: await argon2.hash(input.password),
+      emailVerified: true,
+      active: true
+    };
+    this.users.set(user.id, user);
+    this.members.set(`mem_${user.id}`, {
+      id: `mem_${user.id}`,
+      workspaceId,
+      userId: user.id,
+      role: input.role,
+      status: "ACTIVE"
+    });
+    this.audit(session.userId, workspaceId, "member.created", "user", user.id, { email, role: input.role });
+    return { id: user.id, email: user.email, displayName: user.displayName, role: input.role, status: "ACTIVE", active: true };
+  }
+
+  async createPostOffice(session: Session, workspaceId: string, input: CreatePostOfficeInput): Promise<PostOffice> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const office: PostOffice = {
+      id: nanoid(),
+      workspaceId,
+      name: input.name,
+      address: input.address,
+      latitude: input.latitude,
+      longitude: input.longitude,
+      geofenceRadius: input.geofenceRadius,
+      active: true
+    };
+    this.postOffices.set(office.id, office);
+    this.audit(session.userId, workspaceId, "post_office.created", "post_office", office.id, { name: office.name });
+    return office;
+  }
+
+  async createMailbox(session: Session, workspaceId: string, input: CreateMailboxInput): Promise<Mailbox> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const office = this.postOffices.get(input.postOfficeId);
+    if (!office || office.workspaceId !== workspaceId) throw new NotFoundError("Post office not found.");
+    if ([...this.mailboxes.values()].some((mailbox) => mailbox.workspaceId === workspaceId && mailbox.boxNumber === input.boxNumber)) {
+      throw new ConflictError("Mailbox number already exists.");
+    }
+    const now = new Date().toISOString();
+    const mailbox: Mailbox = {
+      id: nanoid(),
+      workspaceId,
+      postOfficeId: input.postOfficeId,
+      name: input.name,
+      boxNumber: input.boxNumber,
+      active: true,
+      mailWaiting: false,
+      updatedAt: now
+    };
+    this.mailboxes.set(mailbox.id, mailbox);
+    this.audit(session.userId, workspaceId, "mailbox.created", "mailbox", mailbox.id, { boxNumber: mailbox.boxNumber });
+    return mailbox;
   }
 
   async inviteMember(session: Session, workspaceId: string, email: string, role: "ADMIN" | "MEMBER") {

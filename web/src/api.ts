@@ -1,4 +1,4 @@
-import type { DashboardSnapshot } from "./types";
+import type { CreateMailboxInput, CreatePostOfficeInput, CreateUserInput, DashboardSnapshot, TeamMember } from "./types";
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? window.location.origin;
 export const workspaceId = "ws_company";
@@ -27,6 +27,45 @@ export async function collectMailbox(mailboxId: string) {
     body: JSON.stringify({ source: "WEB" })
   });
   if (!response.ok) throw new Error(await errorMessage(response));
+}
+
+export async function loadMembers(): Promise<TeamMember[]> {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/team/members`, { credentials: "include" });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function createUser(input: CreateUserInput): Promise<TeamMember> {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/team/users`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function createPostOffice(input: CreatePostOfficeInput) {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/post-offices`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function createMailbox(input: CreateMailboxInput) {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/mailboxes`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
 }
 
 export async function simulateMail(mailboxNumber: string, duplicate = false) {

@@ -27,3 +27,33 @@ export interface DashboardSnapshot {
   postOffices: PostOffice[];
   history: Array<Record<string, string>>;
 }
+
+export interface TeamMember {
+  id: string;
+  email: string;
+  displayName: string;
+  role: "ADMIN" | "MEMBER";
+  status: string;
+  active: boolean;
+}
+
+export interface CreateUserInput {
+  email: string;
+  displayName: string;
+  password: string;
+  role: "ADMIN" | "MEMBER";
+}
+
+export interface CreatePostOfficeInput {
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  geofenceRadius: number;
+}
+
+export interface CreateMailboxInput {
+  postOfficeId: string;
+  name: string;
+  boxNumber: string;
+}
