@@ -6,7 +6,9 @@ struct MailboxMacOSApp: App {
     var body: some Scene {
         WindowGroup {
             MacOverviewView()
+                .frame(minWidth: 900, minHeight: 600)
         }
+        .defaultSize(width: 1100, height: 720)
     }
 }
 
