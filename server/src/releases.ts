@@ -1,4 +1,4 @@
-export const appVersion = "0.2.0";
+export const appVersion = "0.2.1";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.2.1-backend-branding",
+    version: "0.2.1",
+    releasedAt: "2026-08-31T15:30:00.000Z",
+    title: "Backend branding updated",
+    summary:
+      "Backend package names, deployment templates, session cookie naming, and environment examples now use pobox.watch naming. Existing MAILBOX environment settings still work during the transition.",
+    audience: "ALL"
+  },
   {
     id: "0.2.0-version-notices",
     version: "0.2.0",

@@ -31,7 +31,8 @@ export class PrismaStore implements AppStore {
   constructor(private readonly prisma = new PrismaClient()) {}
 
   async seedDemo() {
-    if (process.env.NODE_ENV === "production" && process.env.MAILBOX_SEED_DEMO !== "true") return;
+    const seedDemo = process.env.POBOX_WATCH_SEED_DEMO ?? process.env.MAILBOX_SEED_DEMO;
+    if (process.env.NODE_ENV === "production" && seedDemo !== "true") return;
     const passwordHash = await argon2.hash("Password123!");
     await this.prisma.workspace.upsert({
       where: { id: "ws_company" },

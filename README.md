@@ -16,22 +16,22 @@ Demo accounts use `Password123!`:
 - `sarah@example.com` Member
 - `john@example.com` Member
 
-The development MVP runs with `MAILBOX_STORAGE=memory` by default and includes simulation controls in the web app.
+The development MVP runs with `POBOX_WATCH_STORAGE=memory` by default and includes simulation controls in the web app.
 
 ## PostgreSQL Mode
 
 For durable local development:
 
 ```bash
-createdb mailbox
+createdb pobox_watch
 cp .env.example .env
-# set DATABASE_URL and MAILBOX_STORAGE=prisma in .env
+# set DATABASE_URL and POBOX_WATCH_STORAGE=prisma in .env
 npm run prisma:migrate --workspace server
 npm run prisma:seed --workspace server
-MAILBOX_STORAGE=prisma npm run dev:server
+POBOX_WATCH_STORAGE=prisma npm run dev:server
 ```
 
-The checked-in initial migration lives at `server/prisma/migrations/000001_init/migration.sql`. Demo seeding is explicit in production; `PrismaStore.seedDemo()` does not create demo accounts when `NODE_ENV=production` unless `MAILBOX_SEED_DEMO=true`.
+The checked-in initial migration lives at `server/prisma/migrations/000001_init/migration.sql`. Demo seeding is explicit in production; `PrismaStore.seedDemo()` does not create demo accounts when `NODE_ENV=production` unless `POBOX_WATCH_SEED_DEMO=true`.
 
 ## Current MVP Slice
 

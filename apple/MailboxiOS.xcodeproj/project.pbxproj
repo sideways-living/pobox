@@ -122,9 +122,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		433447FEFB8B8D2ADB64FAC9 /* Mailbox */ = {
+		433447FEFB8B8D2ADB64FAC9 /* pobox.watch */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A669D8562C481E47ADEB4DF7 /* Build configuration list for PBXNativeTarget "Mailbox" */;
+			buildConfigurationList = A669D8562C481E47ADEB4DF7 /* Build configuration list for PBXNativeTarget "pobox.watch" */;
 			buildPhases = (
 				C301E9402DDC89DB504D9E0B /* Sources */,
 				347379D6EEB551E82C1E784C /* Frameworks */,
@@ -135,8 +135,8 @@
 			dependencies = (
 				71FDD490BFEC899BBB5D4D2F /* PBXTargetDependency */,
 			);
-			name = Mailbox;
-			productName = Mailbox;
+			name = "pobox.watch";
+			productName = "pobox.watch";
 			productReference = BA623A716C187C5CA97AC072 /* pobox.watch.app */;
 			productType = "com.apple.product-type.application";
 		};
@@ -187,7 +187,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				433447FEFB8B8D2ADB64FAC9 /* Mailbox */,
+				433447FEFB8B8D2ADB64FAC9 /* pobox.watch */,
 				AFC342D6E51FC59F04135EA3 /* MailboxShared */,
 			);
 		};
@@ -458,7 +458,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A669D8562C481E47ADEB4DF7 /* Build configuration list for PBXNativeTarget "Mailbox" */ = {
+		A669D8562C481E47ADEB4DF7 /* Build configuration list for PBXNativeTarget "pobox.watch" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				71FDD490BFEC899BBB5D4D2E /* Debug */,

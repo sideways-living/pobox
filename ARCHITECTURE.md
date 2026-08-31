@@ -9,7 +9,7 @@ pobox.watch separates four concepts:
 
 ## Runtime
 
-Production runs on Ubuntu LTS with Nginx terminating HTTPS and proxying `/api` and WebSocket traffic to a Fastify Node.js service on localhost. PostgreSQL is reachable only from the server/private network. A systemd service runs the Node process as `mailboxapp`.
+Production runs on Ubuntu LTS with Nginx terminating HTTPS and proxying `/api` and WebSocket traffic to a Fastify Node.js service on localhost. PostgreSQL is reachable only from the server/private network. A systemd service runs the Node process as `poboxwatchapp`.
 
 The backend depends on an `AppStore` interface. Memory mode keeps the demo/test loop fast; Prisma mode uses PostgreSQL for sessions, workspaces, PO boxes, mail events, collections, invitations, passkeys, devices, and audit events.
 

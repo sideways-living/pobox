@@ -21,9 +21,9 @@ Install Node.js LTS, Nginx, PostgreSQL, Certbot, build tools, and git.
 ## Application User
 
 ```bash
-sudo useradd --system --create-home --shell /usr/sbin/nologin mailboxapp
-sudo mkdir -p /opt/mailbox /var/www/mailbox/web /etc/mailbox
-sudo chown -R mailboxapp:mailboxapp /opt/mailbox
+sudo useradd --system --create-home --shell /usr/sbin/nologin poboxwatchapp
+sudo mkdir -p /opt/pobox.watch /var/www/pobox.watch/web /etc/pobox.watch
+sudo chown -R poboxwatchapp:poboxwatchapp /opt/pobox.watch
 ```
 
 ## PostgreSQL
@@ -31,27 +31,27 @@ sudo chown -R mailboxapp:mailboxapp /opt/mailbox
 Keep PostgreSQL on localhost/private interfaces. Create a restricted app user, not a superuser:
 
 ```sql
-CREATE DATABASE mailbox;
-CREATE USER mailboxapp WITH ENCRYPTED PASSWORD 'replace-me';
-GRANT ALL PRIVILEGES ON DATABASE mailbox TO mailboxapp;
+CREATE DATABASE pobox_watch;
+CREATE USER poboxwatchapp WITH ENCRYPTED PASSWORD 'replace-me';
+GRANT ALL PRIVILEGES ON DATABASE pobox_watch TO poboxwatchapp;
 ```
 
-Set `DATABASE_URL` in `/etc/mailbox/mailbox.env` with:
+Set `DATABASE_URL` in `/etc/pobox.watch/pobox-watch.env` with:
 
 ```text
-MAILBOX_STORAGE=prisma
-MAILBOX_SEED_DEMO=false
+POBOX_WATCH_STORAGE=prisma
+POBOX_WATCH_SEED_DEMO=false
 ```
 
 Then run Prisma migrations with `deploy/scripts/migrate-db.sh`. Do not seed demo users in production unless intentionally standing up a disposable test environment.
 
 ## Node Server
 
-Build with `deploy/scripts/deploy-server.sh`. Install `deploy/systemd/mailbox-api.service` to `/etc/systemd/system/mailbox-api.service`, then:
+Build with `deploy/scripts/deploy-server.sh`. Install `deploy/systemd/pobox-watch-api.service` to `/etc/systemd/system/pobox-watch-api.service`, then:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now mailbox-api
+sudo systemctl enable --now pobox-watch-api
 ```
 
 ## Web
@@ -60,7 +60,7 @@ For a plain Nginx/systemd deployment, build and copy static assets with `deploy/
 
 ## Nginx And TLS
 
-Point DNS for `pobox.watch` at the VPS. Install `deploy/nginx/mailbox.conf`, replace the example domain, then request a certificate:
+Point DNS for `pobox.watch` at the VPS. Install `deploy/nginx/pobox-watch.conf`, adjust the domain if needed, then request a certificate:
 
 ```bash
 sudo certbot --nginx -d pobox.watch

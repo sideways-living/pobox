@@ -4,10 +4,10 @@ After=network.target postgresql.service
 
 [Service]
 Type=simple
-User=mailboxapp
-Group=mailboxapp
-WorkingDirectory=/opt/mailbox/current/server
-EnvironmentFile=/etc/mailbox/mailbox.env
+User=poboxwatchapp
+Group=poboxwatchapp
+WorkingDirectory=/opt/pobox.watch/current/server
+EnvironmentFile=/etc/pobox.watch/pobox-watch.env
 ExecStart=/usr/bin/node dist/src/index.js
 Restart=always
 RestartSec=5

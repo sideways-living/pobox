@@ -3,6 +3,6 @@ set -euo pipefail
 
 npm ci
 npm run build --workspace web
-sudo rsync -a --delete web/dist/ /var/www/mailbox/web/
+sudo rsync -a --delete web/dist/ /var/www/pobox.watch/web/
 sudo nginx -t
 sudo systemctl reload nginx

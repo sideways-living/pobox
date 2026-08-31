@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "MailboxApple",
+    name: "PoboxWatchApple",
     platforms: [
         .iOS(.v17),
         .macOS(.v14)
