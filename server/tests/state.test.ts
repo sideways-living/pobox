@@ -59,6 +59,15 @@ describe("shared mailbox state", () => {
     expect(event.collectedBy).toBe("usr_john");
   });
 
+  it("returns the previous login time on later logins", async () => {
+    const first = await store.login("john@example.com", "Password123!");
+    expect(first.previousLoginAt).toBeUndefined();
+
+    const second = await store.login("john@example.com", "Password123!");
+    expect(second.previousLoginAt).toBeDefined();
+    expect(new Date(second.previousLoginAt ?? "").getTime()).toBeGreaterThan(0);
+  });
+
   it("rejects member-only admin operations", async () => {
     const sarah = await store.login("sarah@example.com", "Password123!");
     await expect(store.inviteMember(sarah, "ws_company", "alex@example.com", "MEMBER")).rejects.toThrow("Admin role required.");

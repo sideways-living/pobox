@@ -1,9 +1,9 @@
-import type { CreateMailboxInput, CreatePostOfficeInput, CreateUserInput, DashboardSnapshot, TeamMember } from "./types";
+import type { AppChangesResponse, CreateMailboxInput, CreatePostOfficeInput, CreateUserInput, DashboardSnapshot, LoginResult, TeamMember } from "./types";
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? window.location.origin;
 export const workspaceId = "ws_company";
 
-export async function login(email: string, password: string) {
+export async function login(email: string, password: string): Promise<LoginResult> {
   const response = await fetch(`${apiBase}/api/v1/auth/login`, {
     method: "POST",
     credentials: "include",
@@ -11,10 +11,19 @@ export async function login(email: string, password: string) {
     body: JSON.stringify({ email, password })
   });
   if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
 }
 
 export async function loadDashboard(): Promise<DashboardSnapshot> {
   const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/dashboard`, { credentials: "include" });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function loadAppChanges(since?: string): Promise<AppChangesResponse> {
+  const url = new URL(`${apiBase}/api/v1/workspaces/${workspaceId}/app/changes`);
+  if (since) url.searchParams.set("since", since);
+  const response = await fetch(url, { credentials: "include" });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
 }

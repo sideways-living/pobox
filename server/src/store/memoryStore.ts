@@ -126,11 +126,15 @@ export class MemoryStore implements AppStore {
     if (!user || !user.active || !(await argon2.verify(user.passwordHash, password))) {
       throw new UnauthorizedError("Invalid email or password.");
     }
+    const previousLoginAt = user.lastLoginAt;
+    const now = new Date().toISOString();
     const session: Session = {
       id: nanoid(32),
       userId: user.id,
-      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString()
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString(),
+      previousLoginAt
     };
+    this.users.set(user.id, { ...user, lastLoginAt: now });
     this.sessions.set(session.id, session);
     return session;
   }

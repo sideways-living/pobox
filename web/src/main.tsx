@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Bell, Check, KeyRound, LogIn, Mail, MapPin, Plus, RefreshCw, Shield, Users } from "lucide-react";
-import { collectMailbox, createMailbox, createPostOffice, createUser, loadDashboard, loadMembers, login, realtimeUrl, simulateMail } from "./api";
-import type { DashboardSnapshot, Mailbox, TeamMember } from "./types";
+import { collectMailbox, createMailbox, createPostOffice, createUser, loadAppChanges, loadDashboard, loadMembers, login, realtimeUrl, simulateMail } from "./api";
+import type { AppChangesResponse, DashboardSnapshot, Mailbox, TeamMember } from "./types";
 import "./styles.css";
 
 type Section = "Overview" | "Mailboxes" | "Map" | "History" | "Team" | "Settings";
@@ -14,6 +14,7 @@ function App() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [section, setSection] = useState<Section>("Overview");
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [changeNotice, setChangeNotice] = useState<AppChangesResponse | null>(null);
 
   async function refresh() {
     const nextSnapshot = await loadDashboard();
@@ -37,8 +38,18 @@ function App() {
     return () => socket.close();
   }, [snapshot?.workspace.id]);
 
+  async function handleLogin(previousLoginAt?: string) {
+    await refresh();
+    try {
+      const changes = await loadAppChanges(previousLoginAt);
+      if (changes.changes.length > 0) setChangeNotice(changes);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load app changes.");
+    }
+  }
+
   if (!snapshot) {
-    return <LoginScreen onLogin={refresh} error={error} setError={setError} />;
+    return <LoginScreen onLogin={handleLogin} error={error} setError={setError} />;
   }
 
   async function mutate(action: () => Promise<void>, mailboxId?: string) {
@@ -98,6 +109,7 @@ function App() {
           refresh={refresh}
           setError={setError}
         />
+        {changeNotice && <ChangeNoticeModal notice={changeNotice} onClose={() => setChangeNotice(null)} />}
       </section>
     </main>
   );
@@ -132,7 +144,7 @@ function SectionView({
   return <OverviewSection snapshot={snapshot} busyId={busyId} mutate={mutate} />;
 }
 
-function LoginScreen({ onLogin, error, setError }: { onLogin: () => Promise<void>; error: string | null; setError: (value: string | null) => void }) {
+function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?: string) => Promise<void>; error: string | null; setError: (value: string | null) => void }) {
   const [email, setEmail] = useState("john@example.com");
   const [password, setPassword] = useState("Password123!");
   const [busy, setBusy] = useState(false);
@@ -141,8 +153,8 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: () => Promise<void
     event.preventDefault();
     try {
       setBusy(true);
-      await login(email, password);
-      await onLogin();
+      const result = await login(email, password);
+      await onLogin(result.previousLoginAt);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in.");
     } finally {
@@ -301,10 +313,38 @@ function SettingsSection({ snapshot, refresh, setError }: { snapshot: DashboardS
       <AddMailboxForm snapshot={snapshot} refresh={refresh} setError={setError} />
       <Panel title="Security Roadmap">
         <div className="security-list">
-          <span><KeyRound size={17} />Passkeys: schema exists, WebAuthn ceremony still to build.</span>
-          <span><Shield size={17} />2FA: next step is TOTP setup, recovery codes, and login challenge flow.</span>
+          <span><KeyRound size={17} />Passkeys: database fields and configuration are ready; registration and login screens are next.</span>
+          <span><Shield size={17} />2FA: next step is TOTP setup, recovery codes, and the login challenge screen.</span>
+          <span><RefreshCw size={17} />Version updates: users now see plain-English changes after sign-in.</span>
         </div>
       </Panel>
+    </div>
+  );
+}
+
+function ChangeNoticeModal({ notice, onClose }: { notice: AppChangesResponse; onClose: () => void }) {
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="change-modal" role="dialog" aria-modal="true" aria-labelledby="change-title">
+        <div>
+          <p className="workspace">pobox.watch {notice.version}</p>
+          <h2 id="change-title">{notice.since ? "Changes Since Your Last Login" : "Latest Changes"}</h2>
+          <p className="small">
+            {notice.since
+              ? `These updates were made after ${new Date(notice.since).toLocaleString()}.`
+              : "Here are the latest updates to the app."}
+          </p>
+        </div>
+        <div className="change-list">
+          {notice.changes.map((change) => (
+            <article key={change.id} className="change-item">
+              <strong>{change.title}</strong>
+              <span>{change.summary}</span>
+            </article>
+          ))}
+        </div>
+        <button className="primary" onClick={onClose}>Got It</button>
+      </section>
     </div>
   );
 }

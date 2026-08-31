@@ -8,6 +8,7 @@ import Fastify from "fastify";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
+import { appVersion, changesSince } from "../releases.js";
 import { realtimeHub } from "../realtime/hub.js";
 import { MemoryStore } from "../store/memoryStore.js";
 import type { AppStore } from "../store/types.js";
@@ -78,7 +79,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
       path: "/",
       expires: new Date(session.expiresAt)
     });
-    return { ok: true, expiresAt: session.expiresAt };
+    return { ok: true, expiresAt: session.expiresAt, previousLoginAt: session.previousLoginAt };
   });
 
   app.post("/api/v1/auth/logout", async (_request, reply) => {
@@ -90,6 +91,18 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     status: "NOT_CONFIGURED",
     message: "WebAuthn dependency and schema are present; production RP settings must be configured before enabling registration."
   }));
+
+  app.get("/api/v1/workspaces/:workspaceId/app/changes", async (request) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const query = request.query as { since?: string };
+    const session = await store.getSession(request.cookies.mailbox_session);
+    const member = await store.requireMember(session, workspaceId);
+    return {
+      version: appVersion,
+      since: query.since,
+      changes: changesSince(query.since, member.role)
+    };
+  });
 
   app.get("/api/v1/workspaces/:workspaceId/dashboard", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };

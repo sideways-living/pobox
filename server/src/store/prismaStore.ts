@@ -115,12 +115,13 @@ export class PrismaStore implements AppStore {
     if (!user || !user.active || !(await argon2.verify(user.passwordHash, password))) {
       throw new UnauthorizedError("Invalid email or password.");
     }
+    const previousLoginAt = user.lastLoginAt?.toISOString();
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
     const session = await this.prisma.session.create({
       data: { id: randomBytes(32).toString("base64url"), userId: user.id, expiresAt }
     });
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
-    return this.toSession(session);
+    return { ...this.toSession(session), previousLoginAt };
   }
 
   async getSession(sessionId?: string): Promise<Session> {

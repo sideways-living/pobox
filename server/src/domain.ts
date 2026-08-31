@@ -10,6 +10,7 @@ export interface User {
   passwordHash: string;
   emailVerified: boolean;
   active: boolean;
+  lastLoginAt?: string;
 }
 
 export interface Workspace {
@@ -89,6 +90,7 @@ export interface Session {
   id: string;
   userId: string;
   expiresAt: string;
+  previousLoginAt?: string;
 }
 
 export interface ParsedMailNotification {

@@ -57,3 +57,24 @@ export interface CreateMailboxInput {
   name: string;
   boxNumber: string;
 }
+
+export interface LoginResult {
+  ok: boolean;
+  expiresAt: string;
+  previousLoginAt?: string;
+}
+
+export interface AppChange {
+  id: string;
+  version: string;
+  releasedAt: string;
+  title: string;
+  summary: string;
+  audience: "ALL" | "ADMIN";
+}
+
+export interface AppChangesResponse {
+  version: string;
+  since?: string;
+  changes: AppChange[];
+}

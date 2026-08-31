@@ -387,6 +387,53 @@ input, select {
   border-radius: 6px;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(13, 24, 21, 0.42);
+  z-index: 20;
+}
+
+.change-modal {
+  width: min(100%, 560px);
+  max-height: min(720px, calc(100vh - 40px));
+  overflow: auto;
+  display: grid;
+  gap: 18px;
+  background: #ffffff;
+  border: 1px solid #d8ded8;
+  border-radius: 8px;
+  padding: 22px;
+  box-shadow: 0 20px 60px rgba(16, 35, 29, 0.28);
+}
+
+.change-modal h2 {
+  font-size: 1.45rem;
+  margin-bottom: 8px;
+}
+
+.change-list {
+  display: grid;
+  gap: 10px;
+}
+
+.change-item {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  background: #f8faf8;
+  border: 1px solid #e0e5df;
+  border-radius: 8px;
+}
+
+.change-item span {
+  color: #52635d;
+  line-height: 1.45;
+}
+
 @media (max-width: 980px) {
   .app-shell {
     grid-template-columns: 1fr;
