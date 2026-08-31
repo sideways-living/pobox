@@ -2,6 +2,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import argon2 from "argon2";
 import { createHash, randomBytes } from "node:crypto";
+import { decryptSecret, encryptSecret, generateRecoveryCodes, generateTotpSecret, hashRecoveryCode, recoveryCodeMatches, totpUri, verifyTotp } from "../auth/totp.js";
 import type {
   AuditEvent,
   CollectionEvent,
@@ -18,11 +19,14 @@ import type {
 import { parseMailNotification } from "../parser/mailParser.js";
 import type {
   AppStore,
+  ConfirmTotpResult,
   CreateMailboxInput,
   CreatePostOfficeInput,
   CreateUserInput,
   IncomingMailResult,
   IncomingProviderMessage,
+  LoginResult,
+  SecurityStatus,
   TeamMemberSummary
 } from "./types.js";
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "./types.js";
@@ -111,17 +115,107 @@ export class PrismaStore implements AppStore {
     }
   }
 
-  async login(email: string, password: string): Promise<Session> {
+  async login(email: string, password: string): Promise<LoginResult> {
     const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() }, include: { profile: true } });
     if (!user || !user.active || !(await argon2.verify(user.passwordHash, password))) {
       throw new UnauthorizedError("Invalid email or password.");
     }
-    const previousLoginAt = user.lastLoginAt?.toISOString();
+    if (user.totpEnabled) {
+      const expiresAt = new Date(Date.now() + 1000 * 60 * 10);
+      const challenge = await this.prisma.authChallenge.create({
+        data: { id: randomBytes(32).toString("base64url"), userId: user.id, expiresAt }
+      });
+      return {
+        kind: "two_factor_required",
+        challengeId: challenge.id,
+        expiresAt: challenge.expiresAt.toISOString(),
+        methods: ["totp", "recovery_code"]
+      };
+    }
+    return { kind: "session", ...(await this.createSession(user.id, user.lastLoginAt?.toISOString())) };
+  }
+
+  async verifySecondFactor(challengeId: string, code: string): Promise<Session> {
+    const challenge = await this.prisma.authChallenge.findUnique({ where: { id: challengeId }, include: { user: true } });
+    if (!challenge || challenge.expiresAt.getTime() < Date.now()) throw new UnauthorizedError("Two-factor challenge expired.");
+    if (!challenge.user.active || !challenge.user.totpEnabled || !challenge.user.totpSecretEncrypted) {
+      throw new UnauthorizedError("Two-factor authentication is not enabled.");
+    }
+    const validTotp = verifyTotp(decryptSecret(challenge.user.totpSecretEncrypted), code);
+    const availableRecoveryCodes = await this.prisma.recoveryCode.findMany({
+      where: { userId: challenge.userId, usedAt: null }
+    });
+    const recovery = availableRecoveryCodes.find((candidate) => recoveryCodeMatches(code, candidate.codeHash));
+    if (!validTotp && !recovery) throw new UnauthorizedError("Invalid two-factor code.");
+    await this.prisma.$transaction([
+      ...(recovery ? [this.prisma.recoveryCode.update({ where: { id: recovery.id }, data: { usedAt: new Date() } })] : []),
+      this.prisma.authChallenge.delete({ where: { id: challenge.id } })
+    ]);
+    return this.createSession(challenge.userId, challenge.user.lastLoginAt?.toISOString());
+  }
+
+  async securityStatus(session: Session): Promise<SecurityStatus> {
+    const [user, passkeyCount, recoveryCodesRemaining] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: session.userId } }),
+      this.prisma.passkeyCredential.count({ where: { userId: session.userId } }),
+      this.prisma.recoveryCode.count({ where: { userId: session.userId, usedAt: null } })
+    ]);
+    if (!user) throw new UnauthorizedError("Missing user.");
+    return { passkeysAvailable: false, passkeyCount, totpEnabled: user.totpEnabled, recoveryCodesRemaining };
+  }
+
+  async beginTotpSetup(session: Session) {
+    const user = await this.prisma.user.findUnique({ where: { id: session.userId } });
+    if (!user) throw new UnauthorizedError("Missing user.");
+    const secret = generateTotpSecret();
+    await this.prisma.user.update({ where: { id: user.id }, data: { totpPendingSecretEncrypted: encryptSecret(secret) } });
+    return { secret, otpauthUrl: totpUri(secret, user.email) };
+  }
+
+  async confirmTotpSetup(session: Session, code: string): Promise<ConfirmTotpResult> {
+    const user = await this.prisma.user.findUnique({ where: { id: session.userId } });
+    if (!user?.totpPendingSecretEncrypted) throw new ConflictError("Start 2FA setup before confirming.");
+    const secret = decryptSecret(user.totpPendingSecretEncrypted);
+    if (!verifyTotp(secret, code)) throw new UnauthorizedError("Invalid two-factor code.");
+    const recoveryCodes = generateRecoveryCodes();
+    await this.prisma.$transaction([
+      this.prisma.recoveryCode.deleteMany({ where: { userId: user.id } }),
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          totpSecretEncrypted: user.totpPendingSecretEncrypted,
+          totpPendingSecretEncrypted: null,
+          totpEnabled: true,
+          totpConfirmedAt: new Date()
+        }
+      }),
+      ...recoveryCodes.map((recoveryCode) =>
+        this.prisma.recoveryCode.create({ data: { userId: user.id, codeHash: hashRecoveryCode(recoveryCode) } })
+      )
+    ]);
+    return { recoveryCodes };
+  }
+
+  async disableTotp(session: Session, code: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: session.userId } });
+    if (!user?.totpEnabled || !user.totpSecretEncrypted) throw new ConflictError("2FA is not enabled.");
+    if (!verifyTotp(decryptSecret(user.totpSecretEncrypted), code)) throw new UnauthorizedError("Invalid two-factor code.");
+    await this.prisma.$transaction([
+      this.prisma.recoveryCode.deleteMany({ where: { userId: user.id } }),
+      this.prisma.authChallenge.deleteMany({ where: { userId: user.id } }),
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { totpEnabled: false, totpSecretEncrypted: null, totpPendingSecretEncrypted: null, totpConfirmedAt: null }
+      })
+    ]);
+  }
+
+  private async createSession(userId: string, previousLoginAt?: string): Promise<Session> {
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
     const session = await this.prisma.session.create({
-      data: { id: randomBytes(32).toString("base64url"), userId: user.id, expiresAt }
+      data: { id: randomBytes(32).toString("base64url"), userId, expiresAt }
     });
-    await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    await this.prisma.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } });
     return { ...this.toSession(session), previousLoginAt };
   }
 

@@ -11,6 +11,10 @@ export interface User {
   emailVerified: boolean;
   active: boolean;
   lastLoginAt?: string;
+  totpEnabled?: boolean;
+  totpSecretEncrypted?: string;
+  totpPendingSecretEncrypted?: string;
+  totpConfirmedAt?: string;
 }
 
 export interface Workspace {
@@ -91,6 +95,12 @@ export interface Session {
   userId: string;
   expiresAt: string;
   previousLoginAt?: string;
+}
+
+export interface AuthChallenge {
+  id: string;
+  userId: string;
+  expiresAt: string;
 }
 
 export interface ParsedMailNotification {

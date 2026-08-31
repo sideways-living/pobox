@@ -15,6 +15,8 @@ import type { AppStore } from "../store/types.js";
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "../store/types.js";
 
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
+const twoFactorSchema = z.object({ challengeId: z.string().min(16), code: z.string().min(6).max(32) });
+const totpConfirmSchema = z.object({ code: z.string().min(6).max(32) });
 const collectSchema = z.object({ source: z.enum(["IPHONE", "MACOS", "WEB", "ADMIN", "NOTIFICATION"]).default("WEB") });
 const simulateSchema = z.object({
   mailboxNumber: z.string().min(2),
@@ -77,7 +79,24 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
 
   app.post("/api/v1/auth/login", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = loginSchema.parse(request.body);
-    const session = await store.login(body.email, body.password);
+    const result = await store.login(body.email, body.password);
+    if (result.kind === "two_factor_required") {
+      return { ok: false, twoFactorRequired: true, challengeId: result.challengeId, expiresAt: result.expiresAt, methods: result.methods };
+    }
+    const session = result;
+    reply.setCookie(sessionCookieName, session.id, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      expires: new Date(session.expiresAt)
+    });
+    return { ok: true, expiresAt: session.expiresAt, previousLoginAt: session.previousLoginAt };
+  });
+
+  app.post("/api/v1/auth/2fa/verify", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const body = twoFactorSchema.parse(request.body);
+    const session = await store.verifySecondFactor(body.challengeId, body.code);
     reply.setCookie(sessionCookieName, session.id, {
       httpOnly: true,
       sameSite: "lax",
@@ -98,6 +117,29 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     status: "NOT_CONFIGURED",
     message: "WebAuthn dependency and schema are present; production RP settings must be configured before enabling registration."
   }));
+
+  app.get("/api/v1/auth/security", async (request) => {
+    const session = await store.getSession(sessionCookie(request.cookies));
+    return store.securityStatus(session);
+  });
+
+  app.post("/api/v1/auth/2fa/setup", async (request) => {
+    const session = await store.getSession(sessionCookie(request.cookies));
+    return store.beginTotpSetup(session);
+  });
+
+  app.post("/api/v1/auth/2fa/confirm", async (request) => {
+    const body = totpConfirmSchema.parse(request.body);
+    const session = await store.getSession(sessionCookie(request.cookies));
+    return store.confirmTotpSetup(session, body.code);
+  });
+
+  app.post("/api/v1/auth/2fa/disable", async (request) => {
+    const body = totpConfirmSchema.parse(request.body);
+    const session = await store.getSession(sessionCookie(request.cookies));
+    await store.disableTotp(session, body.code);
+    return { ok: true };
+  });
 
   app.get("/api/v1/workspaces/:workspaceId/app/changes", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };

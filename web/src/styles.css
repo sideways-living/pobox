@@ -359,6 +359,38 @@ input, select {
   border-radius: 8px;
 }
 
+.security-action {
+  margin-top: 14px;
+}
+
+.security-setup {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e0e5df;
+}
+
+.security-setup a {
+  color: #143329;
+  font-weight: 800;
+}
+
+.recovery-codes {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 12px;
+  background: #f8faf8;
+  border: 1px solid #e0e5df;
+  border-radius: 8px;
+}
+
+.recovery-codes code {
+  display: block;
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.7;
+}
+
 .map-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

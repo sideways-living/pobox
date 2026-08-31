@@ -1,6 +1,8 @@
 import argon2 from "argon2";
 import { nanoid } from "nanoid";
+import { decryptSecret, encryptSecret, generateRecoveryCodes, generateTotpSecret, hashRecoveryCode, recoveryCodeMatches, totpUri, verifyTotp } from "../auth/totp.js";
 import type {
+  AuthChallenge,
   AuditEvent,
   CollectionEvent,
   CollectionSource,
@@ -16,11 +18,14 @@ import type {
 import { parseMailNotification } from "../parser/mailParser.js";
 import type {
   AppStore,
+  ConfirmTotpResult,
   CreateMailboxInput,
   CreatePostOfficeInput,
   CreateUserInput,
   IncomingMailResult,
   IncomingProviderMessage,
+  LoginResult,
+  SecurityStatus,
   TeamMemberSummary
 } from "./types.js";
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "./types.js";
@@ -35,6 +40,8 @@ export class MemoryStore implements AppStore {
   collectionEvents = new Map<string, CollectionEvent>();
   auditEvents = new Map<string, AuditEvent>();
   sessions = new Map<string, Session>();
+  authChallenges = new Map<string, AuthChallenge>();
+  recoveryCodes = new Map<string, { id: string; userId: string; codeHash: string; usedAt?: string }>();
 
   async seedDemo() {
     if (this.users.size > 0) return;
@@ -121,11 +128,91 @@ export class MemoryStore implements AppStore {
     }
   }
 
-  async login(email: string, password: string): Promise<Session> {
+  async login(email: string, password: string): Promise<LoginResult> {
     const user = [...this.users.values()].find((candidate) => candidate.email.toLowerCase() === email.toLowerCase());
     if (!user || !user.active || !(await argon2.verify(user.passwordHash, password))) {
       throw new UnauthorizedError("Invalid email or password.");
     }
+    if (user.totpEnabled) {
+      const challenge = {
+        id: nanoid(32),
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 1000 * 60 * 10).toISOString()
+      };
+      this.authChallenges.set(challenge.id, challenge);
+      return { kind: "two_factor_required", challengeId: challenge.id, expiresAt: challenge.expiresAt, methods: ["totp", "recovery_code"] };
+    }
+    return { kind: "session", ...(await this.createSession(user)) };
+  }
+
+  async verifySecondFactor(challengeId: string, code: string): Promise<Session> {
+    const challenge = this.authChallenges.get(challengeId);
+    if (!challenge || new Date(challenge.expiresAt).getTime() < Date.now()) throw new UnauthorizedError("Two-factor challenge expired.");
+    const user = this.users.get(challenge.userId);
+    if (!user?.totpEnabled || !user.totpSecretEncrypted) throw new UnauthorizedError("Two-factor authentication is not enabled.");
+    const validTotp = verifyTotp(decryptSecret(user.totpSecretEncrypted), code);
+    const recovery = [...this.recoveryCodes.values()].find(
+      (candidate) => candidate.userId === user.id && !candidate.usedAt && recoveryCodeMatches(code, candidate.codeHash)
+    );
+    if (!validTotp && !recovery) throw new UnauthorizedError("Invalid two-factor code.");
+    if (recovery) this.recoveryCodes.set(recovery.id, { ...recovery, usedAt: new Date().toISOString() });
+    this.authChallenges.delete(challengeId);
+    return this.createSession(user);
+  }
+
+  async securityStatus(session: Session): Promise<SecurityStatus> {
+    const user = this.users.get(session.userId);
+    if (!user) throw new UnauthorizedError("Missing user.");
+    return {
+      passkeysAvailable: false,
+      passkeyCount: 0,
+      totpEnabled: user.totpEnabled ?? false,
+      recoveryCodesRemaining: [...this.recoveryCodes.values()].filter((code) => code.userId === user.id && !code.usedAt).length
+    };
+  }
+
+  async beginTotpSetup(session: Session) {
+    const user = this.users.get(session.userId);
+    if (!user) throw new UnauthorizedError("Missing user.");
+    const secret = generateTotpSecret();
+    this.users.set(user.id, { ...user, totpPendingSecretEncrypted: encryptSecret(secret) });
+    return { secret, otpauthUrl: totpUri(secret, user.email) };
+  }
+
+  async confirmTotpSetup(session: Session, code: string): Promise<ConfirmTotpResult> {
+    const user = this.users.get(session.userId);
+    if (!user?.totpPendingSecretEncrypted) throw new ConflictError("Start 2FA setup before confirming.");
+    const secret = decryptSecret(user.totpPendingSecretEncrypted);
+    if (!verifyTotp(secret, code)) throw new UnauthorizedError("Invalid two-factor code.");
+    const recoveryCodes = generateRecoveryCodes();
+    for (const existing of [...this.recoveryCodes.values()].filter((candidate) => candidate.userId === user.id)) {
+      this.recoveryCodes.delete(existing.id);
+    }
+    for (const recoveryCode of recoveryCodes) {
+      const id = nanoid();
+      this.recoveryCodes.set(id, { id, userId: user.id, codeHash: hashRecoveryCode(recoveryCode) });
+    }
+    this.users.set(user.id, {
+      ...user,
+      totpSecretEncrypted: user.totpPendingSecretEncrypted,
+      totpPendingSecretEncrypted: undefined,
+      totpEnabled: true,
+      totpConfirmedAt: new Date().toISOString()
+    });
+    return { recoveryCodes };
+  }
+
+  async disableTotp(session: Session, code: string): Promise<void> {
+    const user = this.users.get(session.userId);
+    if (!user?.totpEnabled || !user.totpSecretEncrypted) throw new ConflictError("2FA is not enabled.");
+    if (!verifyTotp(decryptSecret(user.totpSecretEncrypted), code)) throw new UnauthorizedError("Invalid two-factor code.");
+    this.users.set(user.id, { ...user, totpEnabled: false, totpSecretEncrypted: undefined, totpPendingSecretEncrypted: undefined, totpConfirmedAt: undefined });
+    for (const recovery of [...this.recoveryCodes.values()].filter((candidate) => candidate.userId === user.id)) {
+      this.recoveryCodes.delete(recovery.id);
+    }
+  }
+
+  private async createSession(user: User): Promise<Session> {
     const previousLoginAt = user.lastLoginAt;
     const now = new Date().toISOString();
     const session: Session = {

@@ -13,14 +13,26 @@ public actor MailboxAPIClient {
         self.session = session
     }
 
-    public func login(email: String, password: String) async throws {
+    public func login(email: String, password: String) async throws -> LoginResult {
         let url = baseURL.appending(path: "/api/v1/auth/login")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(LoginRequest(email: email, password: password))
-        let (_, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request)
         try validate(response)
+        return try decoder.decode(LoginResult.self, from: data)
+    }
+
+    public func verifySecondFactor(challengeId: String, code: String) async throws -> LoginResult {
+        let url = baseURL.appending(path: "/api/v1/auth/2fa/verify")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(TwoFactorRequest(challengeId: challengeId, code: code))
+        let (data, response) = try await session.data(for: request)
+        try validate(response)
+        return try decoder.decode(LoginResult.self, from: data)
     }
 
     public func logout() async throws {
@@ -62,4 +74,17 @@ public enum MailboxAPIError: Error {
 private struct LoginRequest: Encodable {
     let email: String
     let password: String
+}
+
+private struct TwoFactorRequest: Encodable {
+    let challengeId: String
+    let code: String
+}
+
+public struct LoginResult: Codable, Sendable {
+    public let ok: Bool
+    public let twoFactorRequired: Bool?
+    public let challengeId: String?
+    public let expiresAt: String
+    public let previousLoginAt: String?
 }

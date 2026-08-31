@@ -50,10 +50,35 @@ export interface CreateMailboxInput {
   boxNumber: string;
 }
 
+export type LoginResult =
+  | ({ kind: "session" } & Session)
+  | { kind: "two_factor_required"; challengeId: string; expiresAt: string; methods: Array<"totp" | "recovery_code"> };
+
+export interface SecurityStatus {
+  passkeysAvailable: boolean;
+  passkeyCount: number;
+  totpEnabled: boolean;
+  recoveryCodesRemaining: number;
+}
+
+export interface TotpSetup {
+  secret: string;
+  otpauthUrl: string;
+}
+
+export interface ConfirmTotpResult {
+  recoveryCodes: string[];
+}
+
 export interface AppStore {
   seedDemo(): Promise<void>;
-  login(email: string, password: string): Promise<Session>;
+  login(email: string, password: string): Promise<LoginResult>;
+  verifySecondFactor(challengeId: string, code: string): Promise<Session>;
   getSession(sessionId?: string): Promise<Session>;
+  securityStatus(session: Session): Promise<SecurityStatus>;
+  beginTotpSetup(session: Session): Promise<TotpSetup>;
+  confirmTotpSetup(session: Session, code: string): Promise<ConfirmTotpResult>;
+  disableTotp(session: Session, code: string): Promise<void>;
   requireMember(session: Session, workspaceId: string, role?: "ADMIN"): Promise<WorkspaceMember>;
   dashboard(session: Session, workspaceId: string): Promise<DashboardSnapshot>;
   outstandingMailboxCount(workspaceId: string): Promise<number>;

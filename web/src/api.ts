@@ -1,4 +1,4 @@
-import type { AppChangesResponse, CreateMailboxInput, CreatePostOfficeInput, CreateUserInput, DashboardSnapshot, LoginResult, TeamMember } from "./types";
+import type { AppChangesResponse, CreateMailboxInput, CreatePostOfficeInput, CreateUserInput, DashboardSnapshot, LoginResult, SecurityStatus, TeamMember, TotpSetup } from "./types";
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? window.location.origin;
 export const workspaceId = "ws_company";
@@ -12,6 +12,53 @@ export async function login(email: string, password: string): Promise<LoginResul
   });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
+}
+
+export async function verifySecondFactor(challengeId: string, code: string): Promise<LoginResult> {
+  const response = await fetch(`${apiBase}/api/v1/auth/2fa/verify`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challengeId, code })
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function loadSecurityStatus(): Promise<SecurityStatus> {
+  const response = await fetch(`${apiBase}/api/v1/auth/security`, { credentials: "include" });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function beginTotpSetup(): Promise<TotpSetup> {
+  const response = await fetch(`${apiBase}/api/v1/auth/2fa/setup`, {
+    method: "POST",
+    credentials: "include"
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function confirmTotpSetup(code: string): Promise<{ recoveryCodes: string[] }> {
+  const response = await fetch(`${apiBase}/api/v1/auth/2fa/confirm`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code })
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function disableTotp(code: string): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/auth/2fa/disable`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code })
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
 }
 
 export async function loadDashboard(): Promise<DashboardSnapshot> {

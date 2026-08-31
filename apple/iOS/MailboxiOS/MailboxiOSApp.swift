@@ -14,6 +14,8 @@ struct MailboxiOSApp: App {
 final class iPhoneMailboxViewModel: ObservableObject {
     @Published var email = "daniel@example.com"
     @Published var password = "Password123!"
+    @Published var twoFactorCode = ""
+    @Published var twoFactorChallengeId: String?
     @Published var snapshot: MailboxDashboardSnapshot?
     @Published var errorMessage: String?
     @Published var isLoading = false
@@ -24,7 +26,22 @@ final class iPhoneMailboxViewModel: ObservableObject {
 
     func signIn() async {
         await run {
-            try await client.login(email: email, password: password)
+            let result = try await client.login(email: email, password: password)
+            if result.twoFactorRequired == true, let challengeId = result.challengeId {
+                twoFactorChallengeId = challengeId
+                twoFactorCode = ""
+                return
+            }
+            snapshot = try await client.dashboard(workspaceId: workspaceId)
+        }
+    }
+
+    func verifySecondFactor() async {
+        guard let challengeId = twoFactorChallengeId else { return }
+        await run {
+            _ = try await client.verifySecondFactor(challengeId: challengeId, code: twoFactorCode)
+            twoFactorChallengeId = nil
+            twoFactorCode = ""
             snapshot = try await client.dashboard(workspaceId: workspaceId)
         }
     }
@@ -80,22 +97,38 @@ struct iPhoneLoginView: View {
                     Text("pobox.watch")
                 }
                 Section("Sign In") {
-                    TextField("Email", text: $model.email)
-                        .textContentType(.username)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.emailAddress)
-                    SecureField("Password", text: $model.password)
-                        .textContentType(.password)
-                    Button {
-                        Task { await model.signIn() }
-                    } label: {
-                        if model.isLoading {
-                            ProgressView()
-                        } else {
-                            Label("Sign In", systemImage: "person.crop.circle.badge.checkmark")
+                    if model.twoFactorChallengeId == nil {
+                        TextField("Email", text: $model.email)
+                            .textContentType(.username)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.emailAddress)
+                        SecureField("Password", text: $model.password)
+                            .textContentType(.password)
+                        Button {
+                            Task { await model.signIn() }
+                        } label: {
+                            if model.isLoading {
+                                ProgressView()
+                            } else {
+                                Label("Sign In", systemImage: "person.crop.circle.badge.checkmark")
+                            }
+                        }
+                        .disabled(model.isLoading)
+                    } else {
+                        TextField("Authenticator or recovery code", text: $model.twoFactorCode)
+                            .textContentType(.oneTimeCode)
+                            .keyboardType(.numberPad)
+                        Button {
+                            Task { await model.verifySecondFactor() }
+                        } label: {
+                            Label("Verify Code", systemImage: "checkmark.shield")
+                        }
+                        .disabled(model.isLoading)
+                        Button("Use Password Instead") {
+                            model.twoFactorChallengeId = nil
+                            model.twoFactorCode = ""
                         }
                     }
-                    .disabled(model.isLoading)
                 }
                 if let errorMessage = model.errorMessage {
                     Section {

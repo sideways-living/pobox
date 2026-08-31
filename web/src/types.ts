@@ -58,10 +58,20 @@ export interface CreateMailboxInput {
   boxNumber: string;
 }
 
-export interface LoginResult {
-  ok: boolean;
-  expiresAt: string;
-  previousLoginAt?: string;
+export type LoginResult =
+  | { ok: true; expiresAt: string; previousLoginAt?: string }
+  | { ok: false; twoFactorRequired: true; challengeId: string; expiresAt: string; methods: Array<"totp" | "recovery_code"> };
+
+export interface SecurityStatus {
+  passkeysAvailable: boolean;
+  passkeyCount: number;
+  totpEnabled: boolean;
+  recoveryCodesRemaining: number;
+}
+
+export interface TotpSetup {
+  secret: string;
+  otpauthUrl: string;
 }
 
 export interface AppChange {

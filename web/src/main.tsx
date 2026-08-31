@@ -1,8 +1,24 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Bell, Check, KeyRound, LogIn, Mail, MapPin, Plus, RefreshCw, Shield, Users } from "lucide-react";
-import { collectMailbox, createMailbox, createPostOffice, createUser, loadAppChanges, loadDashboard, loadMembers, login, realtimeUrl, simulateMail } from "./api";
-import type { AppChangesResponse, DashboardSnapshot, Mailbox, TeamMember } from "./types";
+import {
+  beginTotpSetup,
+  collectMailbox,
+  confirmTotpSetup,
+  createMailbox,
+  createPostOffice,
+  createUser,
+  disableTotp,
+  loadAppChanges,
+  loadDashboard,
+  loadMembers,
+  loadSecurityStatus,
+  login,
+  realtimeUrl,
+  simulateMail,
+  verifySecondFactor
+} from "./api";
+import type { AppChangesResponse, DashboardSnapshot, Mailbox, SecurityStatus, TeamMember, TotpSetup } from "./types";
 import "./styles.css";
 
 type Section = "Overview" | "Mailboxes" | "Map" | "History" | "Team" | "Settings";
@@ -147,14 +163,22 @@ function SectionView({
 function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?: string) => Promise<void>; error: string | null; setError: (value: string | null) => void }) {
   const [email, setEmail] = useState("john@example.com");
   const [password, setPassword] = useState("Password123!");
+  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     try {
       setBusy(true);
-      const result = await login(email, password);
-      await onLogin(result.previousLoginAt);
+      const result = challengeId ? await verifySecondFactor(challengeId, twoFactorCode) : await login(email, password);
+      if (!result.ok && result.twoFactorRequired) {
+        setChallengeId(result.challengeId);
+        setTwoFactorCode("");
+        setError(null);
+        return;
+      }
+      if (result.ok) await onLogin(result.previousLoginAt);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in.");
     } finally {
@@ -166,11 +190,22 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
     <main className="login-shell">
       <form className="login-panel" onSubmit={submit}>
         <div className="brand large"><Mail size={26} />pobox.watch</div>
-        <label>Email<input value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-        <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+        {!challengeId && (
+          <>
+            <label>Email<input value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+            <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+          </>
+        )}
+        {challengeId && (
+          <label>
+            Authenticator or recovery code
+            <input inputMode="numeric" autoComplete="one-time-code" value={twoFactorCode} onChange={(event) => setTwoFactorCode(event.target.value)} autoFocus />
+          </label>
+        )}
         {error && <div className="alert">{error}</div>}
-        <button className="primary" disabled={busy}><LogIn size={18} />Sign In</button>
-        <button type="button" className="secondary"><KeyRound size={18} />Sign in with Passkey</button>
+        <button className="primary" disabled={busy}><LogIn size={18} />{challengeId ? "Verify Code" : "Sign In"}</button>
+        {challengeId && <button type="button" className="secondary" onClick={() => setChallengeId(null)}>Use Password Instead</button>}
+        {!challengeId && <button type="button" className="secondary"><KeyRound size={18} />Sign in with Passkey</button>}
         <button type="button" className="link-button">Forgot Password?</button>
       </form>
     </main>
@@ -311,14 +346,107 @@ function SettingsSection({ snapshot, refresh, setError }: { snapshot: DashboardS
     <div className="admin-grid">
       <AddPostOfficeForm snapshot={snapshot} refresh={refresh} setError={setError} />
       <AddMailboxForm snapshot={snapshot} refresh={refresh} setError={setError} />
-      <Panel title="Security Roadmap">
-        <div className="security-list">
-          <span><KeyRound size={17} />Passkeys: database fields and configuration are ready; registration and login screens are next.</span>
-          <span><Shield size={17} />2FA: next step is TOTP setup, recovery codes, and the login challenge screen.</span>
-          <span><RefreshCw size={17} />Version updates: users now see plain-English changes after sign-in.</span>
-        </div>
-      </Panel>
+      <SecurityPanel setError={setError} />
     </div>
+  );
+}
+
+function SecurityPanel({ setError }: { setError: (value: string | null) => void }) {
+  const [status, setStatus] = useState<SecurityStatus | null>(null);
+  const [setup, setSetup] = useState<TotpSetup | null>(null);
+  const [code, setCode] = useState("");
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  async function refreshSecurity() {
+    setStatus(await loadSecurityStatus());
+  }
+
+  useEffect(() => {
+    refreshSecurity().catch((err) => setError(err instanceof Error ? err.message : "Unable to load security settings."));
+  }, []);
+
+  async function startSetup() {
+    try {
+      setBusy(true);
+      setRecoveryCodes([]);
+      setSetup(await beginTotpSetup());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to start 2FA setup.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmSetup(event: React.FormEvent) {
+    event.preventDefault();
+    try {
+      setBusy(true);
+      const result = await confirmTotpSetup(code);
+      setRecoveryCodes(result.recoveryCodes);
+      setSetup(null);
+      setCode("");
+      await refreshSecurity();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to confirm 2FA setup.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function turnOff(event: React.FormEvent) {
+    event.preventDefault();
+    try {
+      setBusy(true);
+      await disableTotp(code);
+      setCode("");
+      setRecoveryCodes([]);
+      await refreshSecurity();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to disable 2FA.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Panel title="Security">
+      <div className="security-list">
+        <span><KeyRound size={17} />Passkeys: {status?.passkeysAvailable ? `${status.passkeyCount} registered; browser setup is next.` : "Not available on this server."}</span>
+        <span><Shield size={17} />2FA: {status?.totpEnabled ? `On, with ${status.recoveryCodesRemaining} recovery codes left.` : "Off"}</span>
+        <span><RefreshCw size={17} />Version updates: users see plain-English changes after sign-in.</span>
+      </div>
+
+      {!status?.totpEnabled && !setup && <button className="primary security-action" disabled={busy} onClick={startSetup}><Shield size={17} />Set Up Authenticator App</button>}
+
+      {setup && (
+        <form className="form-grid security-setup" onSubmit={confirmSetup}>
+          <p className="small">Add this account to an authenticator app, then enter the six-digit code it shows.</p>
+          <label>Manual setup key<input value={setup.secret} readOnly /></label>
+          <a href={setup.otpauthUrl}>Open Authenticator Setup</a>
+          <label>Six-digit code<input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(event) => setCode(event.target.value)} required /></label>
+          <button className="primary" disabled={busy}>Confirm 2FA</button>
+        </form>
+      )}
+
+      {status?.totpEnabled && (
+        <form className="form-grid security-setup" onSubmit={turnOff}>
+          <label>Authenticator code to turn off 2FA<input inputMode="numeric" value={code} onChange={(event) => setCode(event.target.value)} required /></label>
+          <button disabled={busy}>Turn Off 2FA</button>
+        </form>
+      )}
+
+      {recoveryCodes.length > 0 && (
+        <div className="recovery-codes">
+          <strong>Recovery codes</strong>
+          <p className="small">Keep these somewhere safe. Each code can be used once if you lose access to your authenticator app.</p>
+          <code>{recoveryCodes.join("\n")}</code>
+        </div>
+      )}
+    </Panel>
   );
 }
 

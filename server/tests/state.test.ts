@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { currentTotpCode } from "../src/auth/totp.js";
+import type { Session } from "../src/domain.js";
 import { MemoryStore } from "../src/store/memoryStore.js";
 import { ConflictError } from "../src/store/types.js";
 
@@ -10,8 +12,14 @@ describe("shared mailbox state", () => {
     await store.seedDemo();
   });
 
+  async function loginSession(email: string): Promise<Session> {
+    const result = await store.login(email, "Password123!");
+    if (result.kind !== "session") throw new Error("Expected a session.");
+    return result;
+  }
+
   it("deduplicates provider messages, not mailbox days", async () => {
-    const daniel = await store.login("daniel@example.com", "Password123!");
+    const daniel = await loginSession("daniel@example.com");
     const first = await store.processIncomingMail({
       workspaceId: "ws_company",
       provider: "mock",
@@ -47,7 +55,7 @@ describe("shared mailbox state", () => {
   });
 
   it("derives collection actor from authenticated session", async () => {
-    const john = await store.login("john@example.com", "Password123!");
+    const john = await loginSession("john@example.com");
     await store.processIncomingMail({
       workspaceId: "ws_company",
       provider: "mock",
@@ -60,16 +68,46 @@ describe("shared mailbox state", () => {
   });
 
   it("returns the previous login time on later logins", async () => {
-    const first = await store.login("john@example.com", "Password123!");
+    const first = await loginSession("john@example.com");
     expect(first.previousLoginAt).toBeUndefined();
 
-    const second = await store.login("john@example.com", "Password123!");
+    const second = await loginSession("john@example.com");
     expect(second.previousLoginAt).toBeDefined();
     expect(new Date(second.previousLoginAt ?? "").getTime()).toBeGreaterThan(0);
   });
 
+  it("requires a second factor after TOTP is enabled", async () => {
+    const john = await loginSession("john@example.com");
+    const setup = await store.beginTotpSetup(john);
+    const recovery = await store.confirmTotpSetup(john, currentTotpCode(setup.secret));
+    expect(recovery.recoveryCodes).toHaveLength(10);
+
+    const challenged = await store.login("john@example.com", "Password123!");
+    expect(challenged.kind).toBe("two_factor_required");
+    if (challenged.kind !== "two_factor_required") throw new Error("Expected two-factor challenge.");
+
+    await expect(store.getSession(challenged.challengeId)).rejects.toThrow("Session expired.");
+    const session = await store.verifySecondFactor(challenged.challengeId, currentTotpCode(setup.secret));
+    expect(session.userId).toBe("usr_john");
+  });
+
+  it("allows a recovery code to complete one login once", async () => {
+    const john = await loginSession("john@example.com");
+    const setup = await store.beginTotpSetup(john);
+    const recovery = await store.confirmTotpSetup(john, currentTotpCode(setup.secret));
+
+    const challenged = await store.login("john@example.com", "Password123!");
+    if (challenged.kind !== "two_factor_required") throw new Error("Expected two-factor challenge.");
+    const session = await store.verifySecondFactor(challenged.challengeId, recovery.recoveryCodes[0]);
+    expect(session.userId).toBe("usr_john");
+
+    const secondChallenge = await store.login("john@example.com", "Password123!");
+    if (secondChallenge.kind !== "two_factor_required") throw new Error("Expected two-factor challenge.");
+    await expect(store.verifySecondFactor(secondChallenge.challengeId, recovery.recoveryCodes[0])).rejects.toThrow("Invalid two-factor code.");
+  });
+
   it("rejects member-only admin operations", async () => {
-    const sarah = await store.login("sarah@example.com", "Password123!");
+    const sarah = await loginSession("sarah@example.com");
     await expect(store.inviteMember(sarah, "ws_company", "alex@example.com", "MEMBER")).rejects.toThrow("Admin role required.");
     await expect(
       store.createUser(sarah, "ws_company", {
@@ -82,7 +120,7 @@ describe("shared mailbox state", () => {
   });
 
   it("allows admins to create users, post offices, and mailboxes", async () => {
-    const daniel = await store.login("daniel@example.com", "Password123!");
+    const daniel = await loginSession("daniel@example.com");
     const user = await store.createUser(daniel, "ws_company", {
       email: "ops@example.com",
       displayName: "Ops Lead",
@@ -110,8 +148,8 @@ describe("shared mailbox state", () => {
   });
 
   it("makes simultaneous collection idempotent", async () => {
-    const sarah = await store.login("sarah@example.com", "Password123!");
-    const daniel = await store.login("daniel@example.com", "Password123!");
+    const sarah = await loginSession("sarah@example.com");
+    const daniel = await loginSession("daniel@example.com");
     await store.processIncomingMail({
       workspaceId: "ws_company",
       provider: "mock",

@@ -41,6 +41,8 @@ final class MailboxMacOSAppDelegate: NSObject, NSApplicationDelegate {
 final class MacMailboxViewModel: ObservableObject {
     @Published var email = "daniel@example.com"
     @Published var password = "Password123!"
+    @Published var twoFactorCode = ""
+    @Published var twoFactorChallengeId: String?
     @Published var snapshot: MailboxDashboardSnapshot?
     @Published var errorMessage: String?
     @Published var isLoading = false
@@ -51,7 +53,22 @@ final class MacMailboxViewModel: ObservableObject {
 
     func signIn() async {
         await run {
-            try await client.login(email: email, password: password)
+            let result = try await client.login(email: email, password: password)
+            if result.twoFactorRequired == true, let challengeId = result.challengeId {
+                twoFactorChallengeId = challengeId
+                twoFactorCode = ""
+                return
+            }
+            snapshot = try await client.dashboard(workspaceId: workspaceId)
+        }
+    }
+
+    func verifySecondFactor() async {
+        guard let challengeId = twoFactorChallengeId else { return }
+        await run {
+            _ = try await client.verifySecondFactor(challengeId: challengeId, code: twoFactorCode)
+            twoFactorChallengeId = nil
+            twoFactorCode = ""
             snapshot = try await client.dashboard(workspaceId: workspaceId)
         }
     }
@@ -105,21 +122,42 @@ struct MacLoginView: View {
             Text("Sign in to pobox.watch")
                 .foregroundStyle(.secondary)
 
-            TextField("Email", text: $model.email)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 360)
-            SecureField("Password", text: $model.password)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 360)
+            if model.twoFactorChallengeId == nil {
+                TextField("Email", text: $model.email)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 360)
+                SecureField("Password", text: $model.password)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 360)
+            } else {
+                TextField("Authenticator or recovery code", text: $model.twoFactorCode)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 360)
+            }
 
             HStack {
-                Button {
-                    Task { await model.signIn() }
-                } label: {
-                    Label("Sign In", systemImage: "person.crop.circle.badge.checkmark")
+                if model.twoFactorChallengeId == nil {
+                    Button {
+                        Task { await model.signIn() }
+                    } label: {
+                        Label("Sign In", systemImage: "person.crop.circle.badge.checkmark")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.isLoading)
+                } else {
+                    Button {
+                        Task { await model.verifySecondFactor() }
+                    } label: {
+                        Label("Verify Code", systemImage: "checkmark.shield")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.isLoading)
+
+                    Button("Use Password Instead") {
+                        model.twoFactorChallengeId = nil
+                        model.twoFactorCode = ""
+                    }
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(model.isLoading)
 
                 if model.isLoading {
                     ProgressView()

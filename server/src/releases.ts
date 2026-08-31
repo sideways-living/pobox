@@ -1,4 +1,4 @@
-export const appVersion = "0.2.1";
+export const appVersion = "0.3.0";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.3.0-two-factor-auth",
+    version: "0.3.0",
+    releasedAt: "2026-09-01T10:00:00.000Z",
+    title: "Authenticator app 2FA",
+    summary:
+      "You can now set up authenticator app two-factor authentication from Settings. Once enabled, pobox.watch asks for a one-time code or recovery code after your password.",
+    audience: "ALL"
+  },
   {
     id: "0.2.1-backend-branding",
     version: "0.2.1",

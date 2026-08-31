@@ -35,9 +35,15 @@ model User {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   lastLoginAt       DateTime?
+  totpSecretEncrypted        String?
+  totpPendingSecretEncrypted String?
+  totpEnabled                Boolean             @default(false)
+  totpConfirmedAt            DateTime?
   profile           UserProfile?
   memberships       WorkspaceMember[]
   sessions          Session[]
+  authChallenges    AuthChallenge[]
+  recoveryCodes     RecoveryCode[]
   collectedEvents   CollectionEvent[]
   devices           Device[]
   passkeyCredentials PasskeyCredential[]
@@ -51,6 +57,27 @@ model Session {
   user      User     @relation(fields: [userId], references: [id])
 
   @@index([userId, expiresAt])
+}
+
+model AuthChallenge {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, expiresAt])
+}
+
+model RecoveryCode {
+  id        String    @id @default(uuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, usedAt])
 }
 
 model UserProfile {
