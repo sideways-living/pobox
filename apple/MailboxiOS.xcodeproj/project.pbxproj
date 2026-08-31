@@ -1,0 +1,482 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		9C8202E6A066449AC8B2BBFC /* MailboxiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA029BAA74B6AEAA2A8B7B6 /* MailboxiOSApp.swift */; };
+		BCF7E75839B35176A4A41782 /* LocationReminderPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1699F8903E81A884E231D1A5 /* LocationReminderPolicy.swift */; };
+		240F0EB53EE900C9DE9131FB /* MailboxAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7451E3C90F480C8FFE75816C /* MailboxAPIClient.swift */; };
+		899B66472461DE33C376ACFC /* MailboxModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8383CFF48734BB1E6121572E /* MailboxModels.swift */; };
+		D6CC854C2BBFAFE42C383599 /* MailboxShared.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 54BAC908F278B9E5641724F2 /* MailboxShared.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B621CA49A286455256B5C34B /* MailboxShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 54BAC908F278B9E5641724F2 /* MailboxShared.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B2FA78FD120BB9A5C9AEA6C7 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 58D6D3DE8D70B08749A14163 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AFC342D6E51FC59F04135EA3;
+			remoteInfo = MailboxShared;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		260F4006A76343654140CDF6 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				D6CC854C2BBFAFE42C383599 /* MailboxShared.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		BA623A716C187C5CA97AC072 /* Mailbox.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mailbox.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		54BAC908F278B9E5641724F2 /* MailboxShared.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = MailboxShared.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		5EA029BAA74B6AEAA2A8B7B6 /* MailboxiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailboxiOSApp.swift; sourceTree = "<group>"; };
+		1699F8903E81A884E231D1A5 /* LocationReminderPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationReminderPolicy.swift; sourceTree = "<group>"; };
+		7451E3C90F480C8FFE75816C /* MailboxAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailboxAPIClient.swift; sourceTree = "<group>"; };
+		8383CFF48734BB1E6121572E /* MailboxModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailboxModels.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		347379D6EEB551E82C1E784C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B621CA49A286455256B5C34B /* MailboxShared.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		89A016E73D51E4854FA18B21 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		B2DE9839B8DE6DF7D9A9BF5C = {
+			isa = PBXGroup;
+			children = (
+				111297B124F2A0ABC45F7ACD /* iOS */,
+				3B5767207F6EA31EBB352746 /* Shared */,
+				618456F2879A9861CBC16692 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		618456F2879A9861CBC16692 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BA623A716C187C5CA97AC072 /* Mailbox.app */,
+				54BAC908F278B9E5641724F2 /* MailboxShared.framework */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		111297B124F2A0ABC45F7ACD /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				CDBDBC9EDC04291169BF4BF2 /* MailboxiOS */,
+			);
+			path = iOS;
+			sourceTree = "<group>";
+		};
+		CDBDBC9EDC04291169BF4BF2 /* MailboxiOS */ = {
+			isa = PBXGroup;
+			children = (
+				5EA029BAA74B6AEAA2A8B7B6 /* MailboxiOSApp.swift */,
+			);
+			path = MailboxiOS;
+			sourceTree = "<group>";
+		};
+		3B5767207F6EA31EBB352746 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				0A00D89FEA6468BAE0FAFD88 /* MailboxShared */,
+			);
+			path = Shared/Sources;
+			sourceTree = "<group>";
+		};
+		0A00D89FEA6468BAE0FAFD88 /* MailboxShared */ = {
+			isa = PBXGroup;
+			children = (
+				1699F8903E81A884E231D1A5 /* LocationReminderPolicy.swift */,
+				7451E3C90F480C8FFE75816C /* MailboxAPIClient.swift */,
+				8383CFF48734BB1E6121572E /* MailboxModels.swift */,
+			);
+			path = MailboxShared;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		433447FEFB8B8D2ADB64FAC9 /* Mailbox */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A669D8562C481E47ADEB4DF7 /* Build configuration list for PBXNativeTarget "Mailbox" */;
+			buildPhases = (
+				C301E9402DDC89DB504D9E0B /* Sources */,
+				347379D6EEB551E82C1E784C /* Frameworks */,
+				260F4006A76343654140CDF6 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				71FDD490BFEC899BBB5D4D2F /* PBXTargetDependency */,
+			);
+			name = Mailbox;
+			productName = Mailbox;
+			productReference = BA623A716C187C5CA97AC072 /* Mailbox.app */;
+			productType = "com.apple.product-type.application";
+		};
+		AFC342D6E51FC59F04135EA3 /* MailboxShared */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 721C3601753C9775EE6FBB0C /* Build configuration list for PBXNativeTarget "MailboxShared" */;
+			buildPhases = (
+				271C244CF316A5E443E0A4E3 /* Sources */,
+				89A016E73D51E4854FA18B21 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MailboxShared;
+			productName = MailboxShared;
+			productReference = 54BAC908F278B9E5641724F2 /* MailboxShared.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		58D6D3DE8D70B08749A14163 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					433447FEFB8B8D2ADB64FAC9 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					AFC342D6E51FC59F04135EA3 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = 09BF8B5C82DA7707FECA7D0A /* Build configuration list for PBXProject "MailboxiOS" */;
+			compatibilityVersion = "Xcode 15.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = B2DE9839B8DE6DF7D9A9BF5C;
+			productRefGroup = 618456F2879A9861CBC16692 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				433447FEFB8B8D2ADB64FAC9 /* Mailbox */,
+				AFC342D6E51FC59F04135EA3 /* MailboxShared */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		C301E9402DDC89DB504D9E0B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9C8202E6A066449AC8B2BBFC /* MailboxiOSApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		271C244CF316A5E443E0A4E3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BCF7E75839B35176A4A41782 /* LocationReminderPolicy.swift in Sources */,
+				240F0EB53EE900C9DE9131FB /* MailboxAPIClient.swift in Sources */,
+				899B66472461DE33C376ACFC /* MailboxModels.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		71FDD490BFEC899BBB5D4D2F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AFC342D6E51FC59F04135EA3 /* MailboxShared */;
+			targetProxy = B2FA78FD120BB9A5C9AEA6C7 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		E017B610CD2B8EAC4B3327A7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		CF02341838AD0E4E76597AE6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		71FDD490BFEC899BBB5D4D2E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Mailbox;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.mailbox";
+				PRODUCT_NAME = Mailbox;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		B2FA78FD120BB9A5C9AEA6C8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Mailbox;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.mailbox";
+				PRODUCT_NAME = Mailbox;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		833216C93F3FC38C359D74B6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = "";
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.mailbox.shared";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		4A58D9727D1ECAF47338F3D9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = "";
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.mailbox.shared";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		09BF8B5C82DA7707FECA7D0A /* Build configuration list for PBXProject "MailboxiOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E017B610CD2B8EAC4B3327A7 /* Debug */,
+				CF02341838AD0E4E76597AE6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A669D8562C481E47ADEB4DF7 /* Build configuration list for PBXNativeTarget "Mailbox" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				71FDD490BFEC899BBB5D4D2E /* Debug */,
+				B2FA78FD120BB9A5C9AEA6C8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		721C3601753C9775EE6FBB0C /* Build configuration list for PBXNativeTarget "MailboxShared" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				833216C93F3FC38C359D74B6 /* Debug */,
+				4A58D9727D1ECAF47338F3D9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 58D6D3DE8D70B08749A14163 /* Project object */;
+}
