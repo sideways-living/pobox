@@ -9,7 +9,6 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { appVersion, changesSince } from "../releases.js";
-import { searchLctrPostOffices } from "../lctr/postOfficeLookup.js";
 import { realtimeHub } from "../realtime/hub.js";
 import { MemoryStore } from "../store/memoryStore.js";
 import type { AppStore } from "../store/types.js";
@@ -234,8 +233,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const { workspaceId } = request.params as { workspaceId: string };
     const query = postOfficeLookupSchema.parse(request.query);
     const session = await securedSession(request, workspaceId);
-    await store.requireMember(session, workspaceId, "ADMIN");
-    return searchLctrPostOffices(query.query, query.state);
+    return store.searchPostOfficeLocations(session, workspaceId, query.query);
   });
 
   app.post("/api/v1/workspaces/:workspaceId/team/users", async (request) => {

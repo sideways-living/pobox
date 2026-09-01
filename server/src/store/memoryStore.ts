@@ -25,6 +25,7 @@ import type {
   WorkspaceMember
 } from "../domain.js";
 import { parseMailNotification } from "../parser/mailParser.js";
+import { searchLctrPostOffices, type LctrPostOfficeLocation } from "../lctr/postOfficeLookup.js";
 import type {
   AppStore,
   ConfirmTotpResult,
@@ -528,6 +529,11 @@ export class MemoryStore implements AppStore {
         confidence: typeof event.metadata.confidence === "number" ? event.metadata.confidence : undefined,
         createdAt: event.createdAt
       }));
+  }
+
+  async searchPostOfficeLocations(session: Session, workspaceId: string, query: string): Promise<LctrPostOfficeLocation[]> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    return searchLctrPostOffices(query);
   }
 
   async createUser(session: Session, workspaceId: string, input: CreateUserInput): Promise<TeamMemberSummary> {

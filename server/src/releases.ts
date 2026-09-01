@@ -1,4 +1,4 @@
-export const appVersion = "0.8.0";
+export const appVersion = "0.9.0";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.9.0-synced-post-office-directory",
+    version: "0.9.0",
+    releasedAt: "2026-09-01T21:00:00.000Z",
+    title: "Synced post office directory",
+    summary:
+      "pobox.watch now imports the Australia Post location catalogue from LCTR and refreshes it when the saved directory is older than a week, so post office setup searches local data first.",
+    audience: "ADMIN"
+  },
   {
     id: "0.8.0-lctr-post-office-lookup",
     version: "0.8.0",

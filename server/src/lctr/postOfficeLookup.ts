@@ -67,7 +67,7 @@ export async function searchLctrPostOffices(query: string, state?: string): Prom
   return rankedLocations(await loadAustraliaPostLocations(state), normalizedQuery);
 }
 
-function rankedLocations(locations: LctrPostOfficeLocation[], normalizedQuery: string) {
+export function rankedLocations(locations: LctrPostOfficeLocation[], normalizedQuery: string) {
   const suburbAnchors = locations.filter((location) => normalize(location.suburb) === normalizedQuery);
 
   return locations
@@ -76,6 +76,10 @@ function rankedLocations(locations: LctrPostOfficeLocation[], normalizedQuery: s
     .sort((a, b) => b.score - a.score || a.location.name.localeCompare(b.location.name))
     .slice(0, 20)
     .map((result) => result.location);
+}
+
+export async function fetchAllLctrPostOffices(): Promise<LctrPostOfficeLocation[]> {
+  return loadAustraliaPostLocations();
 }
 
 async function loadAustraliaPostLocations(state?: string): Promise<LctrPostOfficeLocation[]> {

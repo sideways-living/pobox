@@ -170,6 +170,38 @@ model PostOffice {
   @@index([workspaceId])
 }
 
+model PostOfficeDirectory {
+  sourceId    String   @id
+  name        String
+  address     String
+  phone       String?
+  suburb      String?
+  postcode    String?
+  state       String?
+  latitude    Decimal
+  longitude   Decimal
+  hours       String?
+  active      Boolean  @default(true)
+  importedAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastSeenAt  DateTime @default(now())
+
+  @@index([suburb])
+  @@index([postcode])
+  @@index([state])
+  @@index([active])
+}
+
+model IntegrationSyncState {
+  key       String   @id
+  syncedAt  DateTime
+  status    String
+  message   String?
+  rowCount  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Mailbox {
   id                   String            @id @default(uuid())
   workspaceId           String

@@ -12,6 +12,8 @@ import argon2 from "argon2";
 import { createHash, randomBytes } from "node:crypto";
 import { decryptSecret, encryptSecret, generateRecoveryCodes, generateTotpSecret, hashRecoveryCode, recoveryCodeMatches, totpUri, verifyTotp } from "../auth/totp.js";
 import { challengeFromClientData, webAuthnConfig } from "../auth/webauthn.js";
+import { searchPostOfficeDirectory } from "../lctr/postOfficeDirectory.js";
+import type { LctrPostOfficeLocation } from "../lctr/postOfficeLookup.js";
 import type {
   AuditEvent,
   CollectionEvent,
@@ -585,6 +587,11 @@ export class PrismaStore implements AppStore {
         createdAt: event.createdAt.toISOString()
       };
     });
+  }
+
+  async searchPostOfficeLocations(session: Session, workspaceId: string, query: string): Promise<LctrPostOfficeLocation[]> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    return searchPostOfficeDirectory(this.prisma, query);
   }
 
   async createUser(session: Session, workspaceId: string, input: CreateUserInput): Promise<TeamMemberSummary> {
