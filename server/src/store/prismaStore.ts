@@ -667,12 +667,13 @@ export class PrismaStore implements AppStore {
     await this.requireMember(session, workspaceId, "ADMIN");
     const office = await this.prisma.postOffice.findFirst({ where: { id: input.postOfficeId, workspaceId } });
     if (!office) throw new NotFoundError("Post office not found.");
+    const name = input.name?.trim() || `PO Box ${input.boxNumber.trim()}`;
     try {
       const mailbox = await this.prisma.mailbox.create({
         data: {
           workspaceId,
           postOfficeId: input.postOfficeId,
-          name: input.name,
+          name,
           boxNumber: input.boxNumber,
           active: true,
           mailWaiting: false

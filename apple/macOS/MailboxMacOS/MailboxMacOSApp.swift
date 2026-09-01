@@ -147,11 +147,11 @@ final class MacMailboxViewModel: ObservableObject {
         }
     }
 
-    func createMailbox(postOfficeId: String, name: String, boxNumber: String) async {
+    func createMailbox(postOfficeId: String, boxNumber: String) async {
         await run {
             _ = try await client.createMailbox(
                 workspaceId: workspaceId,
-                input: CreateMailboxInput(postOfficeId: postOfficeId, name: name, boxNumber: boxNumber)
+                input: CreateMailboxInput(postOfficeId: postOfficeId, boxNumber: boxNumber)
             )
             try await loadWorkspace()
         }
@@ -336,8 +336,8 @@ struct MacOverviewView: View {
                 await model.searchPostOfficeLocations(query: query)
             }, createPostOffice: { name, address, phone, latitude, longitude, radius in
                 await model.createPostOffice(name: name, address: address, phone: phone, latitude: latitude, longitude: longitude, geofenceRadius: radius)
-            }, createMailbox: { postOfficeId, name, boxNumber in
-                await model.createMailbox(postOfficeId: postOfficeId, name: name, boxNumber: boxNumber)
+            }, createMailbox: { postOfficeId, boxNumber in
+                await model.createMailbox(postOfficeId: postOfficeId, boxNumber: boxNumber)
             })
         default:
             MacEmptyStateView(title: item, subtitle: "No information is available for this section.")
@@ -573,7 +573,7 @@ struct MacSettingsView: View {
     let locationResults: [PostOfficeLocationResult]
     let searchPostOfficeLocations: (String) async -> Void
     let createPostOffice: (String, String, String?, Double, Double, Int) async -> Void
-    let createMailbox: (String, String, String) async -> Void
+    let createMailbox: (String, String) async -> Void
 
     var body: some View {
         MacPage(title: "Settings", subtitle: "Configuration for this native pobox.watch client.") {
@@ -750,9 +750,8 @@ struct MacCreatePostOfficeForm: View {
 
 struct MacCreateMailboxForm: View {
     let postOffices: [PostOffice]
-    let createMailbox: (String, String, String) async -> Void
+    let createMailbox: (String, String) async -> Void
     @State private var postOfficeId = ""
-    @State private var name = ""
     @State private var boxNumber = ""
 
     var body: some View {
@@ -768,21 +767,18 @@ struct MacCreateMailboxForm: View {
                         postOfficeId = postOffices.first?.id ?? ""
                     }
                 }
-                TextField("Name", text: $name)
-                    .textFieldStyle(.roundedBorder)
-                TextField("Box number", text: $boxNumber)
+                TextField("PO Box Number", text: $boxNumber)
                     .textFieldStyle(.roundedBorder)
                 Button {
                     Task {
-                        await createMailbox(postOfficeId, name, boxNumber)
-                        name = ""
+                        await createMailbox(postOfficeId, boxNumber)
                         boxNumber = ""
                     }
                 } label: {
                     Label("Create PO Box", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(postOfficeId.isEmpty || name.isEmpty || boxNumber.isEmpty)
+                .disabled(postOfficeId.isEmpty || boxNumber.isEmpty)
             }
             .frame(maxWidth: 560, alignment: .leading)
         }

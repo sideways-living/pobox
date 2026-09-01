@@ -1136,7 +1136,6 @@ function directoryStatusLabel(status: PostOfficeDirectoryStatus | null) {
 
 function AddMailboxForm({ snapshot, refresh, setError }: { snapshot: DashboardSnapshot; refresh: () => Promise<void>; setError: (value: string | null) => void }) {
   const [postOfficeId, setPostOfficeId] = useState(snapshot.postOffices[0]?.id ?? "");
-  const [name, setName] = useState("");
   const [boxNumber, setBoxNumber] = useState("");
 
   if (snapshot.currentUser.role !== "ADMIN") return null;
@@ -1144,8 +1143,7 @@ function AddMailboxForm({ snapshot, refresh, setError }: { snapshot: DashboardSn
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     try {
-      await createMailbox({ postOfficeId, name, boxNumber });
-      setName("");
+      await createMailbox({ postOfficeId, boxNumber });
       setBoxNumber("");
       await refresh();
     } catch (err) {
@@ -1157,8 +1155,7 @@ function AddMailboxForm({ snapshot, refresh, setError }: { snapshot: DashboardSn
     <Panel title="Add PO Box">
       <form className="form-grid" onSubmit={submit}>
         <label>Post office<select value={postOfficeId} onChange={(event) => setPostOfficeId(event.target.value)}>{snapshot.postOffices.map((office) => <option value={office.id} key={office.id}>{office.name}</option>)}</select></label>
-        <label>Name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="PO Box 1234" required /></label>
-        <label>Box number<input value={boxNumber} onChange={(event) => setBoxNumber(event.target.value)} required /></label>
+        <label>PO Box Number<input value={boxNumber} onChange={(event) => setBoxNumber(event.target.value)} required /></label>
         <button className="primary"><Plus size={17} />Create PO Box</button>
       </form>
     </Panel>

@@ -599,11 +599,12 @@ export class MemoryStore implements AppStore {
       throw new ConflictError("PO box number already exists.");
     }
     const now = new Date().toISOString();
+    const name = input.name?.trim() || `PO Box ${input.boxNumber.trim()}`;
     const mailbox: Mailbox = {
       id: nanoid(),
       workspaceId,
       postOfficeId: input.postOfficeId,
-      name: input.name,
+      name,
       boxNumber: input.boxNumber,
       active: true,
       mailWaiting: false,

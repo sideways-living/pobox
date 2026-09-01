@@ -43,7 +43,7 @@ const createPostOfficeSchema = z.object({
 });
 const createMailboxSchema = z.object({
   postOfficeId: z.string().min(1),
-  name: z.string().min(1).max(160),
+  name: z.string().min(1).max(160).optional(),
   boxNumber: z.string().min(1).max(40)
 });
 const sessionCookieName = "pobox_watch_session";

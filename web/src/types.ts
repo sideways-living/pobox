@@ -112,7 +112,7 @@ export interface PostOfficeDirectoryStatus {
 
 export interface CreateMailboxInput {
   postOfficeId: string;
-  name: string;
+  name?: string;
   boxNumber: string;
 }
 

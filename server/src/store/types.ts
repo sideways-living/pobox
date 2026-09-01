@@ -64,7 +64,7 @@ export interface CreatePostOfficeInput {
 
 export interface CreateMailboxInput {
   postOfficeId: string;
-  name: string;
+  name?: string;
   boxNumber: string;
 }
 

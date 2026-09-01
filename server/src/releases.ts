@@ -1,4 +1,4 @@
-export const appVersion = "0.9.2";
+export const appVersion = "0.9.3";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.9.3-simpler-po-box-setup",
+    version: "0.9.3",
+    releasedAt: "2026-09-01T22:30:00.000Z",
+    title: "Simpler PO Box setup",
+    summary:
+      "Adding a PO Box now only asks for the post office and PO Box number. pobox.watch automatically names the record from the number.",
+    audience: "ADMIN"
+  },
   {
     id: "0.9.2-post-office-autocomplete",
     version: "0.9.2",

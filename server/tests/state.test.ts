@@ -177,9 +177,9 @@ describe("shared mailbox state", () => {
     expect(office.phone).toBe("+61 3 9000 0000");
     const mailbox = await store.createMailbox(daniel, "ws_company", {
       postOfficeId: office.id,
-      name: "PO Box 9001",
       boxNumber: "9001"
     });
+    expect(mailbox.name).toBe("PO Box 9001");
 
     const snapshot = await store.dashboard(daniel, "ws_company");
     expect(snapshot.postOffices.some((candidate) => candidate.id === office.id)).toBe(true);

@@ -159,10 +159,10 @@ public struct CreatePostOfficeInput: Codable, Sendable {
 
 public struct CreateMailboxInput: Codable, Sendable {
     public let postOfficeId: String
-    public let name: String
+    public let name: String?
     public let boxNumber: String
 
-    public init(postOfficeId: String, name: String, boxNumber: String) {
+    public init(postOfficeId: String, name: String? = nil, boxNumber: String) {
         self.postOfficeId = postOfficeId
         self.name = name
         self.boxNumber = boxNumber
