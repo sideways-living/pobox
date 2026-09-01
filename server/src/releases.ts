@@ -1,4 +1,4 @@
-export const appVersion = "0.7.1";
+export const appVersion = "0.8.0";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.8.0-lctr-post-office-lookup",
+    version: "0.8.0",
+    releasedAt: "2026-09-01T20:30:00.000Z",
+    title: "Post office search from LCTR",
+    summary:
+      "Admins can search Australia Post locations by suburb, postcode, name, or address, then select a result to fill the post office address, phone number, and map location before saving.",
+    audience: "ADMIN"
+  },
   {
     id: "0.7.1-native-admin-setup",
     version: "0.7.1",

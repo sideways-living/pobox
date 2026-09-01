@@ -9,6 +9,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { appVersion, changesSince } from "../releases.js";
+import { searchLctrPostOffices } from "../lctr/postOfficeLookup.js";
 import { realtimeHub } from "../realtime/hub.js";
 import { MemoryStore } from "../store/memoryStore.js";
 import type { AppStore } from "../store/types.js";
@@ -20,6 +21,7 @@ const totpConfirmSchema = z.object({ code: z.string().min(6).max(32) });
 const passkeyRegistrationSchema = z.object({ response: z.any(), friendlyName: z.string().min(1).max(80).optional() });
 const passkeyAuthenticationOptionsSchema = z.object({ email: z.string().email().optional() });
 const passkeyAuthenticationSchema = z.object({ response: z.any() });
+const postOfficeLookupSchema = z.object({ query: z.string().min(2).max(80), state: z.string().length(3).optional() });
 const collectSchema = z.object({ source: z.enum(["IPHONE", "MACOS", "WEB", "ADMIN", "NOTIFICATION"]).default("WEB") });
 const simulateSchema = z.object({
   mailboxNumber: z.string().min(2),
@@ -35,6 +37,7 @@ const createUserSchema = z.object({
 const createPostOfficeSchema = z.object({
   name: z.string().min(1).max(160),
   address: z.string().min(1).max(240),
+  phone: z.string().max(80).optional(),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   geofenceRadius: z.number().int().min(25).max(5000).default(200)
@@ -225,6 +228,14 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const { workspaceId } = request.params as { workspaceId: string };
     const session = await securedSession(request, workspaceId);
     return store.listReviewItems(session, workspaceId);
+  });
+
+  app.get("/api/v1/workspaces/:workspaceId/post-office-locations/search", async (request) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const query = postOfficeLookupSchema.parse(request.query);
+    const session = await securedSession(request, workspaceId);
+    await store.requireMember(session, workspaceId, "ADMIN");
+    return searchLctrPostOffices(query.query, query.state);
   });
 
   app.post("/api/v1/workspaces/:workspaceId/team/users", async (request) => {

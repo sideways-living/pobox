@@ -538,6 +538,33 @@ input, select {
   justify-self: start;
 }
 
+.lookup-results {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.lookup-result {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 12px;
+  color: inherit;
+  background: #f8faf8;
+  border: 1px solid #d8ded8;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.lookup-result:hover {
+  border-color: #94a89b;
+  background: #eef4ef;
+}
+
+.lookup-result span, .lookup-result small {
+  color: #65736c;
+}
+
 .team-list, .security-list {
   display: grid;
   gap: 10px;

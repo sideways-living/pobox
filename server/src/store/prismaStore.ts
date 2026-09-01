@@ -96,15 +96,15 @@ export class PrismaStore implements AppStore {
     }
 
     const offices = [
-      ["po_melbourne_gpo", "Melbourne GPO", "350 Bourke Street, Melbourne VIC", -37.8136, 144.9631],
-      ["po_south_melbourne", "South Melbourne Post Office", "113-115 Clarendon Street, South Melbourne VIC", -37.8327, 144.9604],
-      ["po_richmond", "Richmond Post Office", "382 Bridge Road, Richmond VIC", -37.8186, 145.0018]
+      ["po_melbourne_gpo", "Melbourne GPO", "350 Bourke Street, Melbourne VIC", "+61 13 13 18", -37.8136, 144.9631],
+      ["po_south_melbourne", "South Melbourne Post Office", "113-115 Clarendon Street, South Melbourne VIC", "+61 13 13 18", -37.8327, 144.9604],
+      ["po_richmond", "Richmond Post Office", "382 Bridge Road, Richmond VIC", "+61 13 13 18", -37.8186, 145.0018]
     ] as const;
-    for (const [id, name, address, latitude, longitude] of offices) {
+    for (const [id, name, address, phone, latitude, longitude] of offices) {
       await this.prisma.postOffice.upsert({
         where: { id },
-        update: { name, address, latitude, longitude, active: true },
-        create: { id, workspaceId: "ws_company", name, address, latitude, longitude, geofenceRadius: 200, active: true }
+        update: { name, address, phone, latitude, longitude, active: true },
+        create: { id, workspaceId: "ws_company", name, address, phone, latitude, longitude, geofenceRadius: 200, active: true }
       });
     }
 
@@ -634,6 +634,7 @@ export class PrismaStore implements AppStore {
         workspaceId,
         name: input.name,
         address: input.address,
+        phone: input.phone,
         latitude: input.latitude,
         longitude: input.longitude,
         geofenceRadius: input.geofenceRadius,
@@ -711,6 +712,7 @@ export class PrismaStore implements AppStore {
     workspaceId: string;
     name: string;
     address: string;
+    phone: string | null;
     latitude: unknown;
     longitude: unknown;
     geofenceRadius: number;
@@ -721,6 +723,7 @@ export class PrismaStore implements AppStore {
       workspaceId: office.workspaceId,
       name: office.name,
       address: office.address,
+      phone: office.phone ?? undefined,
       latitude: Number(office.latitude),
       longitude: Number(office.longitude),
       geofenceRadius: office.geofenceRadius,

@@ -35,6 +35,7 @@ export interface PostOffice {
   workspaceId: string;
   name: string;
   address: string;
+  phone?: string;
   latitude: number;
   longitude: number;
   geofenceRadius: number;

@@ -81,6 +81,7 @@ CREATE TABLE "PostOffice" (
     "workspaceId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "address" TEXT NOT NULL,
+    "phone" TEXT,
     "latitude" DECIMAL(65,30) NOT NULL,
     "longitude" DECIMAL(65,30) NOT NULL,
     "geofenceRadius" INTEGER NOT NULL DEFAULT 200,

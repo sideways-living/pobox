@@ -8,6 +8,7 @@ final class LocationReminderPolicyTests: XCTestCase {
             id: "po",
             name: "Melbourne GPO",
             address: "350 Bourke Street",
+            phone: "+61 13 13 18",
             latitude: -37.8136,
             longitude: 144.9631,
             geofenceRadius: 200,

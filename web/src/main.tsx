@@ -21,10 +21,11 @@ import {
   logout,
   registerPasskey,
   realtimeUrl,
+  searchPostOfficeLocations,
   simulateMail,
   verifySecondFactor
 } from "./api";
-import type { AppChangesResponse, CollectionHistoryEvent, DashboardSnapshot, Mailbox, MailHistoryEvent, PostOffice, ReviewItem, SecurityStatus, TeamMember, TotpSetup } from "./types";
+import type { AppChangesResponse, CollectionHistoryEvent, DashboardSnapshot, Mailbox, MailHistoryEvent, PostOffice, PostOfficeLocationResult, ReviewItem, SecurityStatus, TeamMember, TotpSetup } from "./types";
 import "./styles.css";
 
 type Section = "Overview" | "Mailboxes" | "Map" | "History" | "Needs Review" | "Team" | "Settings";
@@ -833,6 +834,7 @@ function OfficeMapCard({ office }: { office: PostOffice }) {
       <div>
         <h3>{office.name}</h3>
         <p>{office.address}</p>
+        {office.phone && <span>{office.phone}</span>}
         <span>{office.geofenceRadius}m geofence radius</span>
       </div>
       <div className="map-card-footer">
@@ -982,20 +984,48 @@ function ChangeNoticeModal({ notice, onClose }: { notice: AppChangesResponse; on
 }
 
 function AddPostOfficeForm({ snapshot, refresh, setError }: { snapshot: DashboardSnapshot; refresh: () => Promise<void>; setError: (value: string | null) => void }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<PostOfficeLocationResult[]>([]);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
+  const [phone, setPhone] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [geofenceRadius, setGeofenceRadius] = useState("200");
+  const [busy, setBusy] = useState(false);
 
   if (snapshot.currentUser.role !== "ADMIN") return null;
+
+  async function search(event: React.FormEvent) {
+    event.preventDefault();
+    try {
+      setBusy(true);
+      setResults(await searchPostOfficeLocations(query));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to search post office locations.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function selectLocation(location: PostOfficeLocationResult) {
+    setName(location.name);
+    setAddress(location.address);
+    setPhone(location.phone ?? "");
+    setLatitude(String(location.latitude));
+    setLongitude(String(location.longitude));
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     try {
-      await createPostOffice({ name, address, latitude: Number(latitude), longitude: Number(longitude), geofenceRadius: Number(geofenceRadius) });
+      await createPostOffice({ name, address, phone: phone || undefined, latitude: Number(latitude), longitude: Number(longitude), geofenceRadius: Number(geofenceRadius) });
+      setQuery("");
+      setResults([]);
       setName("");
       setAddress("");
+      setPhone("");
       setLatitude("");
       setLongitude("");
       setGeofenceRadius("200");
@@ -1007,9 +1037,25 @@ function AddPostOfficeForm({ snapshot, refresh, setError }: { snapshot: Dashboar
 
   return (
     <Panel title="Add Post Office">
+      <form className="form-grid" onSubmit={search}>
+        <label>Search LCTR by suburb, postcode, or post office name<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Richmond or 3121" minLength={2} /></label>
+        <button className="primary" disabled={busy || query.trim().length < 2}><MapPin size={17} />Search Locations</button>
+      </form>
+      {results.length > 0 && (
+        <div className="lookup-results">
+          {results.map((location) => (
+            <button type="button" className="lookup-result" key={location.sourceId} onClick={() => selectLocation(location)}>
+              <strong>{location.name}</strong>
+              <span>{location.address}</span>
+              <small>{[location.phone, location.hours].filter(Boolean).join(" - ")}</small>
+            </button>
+          ))}
+        </div>
+      )}
       <form className="form-grid" onSubmit={submit}>
         <label>Name<input value={name} onChange={(event) => setName(event.target.value)} required /></label>
         <label>Address<input value={address} onChange={(event) => setAddress(event.target.value)} required /></label>
+        <label>Phone<input value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
         <label>Latitude<input type="number" step="any" value={latitude} onChange={(event) => setLatitude(event.target.value)} required /></label>
         <label>Longitude<input type="number" step="any" value={longitude} onChange={(event) => setLongitude(event.target.value)} required /></label>
         <label>Geofence radius<input type="number" min="25" max="5000" value={geofenceRadius} onChange={(event) => setGeofenceRadius(event.target.value)} required /></label>

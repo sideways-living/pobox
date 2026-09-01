@@ -41,6 +41,7 @@ public struct PostOffice: Codable, Identifiable, Sendable {
     public let id: String
     public let name: String
     public let address: String
+    public let phone: String?
     public let latitude: Double
     public let longitude: Double
     public let geofenceRadius: Int
@@ -141,13 +142,15 @@ public struct CreateUserInput: Codable, Sendable {
 public struct CreatePostOfficeInput: Codable, Sendable {
     public let name: String
     public let address: String
+    public let phone: String?
     public let latitude: Double
     public let longitude: Double
     public let geofenceRadius: Int
 
-    public init(name: String, address: String, latitude: Double, longitude: Double, geofenceRadius: Int) {
+    public init(name: String, address: String, phone: String?, latitude: Double, longitude: Double, geofenceRadius: Int) {
         self.name = name
         self.address = address
+        self.phone = phone
         self.latitude = latitude
         self.longitude = longitude
         self.geofenceRadius = geofenceRadius
@@ -164,4 +167,19 @@ public struct CreateMailboxInput: Codable, Sendable {
         self.name = name
         self.boxNumber = boxNumber
     }
+}
+
+public struct PostOfficeLocationResult: Codable, Identifiable, Sendable {
+    public var id: String { sourceId }
+
+    public let sourceId: String
+    public let name: String
+    public let address: String
+    public let phone: String?
+    public let suburb: String?
+    public let postcode: String?
+    public let state: String?
+    public let latitude: Double
+    public let longitude: Double
+    public let hours: String?
 }

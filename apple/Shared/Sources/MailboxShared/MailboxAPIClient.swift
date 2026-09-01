@@ -96,6 +96,14 @@ public actor MailboxAPIClient {
         return try decoder.decode(PostOffice.self, from: data)
     }
 
+    public func searchPostOfficeLocations(workspaceId: String, query: String) async throws -> [PostOfficeLocationResult] {
+        var url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/post-office-locations/search")
+        url.append(queryItems: [URLQueryItem(name: "query", value: query)])
+        let (data, response) = try await session.data(from: url)
+        try validate(response, data: data)
+        return try decoder.decode([PostOfficeLocationResult].self, from: data)
+    }
+
     public func createMailbox(workspaceId: String, input: CreateMailboxInput) async throws -> Mailbox {
         let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/mailboxes")
         var request = URLRequest(url: url)

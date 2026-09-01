@@ -169,10 +169,12 @@ describe("shared mailbox state", () => {
     const office = await store.createPostOffice(daniel, "ws_company", {
       name: "Carlton Post Office",
       address: "123 Lygon Street, Carlton VIC",
+      phone: "+61 3 9000 0000",
       latitude: -37.8001,
       longitude: 144.9671,
       geofenceRadius: 180
     });
+    expect(office.phone).toBe("+61 3 9000 0000");
     const mailbox = await store.createMailbox(daniel, "ws_company", {
       postOfficeId: office.id,
       name: "PO Box 9001",

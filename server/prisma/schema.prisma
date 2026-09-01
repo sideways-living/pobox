@@ -157,6 +157,7 @@ model PostOffice {
   workspaceId     String
   name            String
   address         String
+  phone           String?
   latitude        Decimal
   longitude       Decimal
   geofenceRadius  Int       @default(200)

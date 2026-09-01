@@ -15,6 +15,7 @@ export interface PostOffice {
   id: string;
   name: string;
   address: string;
+  phone?: string;
   latitude: number;
   longitude: number;
   geofenceRadius: number;
@@ -82,9 +83,23 @@ export interface CreateUserInput {
 export interface CreatePostOfficeInput {
   name: string;
   address: string;
+  phone?: string;
   latitude: number;
   longitude: number;
   geofenceRadius: number;
+}
+
+export interface PostOfficeLocationResult {
+  sourceId: string;
+  name: string;
+  address: string;
+  phone?: string;
+  suburb?: string;
+  postcode?: string;
+  state?: string;
+  latitude: number;
+  longitude: number;
+  hours?: string;
 }
 
 export interface CreateMailboxInput {

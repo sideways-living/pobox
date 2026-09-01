@@ -54,6 +54,7 @@ export interface CreateUserInput {
 export interface CreatePostOfficeInput {
   name: string;
   address: string;
+  phone?: string;
   latitude: number;
   longitude: number;
   geofenceRadius: number;

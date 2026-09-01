@@ -20,6 +20,7 @@ final class iPhoneMailboxViewModel: ObservableObject {
     @Published var snapshot: MailboxDashboardSnapshot?
     @Published var reviewItems: [ReviewItem] = []
     @Published var members: [TeamMember] = []
+    @Published var postOfficeLocationResults: [PostOfficeLocationResult] = []
     @Published var errorMessage: String?
     @Published var isLoading = false
     @Published var busyMailboxId: String?
@@ -76,6 +77,7 @@ final class iPhoneMailboxViewModel: ObservableObject {
             snapshot = nil
             reviewItems = []
             members = []
+            postOfficeLocationResults = []
             twoFactorChallengeId = nil
             twoFactorCode = ""
             password = ""
@@ -102,12 +104,19 @@ final class iPhoneMailboxViewModel: ObservableObject {
         }
     }
 
-    func createPostOffice(name: String, address: String, latitude: Double, longitude: Double, geofenceRadius: Int) async {
+    func searchPostOfficeLocations(query: String) async {
+        await run {
+            postOfficeLocationResults = try await client.searchPostOfficeLocations(workspaceId: workspaceId, query: query)
+        }
+    }
+
+    func createPostOffice(name: String, address: String, phone: String?, latitude: Double, longitude: Double, geofenceRadius: Int) async {
         await run {
             _ = try await client.createPostOffice(
                 workspaceId: workspaceId,
-                input: CreatePostOfficeInput(name: name, address: address, latitude: latitude, longitude: longitude, geofenceRadius: geofenceRadius)
+                input: CreatePostOfficeInput(name: name, address: address, phone: phone, latitude: latitude, longitude: longitude, geofenceRadius: geofenceRadius)
             )
+            postOfficeLocationResults = []
             try await loadWorkspace()
         }
     }
@@ -274,8 +283,10 @@ struct iPhoneDashboardView: View {
             iPhoneTab(title: "Settings", systemImage: "gearshape") {
                 iPhoneSettingsView(snapshot: model.snapshot, logout: {
                     await model.logout()
-                }, createPostOffice: { name, address, latitude, longitude, radius in
-                    await model.createPostOffice(name: name, address: address, latitude: latitude, longitude: longitude, geofenceRadius: radius)
+                }, locationResults: model.postOfficeLocationResults, searchPostOfficeLocations: { query in
+                    await model.searchPostOfficeLocations(query: query)
+                }, createPostOffice: { name, address, phone, latitude, longitude, radius in
+                    await model.createPostOffice(name: name, address: address, phone: phone, latitude: latitude, longitude: longitude, geofenceRadius: radius)
                 }, createMailbox: { postOfficeId, name, boxNumber in
                     await model.createMailbox(postOfficeId: postOfficeId, name: name, boxNumber: boxNumber)
                 })
@@ -439,6 +450,11 @@ struct iPhoneMapList: View {
                             .font(.headline)
                         Text(office.address)
                             .foregroundStyle(.secondary)
+                        if let phone = office.phone {
+                            Text(phone)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                         Text("\(office.geofenceRadius)m geofence")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -534,7 +550,9 @@ struct iPhoneTeamView: View {
 struct iPhoneSettingsView: View {
     let snapshot: MailboxDashboardSnapshot?
     let logout: () async -> Void
-    let createPostOffice: (String, String, Double, Double, Int) async -> Void
+    let locationResults: [PostOfficeLocationResult]
+    let searchPostOfficeLocations: (String) async -> Void
+    let createPostOffice: (String, String, String?, Double, Double, Int) async -> Void
     let createMailbox: (String, String, String) async -> Void
 
     var body: some View {
@@ -562,7 +580,7 @@ struct iPhoneSettingsView: View {
             }
 
             if snapshot?.currentUser.role == "ADMIN" {
-                iPhoneCreatePostOfficeForm(createPostOffice: createPostOffice)
+                iPhoneCreatePostOfficeForm(locationResults: locationResults, searchPostOfficeLocations: searchPostOfficeLocations, createPostOffice: createPostOffice)
                 iPhoneCreateMailboxForm(postOffices: snapshot?.postOffices ?? [], createMailbox: createMailbox)
             } else {
                 Section("Admin Setup") {
@@ -619,17 +637,51 @@ struct iPhoneCreateUserForm: View {
 }
 
 struct iPhoneCreatePostOfficeForm: View {
-    let createPostOffice: (String, String, Double, Double, Int) async -> Void
+    let locationResults: [PostOfficeLocationResult]
+    let searchPostOfficeLocations: (String) async -> Void
+    let createPostOffice: (String, String, String?, Double, Double, Int) async -> Void
+    @State private var query = ""
     @State private var name = ""
     @State private var address = ""
+    @State private var phone = ""
     @State private var latitude = ""
     @State private var longitude = ""
     @State private var geofenceRadius = "200"
 
     var body: some View {
         Section("Add Post Office") {
+            TextField("Search suburb, postcode, or name", text: $query)
+                .textInputAutocapitalization(.words)
+            Button {
+                Task { await searchPostOfficeLocations(query) }
+            } label: {
+                Label("Search LCTR Locations", systemImage: "magnifyingglass")
+            }
+            .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).count < 2)
+
+            if !locationResults.isEmpty {
+                ForEach(locationResults) { location in
+                    Button {
+                        select(location)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(location.name)
+                                .font(.headline)
+                            Text(location.address)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text([location.phone, location.hours].compactMap(\.self).joined(separator: " - "))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
             TextField("Name", text: $name)
             TextField("Address", text: $address)
+            TextField("Phone", text: $phone)
+                .keyboardType(.phonePad)
             TextField("Latitude", text: $latitude)
                 .keyboardType(.decimalPad)
             TextField("Longitude", text: $longitude)
@@ -638,9 +690,11 @@ struct iPhoneCreatePostOfficeForm: View {
                 .keyboardType(.numberPad)
             Button {
                 Task {
-                    await createPostOffice(name, address, Double(latitude) ?? 0, Double(longitude) ?? 0, Int(geofenceRadius) ?? 200)
+                    await createPostOffice(name, address, phone.isEmpty ? nil : phone, Double(latitude) ?? 0, Double(longitude) ?? 0, Int(geofenceRadius) ?? 200)
+                    query = ""
                     name = ""
                     address = ""
+                    phone = ""
                     latitude = ""
                     longitude = ""
                     geofenceRadius = "200"
@@ -650,6 +704,14 @@ struct iPhoneCreatePostOfficeForm: View {
             }
             .disabled(name.isEmpty || address.isEmpty || Double(latitude) == nil || Double(longitude) == nil || Int(geofenceRadius) == nil)
         }
+    }
+
+    private func select(_ location: PostOfficeLocationResult) {
+        name = location.name
+        address = location.address
+        phone = location.phone ?? ""
+        latitude = String(location.latitude)
+        longitude = String(location.longitude)
     }
 }
 

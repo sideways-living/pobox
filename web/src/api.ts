@@ -7,6 +7,7 @@ import type {
   LoginResult,
   PasskeyAuthenticationOptions,
   PasskeyRegistrationOptions,
+  PostOfficeLocationResult,
   ReviewItem,
   SecurityStatus,
   TeamMember,
@@ -178,6 +179,14 @@ export async function createPostOffice(input: CreatePostOfficeInput) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input)
   });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function searchPostOfficeLocations(query: string): Promise<PostOfficeLocationResult[]> {
+  const url = new URL(`${apiBase}/api/v1/workspaces/${workspaceId}/post-office-locations/search`);
+  url.searchParams.set("query", query);
+  const response = await fetch(url, { credentials: "include" });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
 }
