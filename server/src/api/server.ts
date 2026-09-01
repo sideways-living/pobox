@@ -54,7 +54,13 @@ function sessionCookie(cookies: Record<string, string | undefined>) {
 export async function buildServer(store: AppStore = new MemoryStore()) {
   await store.seedDemo();
   const app = Fastify({ logger: true });
-  await app.register(helmet);
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        "frame-src": ["'self'", "https://maps.google.com", "https://www.google.com"]
+      }
+    }
+  });
   await app.register(cookie, { secret: process.env.SESSION_SECRET || "dev-session-secret-change-me" });
   await app.register(cors, {
     origin: process.env.CORS_ORIGIN || "http://localhost:5173",

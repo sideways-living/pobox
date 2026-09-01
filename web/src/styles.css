@@ -170,9 +170,9 @@ h3 {
 }
 
 .summary-band {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr)) minmax(260px, auto);
+  align-items: stretch;
   gap: 16px;
   background: #dfe7dc;
   padding: 16px;
@@ -180,14 +180,21 @@ h3 {
   margin-bottom: 18px;
 }
 
+.metric-card {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
 .metric {
-  font-size: 2.7rem;
+  font-size: 2.25rem;
   font-weight: 850;
-  margin-right: 10px;
+  line-height: 1;
 }
 
 .metric-label {
   color: #46534e;
+  font-size: 0.88rem;
 }
 
 .dev-controls {
@@ -201,6 +208,19 @@ h3 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 18px;
+}
+
+.page-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 18px;
+  align-items: start;
+}
+
+.page-main {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
 }
 
 .panel {
@@ -222,6 +242,20 @@ h3 {
   margin-top: 16px;
 }
 
+.office:first-child {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.office-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .office-title p, .small {
   color: #65736c;
   margin-bottom: 0;
@@ -231,6 +265,16 @@ h3 {
   display: grid;
   gap: 8px;
   margin-top: 12px;
+}
+
+.queue-list {
+  display: grid;
+  gap: 18px;
+}
+
+.queue-office {
+  display: grid;
+  gap: 12px;
 }
 
 .mailbox {
@@ -260,6 +304,62 @@ h3 {
   font-size: 0.88rem;
 }
 
+.mailbox-table {
+  display: grid;
+  margin-top: 12px;
+  border: 1px solid #e0e5df;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.mailbox-table-head, .mailbox-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.2fr) minmax(110px, 0.7fr) minmax(180px, 1.2fr) minmax(120px, auto);
+  align-items: center;
+  gap: 12px;
+}
+
+.mailbox-table-head {
+  background: #edf2ed;
+  color: #52635d;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 9px 12px;
+  text-transform: uppercase;
+}
+
+.mailbox-row {
+  min-height: 58px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border-top: 1px solid #e0e5df;
+}
+
+.mailbox-row.waiting {
+  background: #fff8f5;
+}
+
+.mailbox-row small, .mailbox-row > span {
+  color: #65736c;
+  font-size: 0.86rem;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.filter {
+  border-color: #c8d3cd;
+}
+
+.filter.active {
+  background: #1d4034;
+  color: #ffffff;
+}
+
 .side-panels {
   display: grid;
   gap: 18px;
@@ -277,9 +377,54 @@ h3 {
   text-decoration: none;
 }
 
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #143329;
+  font-weight: 800;
+  text-decoration: none;
+}
+
 .history {
   display: grid;
   gap: 12px;
+}
+
+.history-item {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 12px;
+  background: #f8faf8;
+  border: 1px solid #e0e5df;
+  border-radius: 8px;
+}
+
+.history-item small {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #65736c;
+}
+
+.history-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+}
+
+.history-icon.ok {
+  background: #dceee2;
+  color: #16613e;
+}
+
+.history-icon.warning {
+  background: #ffe8df;
+  color: #a73524;
 }
 
 .empty-state {
@@ -379,7 +524,9 @@ input, select {
 }
 
 .team-member {
-  display: grid;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 3px;
   padding: 12px;
   background: #f8faf8;
@@ -391,6 +538,15 @@ input, select {
   color: #65736c;
 }
 
+.team-member div {
+  display: grid;
+  gap: 3px;
+}
+
+.team-badges {
+  justify-items: end;
+}
+
 .security-list span {
   display: flex;
   align-items: center;
@@ -398,6 +554,64 @@ input, select {
   padding: 12px;
   background: #f8faf8;
   border-radius: 8px;
+}
+
+.detail-list {
+  display: grid;
+  gap: 10px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 0;
+  border-top: 1px solid #e0e5df;
+}
+
+.detail-row:first-child {
+  border-top: 0;
+}
+
+.detail-row span {
+  color: #65736c;
+}
+
+.detail-row strong {
+  text-align: right;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 26px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.status-pill.ok {
+  background: #dceee2;
+  color: #16613e;
+}
+
+.status-pill.warning {
+  background: #ffe8df;
+  color: #a73524;
+}
+
+.status-pill.info {
+  background: #dfe8f6;
+  color: #234c7c;
+}
+
+.status-pill.muted {
+  background: #eef0ed;
+  color: #52635d;
 }
 
 .security-action {
@@ -438,18 +652,56 @@ input, select {
   gap: 14px;
 }
 
+.map-embed-wrap {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 320px;
+  overflow: hidden;
+  border: 1px solid #d8ded8;
+  border-radius: 8px;
+  background: #edf2ed;
+}
+
+.map-embed {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.route-list, .priority-list {
+  display: grid;
+  gap: 12px;
+}
+
+.priority-list a {
+  color: #143329;
+  font-weight: 800;
+}
+
 .map-card {
   display: grid;
   gap: 14px;
-  min-height: 180px;
+  min-height: 150px;
   padding: 16px;
   background: #f8faf8;
   border: 1px solid #d8ded8;
   border-radius: 8px;
 }
 
+.map-card.waiting {
+  border-color: #e4a08d;
+  background: #fff8f5;
+}
+
 .map-card p, .map-card span {
   color: #65736c;
+}
+
+.map-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
 }
 
 .map-button {
@@ -458,6 +710,13 @@ input, select {
   min-height: 38px;
   padding: 8px 12px;
   border-radius: 6px;
+}
+
+.review-note {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 10px;
+  color: #52635d;
 }
 
 .modal-backdrop {
@@ -516,7 +775,7 @@ input, select {
     display: none;
   }
 
-  .layout-grid {
+  .layout-grid, .page-grid {
     grid-template-columns: 1fr;
   }
 
@@ -530,9 +789,21 @@ input, select {
     padding: 18px;
   }
 
-  .topbar, .topbar-actions, .summary-band, .mailbox, .panel-heading, .office-title {
+  .topbar, .topbar-actions, .summary-band, .mailbox, .panel-heading, .office-title, .team-member, .map-card-footer {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .summary-band {
+    grid-template-columns: 1fr;
+  }
+
+  .mailbox-table-head {
+    display: none;
+  }
+
+  .mailbox-row {
+    grid-template-columns: 1fr;
   }
 
   .account-menu {

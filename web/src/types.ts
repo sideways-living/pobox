@@ -27,7 +27,31 @@ export interface DashboardSnapshot {
   currentUser: { id: string; email: string; displayName: string; role: "ADMIN" | "MEMBER" };
   outstandingMailboxCount: number;
   postOffices: PostOffice[];
-  history: Array<Record<string, string>>;
+  history: Array<MailHistoryEvent | CollectionHistoryEvent>;
+}
+
+export interface MailHistoryEvent {
+  id: string;
+  workspaceId: string;
+  mailboxId: string;
+  provider: string;
+  providerMessageId: string;
+  sender: string;
+  subject: string;
+  receivedAt: string;
+  parserConfidence: number;
+  parserRuleId?: string;
+  processedAt: string;
+}
+
+export interface CollectionHistoryEvent {
+  id: string;
+  workspaceId: string;
+  mailboxId: string;
+  collectedBy: string;
+  collectedAt: string;
+  source: string;
+  method: string;
 }
 
 export interface TeamMember {

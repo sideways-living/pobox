@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
-import { Bell, Check, KeyRound, LogIn, LogOut, Mail, MapPin, Plus, RefreshCw, Shield, Users } from "lucide-react";
+import { AlertTriangle, Bell, Check, Clock, ExternalLink, KeyRound, LogIn, LogOut, Mail, MapPin, Plus, RefreshCw, Route, Shield, Users } from "lucide-react";
 import {
   authenticatePasskey,
   beginPasskeyAuthentication,
@@ -24,10 +24,11 @@ import {
   simulateMail,
   verifySecondFactor
 } from "./api";
-import type { AppChangesResponse, DashboardSnapshot, Mailbox, SecurityStatus, TeamMember, TotpSetup } from "./types";
+import type { AppChangesResponse, CollectionHistoryEvent, DashboardSnapshot, Mailbox, MailHistoryEvent, PostOffice, SecurityStatus, TeamMember, TotpSetup } from "./types";
 import "./styles.css";
 
 type Section = "Overview" | "Mailboxes" | "Map" | "History" | "Team" | "Settings";
+type MailboxFilter = "all" | "waiting" | "clear";
 
 function App() {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
@@ -138,10 +139,10 @@ function App() {
         {error && <div className="alert">{error}</div>}
 
         <section className="summary-band">
-          <div>
-            <span className="metric">{snapshot.outstandingMailboxCount}</span>
-            <span className="metric-label">Outstanding PO boxes</span>
-          </div>
+          <MetricCard value={snapshot.outstandingMailboxCount} label="Outstanding PO boxes" />
+          <MetricCard value={totalMailboxes(snapshot)} label="Total PO boxes" />
+          <MetricCard value={snapshot.postOffices.length} label="Post offices" />
+          <MetricCard value={snapshot.currentUser.role} label="Access level" />
           <div className="dev-controls">
             <button onClick={() => mutate(() => simulateMail("1234"))}>Simulate New Mail 1234</button>
             <button onClick={() => mutate(() => simulateMail("5678"))}>Simulate New Mail 5678</button>
@@ -168,6 +169,15 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; labe
   return <button className={active ? "nav-item active" : "nav-item"} onClick={onClick}>{icon}{label}</button>;
 }
 
+function MetricCard({ value, label }: { value: React.ReactNode; label: string }) {
+  return (
+    <div className="metric-card">
+      <span className="metric">{value}</span>
+      <span className="metric-label">{label}</span>
+    </div>
+  );
+}
+
 function SectionView({
   section,
   snapshot,
@@ -188,7 +198,7 @@ function SectionView({
   if (section === "Team") return <TeamSection snapshot={snapshot} members={members} refresh={refresh} setError={setError} />;
   if (section === "Settings") return <SettingsSection snapshot={snapshot} refresh={refresh} setError={setError} />;
   if (section === "Map") return <MapSection snapshot={snapshot} />;
-  if (section === "History") return <Panel title="History"><History snapshot={snapshot} limit={30} /></Panel>;
+  if (section === "History") return <HistorySection snapshot={snapshot} />;
   if (section === "Mailboxes") return <MailboxSection snapshot={snapshot} busyId={busyId} mutate={mutate} />;
   return <OverviewSection snapshot={snapshot} busyId={busyId} mutate={mutate} />;
 }
@@ -261,52 +271,123 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
 
 function OverviewSection({ snapshot, busyId, mutate }: { snapshot: DashboardSnapshot; busyId: string | null; mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void> }) {
   const waitingBoxes = snapshot.postOffices.flatMap((office) => office.mailboxes.filter((box) => box.mailWaiting));
+  const nextOffice = snapshot.postOffices.find((office) => office.mailboxes.some((box) => box.mailWaiting));
   return (
-    <div className="layout-grid">
-      <MailboxSection snapshot={snapshot} busyId={busyId} mutate={mutate} compact />
+    <div className="page-grid">
+      <section className="page-main">
+        <Panel title="Collection Queue" aside={waitingBoxes.length > 0 ? `${waitingBoxes.length} active` : "Clear"}>
+          {waitingBoxes.length > 0 ? (
+            <div className="queue-list">
+              {snapshot.postOffices.map((office) => {
+                const waiting = office.mailboxes.filter((box) => box.mailWaiting);
+                if (waiting.length === 0) return null;
+                return (
+                  <article className="queue-office" key={office.id}>
+                    <div className="office-title">
+                      <div>
+                        <h3>{office.name}</h3>
+                        <p>{office.address}</p>
+                      </div>
+                      <a className="text-link" href={mapUrl(office.latitude, office.longitude)} target="_blank" rel="noreferrer"><Route size={16} />Directions</a>
+                    </div>
+                    <div className="mailbox-list">
+                      {waiting.map((box) => (
+                        <MailboxRow key={box.id} box={box} busy={busyId === box.id} onCollect={() => mutate(() => collectMailbox(box.id), box.id)} />
+                      ))}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="empty-state"><Check size={22} />No PO boxes currently need checking.</div>
+          )}
+        </Panel>
+        <Panel title="Recent Activity"><History snapshot={snapshot} limit={6} /></Panel>
+      </section>
       <aside className="side-panels">
+        <Panel title="Next Collection">
+          {nextOffice ? <OfficeMapCard office={nextOffice} /> : <p className="small">All post offices are currently clear.</p>}
+        </Panel>
         <MapSummary snapshot={snapshot} />
-        <Panel title="History"><History snapshot={snapshot} limit={8} /></Panel>
-        <Panel title="Team"><p className="small">Signed in as {snapshot.currentUser.displayName} ({snapshot.currentUser.role}). Server authorization applies to every request.</p></Panel>
+        <Panel title="Session">
+          <div className="detail-list">
+            <DetailRow label="Signed in" value={snapshot.currentUser.displayName} />
+            <DetailRow label="Role" value={snapshot.currentUser.role} />
+            <DetailRow label="Live updates" value="Enabled while connected" />
+          </div>
+        </Panel>
       </aside>
-      {waitingBoxes.length === 0 && <div className="empty-state"><Check size={22} />No PO boxes currently need checking.</div>}
     </div>
   );
 }
 
 function MailboxSection({ snapshot, busyId, mutate, compact = false }: { snapshot: DashboardSnapshot; busyId: string | null; compact?: boolean; mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void> }) {
+  const [filter, setFilter] = useState<MailboxFilter>(compact ? "waiting" : "all");
+  const waitingCount = snapshot.outstandingMailboxCount;
+  const clearCount = totalMailboxes(snapshot) - waitingCount;
   return (
-    <Panel title={compact ? "Overview" : "PO Boxes"} aside={new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}>
+    <Panel title={compact ? "PO Box Snapshot" : "PO Boxes"} aside={`Updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}>
+      {!compact && (
+        <div className="filter-bar" role="group" aria-label="PO box filter">
+          <button className={filter === "all" ? "filter active" : "filter"} onClick={() => setFilter("all")}>All {totalMailboxes(snapshot)}</button>
+          <button className={filter === "waiting" ? "filter active" : "filter"} onClick={() => setFilter("waiting")}>Waiting {waitingCount}</button>
+          <button className={filter === "clear" ? "filter active" : "filter"} onClick={() => setFilter("clear")}>Clear {clearCount}</button>
+        </div>
+      )}
       <div className="office-list">
         {snapshot.postOffices.map((office) => (
-          <article className="office" key={office.id}>
-            <div className="office-title">
-              <div>
-                <h3>{office.name}</h3>
-                <p>{office.address}</p>
-              </div>
-              <a href={mapUrl(office.latitude, office.longitude)} target="_blank" rel="noreferrer">Directions</a>
-            </div>
-            <div className="mailbox-list">
-              {office.mailboxes.map((box) => (
-                <MailboxRow
-                  key={box.id}
-                  box={box}
-                  busy={busyId === box.id}
-                  onCollect={() => mutate(() => collectMailbox(box.id), box.id)}
-                />
-              ))}
-            </div>
-          </article>
+          <OfficeSection key={office.id} office={office} filter={filter} busyId={busyId} mutate={mutate} />
         ))}
       </div>
     </Panel>
   );
 }
 
+function OfficeSection({ office, filter, busyId, mutate }: { office: PostOffice; filter: MailboxFilter; busyId: string | null; mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void> }) {
+  const boxes = office.mailboxes.filter((box) => {
+    if (filter === "waiting") return box.mailWaiting;
+    if (filter === "clear") return !box.mailWaiting;
+    return true;
+  });
+  if (boxes.length === 0) return null;
+  const waiting = office.mailboxes.filter((box) => box.mailWaiting).length;
+  return (
+    <article className="office">
+      <div className="office-title">
+        <div>
+          <h3>{office.name}</h3>
+          <p>{office.address}</p>
+        </div>
+        <div className="office-actions">
+          <StatusPill tone={waiting > 0 ? "warning" : "ok"}>{waiting > 0 ? `${waiting} waiting` : "Clear"}</StatusPill>
+          <a className="text-link" href={mapUrl(office.latitude, office.longitude)} target="_blank" rel="noreferrer"><ExternalLink size={15} />Map</a>
+        </div>
+      </div>
+      <div className="mailbox-table">
+        <div className="mailbox-table-head">
+          <span>PO box</span>
+          <span>Status</span>
+          <span>Last event</span>
+          <span>Action</span>
+        </div>
+        {boxes.map((box) => (
+          <MailboxRow
+            key={box.id}
+            box={box}
+            busy={busyId === box.id}
+            onCollect={() => mutate(() => collectMailbox(box.id), box.id)}
+            table
+          />
+        ))}
+      </div>
+    </article>
+  );
+}
+
 function MapSummary({ snapshot }: { snapshot: DashboardSnapshot }) {
   return (
-    <Panel title="Map">
+    <Panel title="Post Office Map">
       {snapshot.postOffices.map((office) => {
         const waiting = office.mailboxes.filter((box) => box.mailWaiting).length;
         return (
@@ -322,21 +403,51 @@ function MapSummary({ snapshot }: { snapshot: DashboardSnapshot }) {
 }
 
 function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
+  const activeOffice = snapshot.postOffices.find((office) => office.mailboxes.some((box) => box.mailWaiting)) ?? snapshot.postOffices[0];
   return (
-    <Panel title="Map">
-      <div className="map-grid">
-        {snapshot.postOffices.map((office) => (
-          <article className="map-card" key={office.id}>
-            <div>
-              <h3>{office.name}</h3>
-              <p>{office.address}</p>
-              <span>{office.geofenceRadius}m geofence radius</span>
+    <div className="page-grid map-page">
+      <section className="page-main">
+        <Panel title="Live Collection Map" aside={activeOffice ? `${activeOffice.latitude.toFixed(4)}, ${activeOffice.longitude.toFixed(4)}` : undefined}>
+          {activeOffice ? (
+            <div className="map-embed-wrap">
+              <iframe
+                title={`${activeOffice.name} map`}
+                className="map-embed"
+                loading="lazy"
+                src={embedMapUrl(activeOffice.latitude, activeOffice.longitude)}
+              />
             </div>
-            <a className="primary map-button" href={mapUrl(office.latitude, office.longitude)} target="_blank" rel="noreferrer"><MapPin size={17} />Open Map</a>
-          </article>
-        ))}
-      </div>
-    </Panel>
+          ) : (
+            <p className="small">Add a post office to show the operational map.</p>
+          )}
+        </Panel>
+        <Panel title="Collection Routes">
+          <div className="route-list">
+            {snapshot.postOffices.map((office) => <OfficeMapCard office={office} key={office.id} />)}
+          </div>
+        </Panel>
+      </section>
+      <aside className="side-panels">
+        <Panel title="Map Summary">
+          <div className="detail-list">
+            <DetailRow label="Tracked locations" value={String(snapshot.postOffices.length)} />
+            <DetailRow label="PO boxes mapped" value={String(totalMailboxes(snapshot))} />
+            <DetailRow label="Needs collection" value={String(snapshot.outstandingMailboxCount)} />
+          </div>
+        </Panel>
+        <Panel title="Priority Stops">
+          {snapshot.postOffices.filter((office) => office.mailboxes.some((box) => box.mailWaiting)).length > 0 ? (
+            <div className="priority-list">
+              {snapshot.postOffices
+                .filter((office) => office.mailboxes.some((box) => box.mailWaiting))
+                .map((office) => <a href={mapUrl(office.latitude, office.longitude)} target="_blank" rel="noreferrer" key={office.id}>{office.name}</a>)}
+            </div>
+          ) : (
+            <p className="small">No priority stops right now.</p>
+          )}
+        </Panel>
+      </aside>
+    </div>
   );
 }
 
@@ -361,41 +472,129 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
   }
 
   return (
-    <div className="admin-grid">
-      <Panel title="Team">
-        <div className="team-list">
-          {members.map((member) => (
-            <div className="team-member" key={member.id}>
-              <strong>{member.displayName}</strong>
-              <span>{member.email}</span>
-              <small>{member.role} - {member.status} - {member.active ? "Active" : "Disabled"}</small>
-            </div>
-          ))}
-        </div>
-      </Panel>
-      {snapshot.currentUser.role === "ADMIN" && (
-        <Panel title="Add User">
-          <form className="form-grid" onSubmit={submit}>
-            <label>Name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></label>
-            <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
-            <label>Temporary password<input type="password" value={password} minLength={12} onChange={(event) => setPassword(event.target.value)} required /></label>
-            <label>Role<select value={role} onChange={(event) => setRole(event.target.value as "ADMIN" | "MEMBER")}><option>MEMBER</option><option>ADMIN</option></select></label>
-            <button className="primary"><Plus size={17} />Create User</button>
-          </form>
+    <div className="page-grid">
+      <section className="page-main">
+        <Panel title="Team Directory" aside={`${members.length} users`}>
+          <div className="team-list">
+            {members.map((member) => (
+              <div className="team-member" key={member.id}>
+                <div>
+                  <strong>{member.displayName}</strong>
+                  <span>{member.email}</span>
+                </div>
+                <div className="team-badges">
+                  <StatusPill tone={member.active ? "ok" : "muted"}>{member.active ? "Active" : "Disabled"}</StatusPill>
+                  <StatusPill tone={member.role === "ADMIN" ? "info" : "muted"}>{member.role}</StatusPill>
+                  <small>{member.status}</small>
+                </div>
+              </div>
+            ))}
+          </div>
         </Panel>
-      )}
+      </section>
+      <aside className="side-panels">
+        <Panel title="Access Summary">
+          <div className="detail-list">
+            <DetailRow label="Admins" value={String(members.filter((member) => member.role === "ADMIN").length)} />
+            <DetailRow label="Members" value={String(members.filter((member) => member.role === "MEMBER").length)} />
+            <DetailRow label="Disabled" value={String(members.filter((member) => !member.active).length)} />
+          </div>
+        </Panel>
+        {snapshot.currentUser.role === "ADMIN" && (
+          <Panel title="Add User">
+            <form className="form-grid" onSubmit={submit}>
+              <label>Name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></label>
+              <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
+              <label>Temporary password<input type="password" value={password} minLength={12} onChange={(event) => setPassword(event.target.value)} required /></label>
+              <label>Role<select value={role} onChange={(event) => setRole(event.target.value as "ADMIN" | "MEMBER")}><option>MEMBER</option><option>ADMIN</option></select></label>
+              <button className="primary"><Plus size={17} />Create User</button>
+            </form>
+          </Panel>
+        )}
+      </aside>
     </div>
   );
 }
 
 function SettingsSection({ snapshot, refresh, setError }: { snapshot: DashboardSnapshot; refresh: () => Promise<void>; setError: (value: string | null) => void }) {
   return (
-    <div className="admin-grid">
-      <AddPostOfficeForm snapshot={snapshot} refresh={refresh} setError={setError} />
-      <AddMailboxForm snapshot={snapshot} refresh={refresh} setError={setError} />
-      <SecurityPanel setError={setError} />
+    <div className="page-grid settings-page">
+      <section className="page-main">
+        <SecurityPanel setError={setError} />
+        <Panel title="Workspace">
+          <div className="detail-list">
+            <DetailRow label="Workspace" value={snapshot.workspace.name} />
+            <DetailRow label="Current user" value={snapshot.currentUser.email} />
+            <DetailRow label="Role" value={snapshot.currentUser.role} />
+            <DetailRow label="Locations" value={`${snapshot.postOffices.length} post offices, ${totalMailboxes(snapshot)} PO boxes`} />
+          </div>
+        </Panel>
+      </section>
+      <aside className="side-panels">
+        <AddPostOfficeForm snapshot={snapshot} refresh={refresh} setError={setError} />
+        <AddMailboxForm snapshot={snapshot} refresh={refresh} setError={setError} />
+      </aside>
     </div>
   );
+}
+
+function HistorySection({ snapshot }: { snapshot: DashboardSnapshot }) {
+  const detected = snapshot.history.filter(isMailEvent).length;
+  const collected = snapshot.history.filter(isCollectionEvent).length;
+  return (
+    <div className="page-grid">
+      <section className="page-main">
+        <Panel title="History Timeline" aside={`${snapshot.history.length} recent events`}>
+          <History snapshot={snapshot} limit={50} />
+        </Panel>
+      </section>
+      <aside className="side-panels">
+        <Panel title="Activity Summary">
+          <div className="detail-list">
+            <DetailRow label="Detected mail" value={String(detected)} />
+            <DetailRow label="Collections" value={String(collected)} />
+            <DetailRow label="Open items" value={String(snapshot.outstandingMailboxCount)} />
+          </div>
+        </Panel>
+        <Panel title="Needs Review">
+          <div className="review-note">
+            <AlertTriangle size={18} />
+            <p>Parser review events are tracked by the backend audit log. A dedicated review queue is the next backend-backed workflow.</p>
+          </div>
+        </Panel>
+      </aside>
+    </div>
+  );
+}
+
+function OfficeMapCard({ office }: { office: PostOffice }) {
+  const waiting = office.mailboxes.filter((box) => box.mailWaiting).length;
+  return (
+    <article className={waiting > 0 ? "map-card waiting" : "map-card"}>
+      <div>
+        <h3>{office.name}</h3>
+        <p>{office.address}</p>
+        <span>{office.geofenceRadius}m geofence radius</span>
+      </div>
+      <div className="map-card-footer">
+        <StatusPill tone={waiting > 0 ? "warning" : "ok"}>{waiting > 0 ? `${waiting} waiting` : "Clear"}</StatusPill>
+        <a className="primary map-button" href={mapUrl(office.latitude, office.longitude)} target="_blank" rel="noreferrer"><MapPin size={17} />Open Map</a>
+      </div>
+    </article>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="detail-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function StatusPill({ tone, children }: { tone: "ok" | "warning" | "info" | "muted"; children: React.ReactNode }) {
+  return <span className={`status-pill ${tone}`}>{children}</span>;
 }
 
 function SecurityPanel({ setError }: { setError: (value: string | null) => void }) {
@@ -621,13 +820,32 @@ function Panel({ title, aside, children }: { title: string; aside?: string; chil
   );
 }
 
-function MailboxRow({ box, busy, onCollect }: { box: Mailbox; busy: boolean; onCollect: () => void }) {
+function MailboxRow({ box, busy, onCollect, table = false }: { box: Mailbox; busy: boolean; onCollect: () => void; table?: boolean }) {
+  const status = box.mailWaiting ? "Mail waiting" : "Clear";
+  const lastEvent = box.latestNotificationAt
+    ? `Detected ${new Date(box.latestNotificationAt).toLocaleString()}`
+    : box.lastCollectedAt
+      ? `Collected ${new Date(box.lastCollectedAt).toLocaleString()}`
+      : "No events yet";
+  if (table) {
+    return (
+      <div className={box.mailWaiting ? "mailbox-row waiting" : "mailbox-row"}>
+        <div>
+          <strong>{box.name}</strong>
+          <small>Box {box.boxNumber}</small>
+        </div>
+        <StatusPill tone={box.mailWaiting ? "warning" : "ok"}>{status}</StatusPill>
+        <span>{lastEvent}</span>
+        {box.mailWaiting ? <button disabled={busy} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button> : <span className="small">No action</span>}
+      </div>
+    );
+  }
   return (
     <div className={box.mailWaiting ? "mailbox waiting" : "mailbox"}>
       <div>
         <strong>{box.name}</strong>
-        <span>{box.mailWaiting ? "Red status: Mail waiting" : "Green status: Clear"}</span>
-        {box.latestNotificationAt && <small>Detected {new Date(box.latestNotificationAt).toLocaleString()}</small>}
+        <span>{box.mailWaiting ? "Mail waiting" : "Clear"}</span>
+        <small>{lastEvent}</small>
       </div>
       {box.mailWaiting && <button disabled={busy} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button>}
     </div>
@@ -635,21 +853,51 @@ function MailboxRow({ box, busy, onCollect }: { box: Mailbox; busy: boolean; onC
 }
 
 function History({ snapshot, limit }: { snapshot: DashboardSnapshot; limit: number }) {
+  const mailboxNames = useMemo(() => mailboxNameMap(snapshot), [snapshot]);
   const userNames = useMemo(() => new Map([[snapshot.currentUser.id, snapshot.currentUser.displayName]]), [snapshot.currentUser]);
+  const events = snapshot.history.slice(0, limit);
+  if (events.length === 0) return <p className="small">No history yet.</p>;
   return (
     <div className="history">
-      {snapshot.history.slice(0, limit).map((event) => {
-        const isCollection = "collectedAt" in event;
+      {events.map((event) => {
+        const isCollection = isCollectionEvent(event);
         const when = isCollection ? event.collectedAt : event.processedAt;
+        const mailboxName = mailboxNames.get(event.mailboxId) ?? "Unknown PO box";
         return (
-          <div key={event.id}>
-            <strong>{isCollection ? `Collected by ${userNames.get(event.collectedBy) ?? event.collectedBy}` : "Mail detected"}</strong>
-            <span>{new Date(when).toLocaleString()}</span>
-          </div>
+          <article className="history-item" key={event.id}>
+            <div className={isCollection ? "history-icon ok" : "history-icon warning"}>
+              {isCollection ? <Check size={16} /> : <Mail size={16} />}
+            </div>
+            <div>
+              <strong>{isCollection ? `${mailboxName} collected` : `${mailboxName} detected mail`}</strong>
+              <span>{isCollection ? `By ${userNames.get(event.collectedBy) ?? event.collectedBy} from ${event.source}` : `${event.subject} from ${event.sender}`}</span>
+              <small><Clock size={13} />{new Date(when).toLocaleString()}</small>
+            </div>
+          </article>
         );
       })}
     </div>
   );
+}
+
+function totalMailboxes(snapshot: DashboardSnapshot) {
+  return snapshot.postOffices.reduce((total, office) => total + office.mailboxes.length, 0);
+}
+
+function mailboxNameMap(snapshot: DashboardSnapshot) {
+  return new Map(snapshot.postOffices.flatMap((office) => office.mailboxes.map((box) => [box.id, box.name] as const)));
+}
+
+function isMailEvent(event: MailHistoryEvent | CollectionHistoryEvent): event is MailHistoryEvent {
+  return "processedAt" in event;
+}
+
+function isCollectionEvent(event: MailHistoryEvent | CollectionHistoryEvent): event is CollectionHistoryEvent {
+  return "collectedAt" in event;
+}
+
+function embedMapUrl(latitude: number, longitude: number) {
+  return `https://maps.google.com/maps?q=${latitude},${longitude}&z=15&output=embed`;
 }
 
 function mapUrl(latitude: number, longitude: number) {

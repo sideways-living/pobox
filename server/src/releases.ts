@@ -1,4 +1,4 @@
-export const appVersion = "0.4.1";
+export const appVersion = "0.5.0";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.5.0-page-buildout",
+    version: "0.5.0",
+    releasedAt: "2026-09-01T13:00:00.000Z",
+    title: "Full page layout build-out",
+    summary:
+      "Overview, PO Boxes, Map, History, Team, and Settings now have distinct operational layouts with clearer collection queues, filters, map views, activity summaries, and account controls.",
+    audience: "ALL"
+  },
   {
     id: "0.4.1-clear-logout",
     version: "0.4.1",
