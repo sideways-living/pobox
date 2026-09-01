@@ -12,7 +12,6 @@ import {
   createMailbox,
   createPostOffice,
   createUser,
-  disableTotp,
   loadAppChanges,
   loadDashboard,
   loadMembers,
@@ -38,6 +37,7 @@ function App() {
   const [section, setSection] = useState<Section>("Overview");
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [changeNotice, setChangeNotice] = useState<AppChangesResponse | null>(null);
+  const [securityGate, setSecurityGate] = useState<{ previousLoginAt?: string } | null>(null);
 
   async function refresh() {
     const nextSnapshot = await loadDashboard();
@@ -61,7 +61,7 @@ function App() {
     return () => socket.close();
   }, [snapshot?.workspace.id]);
 
-  async function handleLogin(previousLoginAt?: string) {
+  async function finishLogin(previousLoginAt?: string) {
     await refresh();
     try {
       const changes = await loadAppChanges(previousLoginAt);
@@ -69,6 +69,16 @@ function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load app changes.");
     }
+  }
+
+  async function handleLogin(previousLoginAt?: string) {
+    const status = await loadSecurityStatus();
+    if (!securityComplete(status)) {
+      setSecurityGate({ previousLoginAt });
+      setError(null);
+      return;
+    }
+    await finishLogin(previousLoginAt);
   }
 
   async function handleLogout() {
@@ -84,7 +94,23 @@ function App() {
     setConnected(false);
     setBusyId(null);
     setSection("Overview");
+    setSecurityGate(null);
     setError(null);
+  }
+
+  if (securityGate) {
+    return (
+      <MandatorySecuritySetup
+        previousLoginAt={securityGate.previousLoginAt}
+        onComplete={async () => {
+          setSecurityGate(null);
+          await finishLogin(securityGate.previousLoginAt);
+        }}
+        onLogout={handleLogout}
+        error={error}
+        setError={setError}
+      />
+    );
   }
 
   if (!snapshot) {
@@ -209,9 +235,14 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [passwordMode, setPasswordMode] = useState(false);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (!passwordMode && !challengeId) {
+      await signInWithPasskey();
+      return;
+    }
     try {
       setBusy(true);
       const result = challengeId ? await verifySecondFactor(challengeId, twoFactorCode) : await login(email, password);
@@ -247,12 +278,12 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
     <main className="login-shell">
       <form className="login-panel" onSubmit={submit}>
         <div className="brand large"><Mail size={26} />pobox.watch</div>
-        {!challengeId && (
-          <>
-            <label>Email<input value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-            <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-          </>
-        )}
+        <div className="login-copy">
+          <h1>Sign in with your passkey</h1>
+          <p>pobox.watch requires a passkey and authenticator 2FA for every account.</p>
+        </div>
+        {!challengeId && <label>Email<input value={email} autoComplete="username webauthn" onChange={(event) => setEmail(event.target.value)} /></label>}
+        {!challengeId && passwordMode && <label>Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>}
         {challengeId && (
           <label>
             Authenticator or recovery code
@@ -260,11 +291,153 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
           </label>
         )}
         {error && <div className="alert">{error}</div>}
-        <button className="primary" disabled={busy}><LogIn size={18} />{challengeId ? "Verify Code" : "Sign In"}</button>
+        <button className="primary" disabled={busy}>
+          {challengeId ? <Shield size={18} /> : passwordMode ? <LogIn size={18} /> : <KeyRound size={18} />}
+          {challengeId ? "Verify Code" : passwordMode ? "Continue with Password" : "Continue with Passkey"}
+        </button>
         {challengeId && <button type="button" className="secondary" onClick={() => setChallengeId(null)}>Use Password Instead</button>}
-        {!challengeId && <button type="button" className="secondary" disabled={busy} onClick={signInWithPasskey}><KeyRound size={18} />Sign in with Passkey</button>}
+        {!challengeId && !passwordMode && <button type="button" className="secondary" disabled={busy} onClick={() => setPasswordMode(true)}>Use Password to Set Up Security</button>}
+        {!challengeId && passwordMode && <button type="button" className="secondary" disabled={busy} onClick={() => setPasswordMode(false)}><KeyRound size={18} />Back to Passkey</button>}
         <button type="button" className="link-button">Forgot Password?</button>
       </form>
+    </main>
+  );
+}
+
+function MandatorySecuritySetup({
+  previousLoginAt,
+  onComplete,
+  onLogout,
+  error,
+  setError
+}: {
+  previousLoginAt?: string;
+  onComplete: () => Promise<void>;
+  onLogout: () => Promise<void>;
+  error: string | null;
+  setError: (value: string | null) => void;
+}) {
+  const [status, setStatus] = useState<SecurityStatus | null>(null);
+  const [setup, setSetup] = useState<TotpSetup | null>(null);
+  const [code, setCode] = useState("");
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  async function refreshSecurity() {
+    const nextStatus = await loadSecurityStatus();
+    setStatus(nextStatus);
+    return nextStatus;
+  }
+
+  useEffect(() => {
+    refreshSecurity().catch((err) => setError(err instanceof Error ? err.message : "Unable to load security setup."));
+  }, []);
+
+  async function addPasskey() {
+    try {
+      setBusy(true);
+      const options = await beginPasskeyRegistration();
+      const response = await startRegistration({ optionsJSON: options.options });
+      setStatus(await registerPasskey(response, "Passkey"));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to add passkey.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function startTotpSetup() {
+    try {
+      setBusy(true);
+      setRecoveryCodes([]);
+      setSetup(await beginTotpSetup());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to start 2FA setup.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmSetup(event: React.FormEvent) {
+    event.preventDefault();
+    try {
+      setBusy(true);
+      const result = await confirmTotpSetup(code);
+      setRecoveryCodes(result.recoveryCodes);
+      setSetup(null);
+      setCode("");
+      await refreshSecurity();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to confirm 2FA setup.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function continueToApp() {
+    const nextStatus = await refreshSecurity();
+    if (!securityComplete(nextStatus)) {
+      setError("Add a passkey and turn on authenticator 2FA before continuing.");
+      return;
+    }
+    await onComplete();
+  }
+
+  const passkeyDone = (status?.passkeyCount ?? 0) > 0;
+  const totpDone = Boolean(status?.totpEnabled);
+  const canContinue = passkeyDone && totpDone;
+
+  return (
+    <main className="login-shell">
+      <section className="login-panel setup-panel">
+        <div className="brand large"><Mail size={26} />pobox.watch</div>
+        <div className="login-copy">
+          <p className="workspace">Security setup required</p>
+          <h1>Finish securing your account</h1>
+          <p>Before you can use pobox.watch, add a passkey and turn on authenticator 2FA.</p>
+          {previousLoginAt && <p className="small">After setup, your change notice will include updates since {new Date(previousLoginAt).toLocaleString()}.</p>}
+        </div>
+
+        {error && <div className="alert">{error}</div>}
+
+        <div className="setup-checklist">
+          <div className={passkeyDone ? "setup-step complete" : "setup-step"}>
+            <div><KeyRound size={20} /><strong>Passkey</strong></div>
+            <StatusPill tone={passkeyDone ? "ok" : "warning"}>{passkeyDone ? "Done" : "Required"}</StatusPill>
+            {!passkeyDone && <button className="primary" disabled={busy || !status?.passkeysAvailable} onClick={addPasskey}>Add Passkey</button>}
+            {!passkeyDone && status && !status.passkeysAvailable && <p className="small">This browser or server configuration cannot create a passkey. Use Safari, Chrome, Edge, or another WebAuthn-compatible browser on the pobox.watch domain.</p>}
+          </div>
+
+          <div className={totpDone ? "setup-step complete" : "setup-step"}>
+            <div><Shield size={20} /><strong>Authenticator 2FA</strong></div>
+            <StatusPill tone={totpDone ? "ok" : "warning"}>{totpDone ? "Done" : "Required"}</StatusPill>
+            {!totpDone && !setup && <button className="primary" disabled={busy} onClick={startTotpSetup}>Set Up Authenticator App</button>}
+            {setup && (
+              <form className="form-grid security-setup" onSubmit={confirmSetup}>
+                <p className="small">Add this account to an authenticator app, then enter the six-digit code it shows.</p>
+                <label>Manual setup key<input value={setup.secret} readOnly /></label>
+                <a href={setup.otpauthUrl}>Open Authenticator Setup</a>
+                <label>Six-digit code<input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(event) => setCode(event.target.value)} required /></label>
+                <button className="primary" disabled={busy}>Confirm 2FA</button>
+              </form>
+            )}
+          </div>
+        </div>
+
+        {recoveryCodes.length > 0 && (
+          <div className="recovery-codes">
+            <strong>Recovery codes</strong>
+            <p className="small">Keep these somewhere safe. Each code can be used once if you lose access to your authenticator app.</p>
+            <code>{recoveryCodes.join("\n")}</code>
+          </div>
+        )}
+
+        <button className="primary" disabled={busy || !canContinue} onClick={continueToApp}>Continue to pobox.watch</button>
+        <button className="secondary" disabled={busy} onClick={onLogout}><LogOut size={17} />Log Out</button>
+      </section>
     </main>
   );
 }
@@ -597,6 +770,10 @@ function StatusPill({ tone, children }: { tone: "ok" | "warning" | "info" | "mut
   return <span className={`status-pill ${tone}`}>{children}</span>;
 }
 
+function securityComplete(status: SecurityStatus) {
+  return status.passkeyCount > 0 && status.totpEnabled;
+}
+
 function SecurityPanel({ setError }: { setError: (value: string | null) => void }) {
   const [status, setStatus] = useState<SecurityStatus | null>(null);
   const [setup, setSetup] = useState<TotpSetup | null>(null);
@@ -642,22 +819,6 @@ function SecurityPanel({ setError }: { setError: (value: string | null) => void 
     }
   }
 
-  async function turnOff(event: React.FormEvent) {
-    event.preventDefault();
-    try {
-      setBusy(true);
-      await disableTotp(code);
-      setCode("");
-      setRecoveryCodes([]);
-      await refreshSecurity();
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to disable 2FA.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function addPasskey() {
     try {
       setBusy(true);
@@ -676,7 +837,7 @@ function SecurityPanel({ setError }: { setError: (value: string | null) => void 
     <Panel title="Security">
       <div className="security-list">
         <span><KeyRound size={17} />Passkeys: {status?.passkeysAvailable ? `${status.passkeyCount} registered.` : "Not available in this browser or server configuration."}</span>
-        <span><Shield size={17} />2FA: {status?.totpEnabled ? `On, with ${status.recoveryCodesRemaining} recovery codes left.` : "Off"}</span>
+        <span><Shield size={17} />2FA: {status?.totpEnabled ? `Required and on, with ${status.recoveryCodesRemaining} recovery codes left.` : "Required and not set up."}</span>
         <span><RefreshCw size={17} />Version updates: users see plain-English changes after sign-in.</span>
       </div>
 
@@ -694,12 +855,7 @@ function SecurityPanel({ setError }: { setError: (value: string | null) => void 
         </form>
       )}
 
-      {status?.totpEnabled && (
-        <form className="form-grid security-setup" onSubmit={turnOff}>
-          <label>Authenticator code to turn off 2FA<input inputMode="numeric" value={code} onChange={(event) => setCode(event.target.value)} required /></label>
-          <button disabled={busy}>Turn Off 2FA</button>
-        </form>
-      )}
+      {status?.totpEnabled && <p className="small security-note">Authenticator 2FA is mandatory for pobox.watch accounts and cannot be turned off from the app.</p>}
 
       {recoveryCodes.length > 0 && (
         <div className="recovery-codes">

@@ -296,7 +296,7 @@ export class MemoryStore implements AppStore {
     return { options };
   }
 
-  async verifyPasskeyAuthentication(response: AuthenticationResponseJSON): Promise<Session> {
+  async verifyPasskeyAuthentication(response: AuthenticationResponseJSON): Promise<LoginResult> {
     const credential = this.passkeyCredentials.get(response.id);
     const user = credential ? this.users.get(credential.userId) : undefined;
     if (!credential || !user?.active) throw new UnauthorizedError("Passkey is not registered.");
@@ -320,7 +320,16 @@ export class MemoryStore implements AppStore {
     if (!verification.verified) throw new UnauthorizedError("Passkey sign-in could not be verified.");
     this.passkeyCredentials.set(credential.credentialId, { ...credential, counter: verification.authenticationInfo.newCounter, lastUsedAt: new Date().toISOString() });
     this.webAuthnChallenges.delete(challenge.id);
-    return this.createSession(user);
+    if (user.totpEnabled) {
+      const authChallenge = {
+        id: nanoid(32),
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 1000 * 60 * 10).toISOString()
+      };
+      this.authChallenges.set(authChallenge.id, authChallenge);
+      return { kind: "two_factor_required", challengeId: authChallenge.id, expiresAt: authChallenge.expiresAt, methods: ["totp", "recovery_code"] };
+    }
+    return { kind: "session", ...(await this.createSession(user)) };
   }
 
   private async createSession(user: User): Promise<Session> {

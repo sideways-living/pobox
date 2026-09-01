@@ -79,6 +79,16 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     return reply.code(500).send({ error: "Internal server error." });
   });
 
+  async function securedSession(request: { cookies: Record<string, string | undefined> }, workspaceId: string) {
+    const session = await store.getSession(sessionCookie(request.cookies));
+    const status = await store.securityStatus(session);
+    if (status.passkeyCount < 1 || !status.totpEnabled) {
+      throw new ForbiddenError("Passkey and authenticator 2FA setup are required before using pobox.watch.");
+    }
+    await store.requireMember(session, workspaceId);
+    return session;
+  }
+
   app.get("/api/health", async () => ({
     ok: true,
     service: "pobox-watch-api",
@@ -140,7 +150,11 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
 
   app.post("/api/v1/auth/passkeys/authenticate", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = passkeyAuthenticationSchema.parse(request.body);
-    const session = await store.verifyPasskeyAuthentication(body.response);
+    const result = await store.verifyPasskeyAuthentication(body.response);
+    if (result.kind === "two_factor_required") {
+      return { ok: false, twoFactorRequired: true, challengeId: result.challengeId, expiresAt: result.expiresAt, methods: result.methods };
+    }
+    const session = result;
     reply.setCookie(sessionCookieName, session.id, {
       httpOnly: true,
       sameSite: "lax",
@@ -168,16 +182,15 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
   });
 
   app.post("/api/v1/auth/2fa/disable", async (request) => {
-    const body = totpConfirmSchema.parse(request.body);
     const session = await store.getSession(sessionCookie(request.cookies));
-    await store.disableTotp(session, body.code);
-    return { ok: true };
+    await store.requireMember(session, "ws_company");
+    throw new ForbiddenError("Authenticator 2FA is mandatory for pobox.watch accounts.");
   });
 
   app.get("/api/v1/workspaces/:workspaceId/app/changes", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };
     const query = request.query as { since?: string };
-    const session = await store.getSession(sessionCookie(request.cookies));
+    const session = await securedSession(request, workspaceId);
     const member = await store.requireMember(session, workspaceId);
     return {
       version: appVersion,
@@ -188,14 +201,14 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
 
   app.get("/api/v1/workspaces/:workspaceId/dashboard", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };
-    const session = await store.getSession(sessionCookie(request.cookies));
+    const session = await securedSession(request, workspaceId);
     return store.dashboard(session, workspaceId);
   });
 
   app.post("/api/v1/workspaces/:workspaceId/mailboxes/:mailboxId/collect", async (request) => {
     const { workspaceId, mailboxId } = request.params as { workspaceId: string; mailboxId: string };
     const body = collectSchema.parse(request.body ?? {});
-    const session = await store.getSession(sessionCookie(request.cookies));
+    const session = await securedSession(request, workspaceId);
     const event = await store.collectMailbox(session, workspaceId, mailboxId, body.source);
     realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
     return event;
@@ -204,20 +217,20 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
   app.post("/api/v1/workspaces/:workspaceId/team/invitations", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };
     const body = inviteSchema.parse(request.body);
-    const session = await store.getSession(sessionCookie(request.cookies));
+    const session = await securedSession(request, workspaceId);
     return store.inviteMember(session, workspaceId, body.email, body.role);
   });
 
   app.get("/api/v1/workspaces/:workspaceId/team/members", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };
-    const session = await store.getSession(sessionCookie(request.cookies));
+    const session = await securedSession(request, workspaceId);
     return store.listMembers(session, workspaceId);
   });
 
   app.post("/api/v1/workspaces/:workspaceId/team/users", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };
     const body = createUserSchema.parse(request.body);
-    const session = await store.getSession(sessionCookie(request.cookies));
+    const session = await securedSession(request, workspaceId);
     const member = await store.createUser(session, workspaceId, body);
     realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
     return member;
@@ -226,7 +239,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
   app.post("/api/v1/workspaces/:workspaceId/post-offices", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };
     const body = createPostOfficeSchema.parse(request.body);
-    const session = await store.getSession(sessionCookie(request.cookies));
+    const session = await securedSession(request, workspaceId);
     const postOffice = await store.createPostOffice(session, workspaceId, body);
     realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
     return postOffice;
@@ -235,7 +248,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
   app.post("/api/v1/workspaces/:workspaceId/mailboxes", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };
     const body = createMailboxSchema.parse(request.body);
-    const session = await store.getSession(sessionCookie(request.cookies));
+    const session = await securedSession(request, workspaceId);
     const mailbox = await store.createMailbox(session, workspaceId, body);
     realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
     return mailbox;
@@ -244,8 +257,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
   app.post("/api/v1/workspaces/:workspaceId/dev/simulate-mail", async (request) => {
     if (process.env.NODE_ENV === "production") throw new ForbiddenError("Development simulation is disabled in production.");
     const { workspaceId } = request.params as { workspaceId: string };
-    const session = await store.getSession(sessionCookie(request.cookies));
-    await store.requireMember(session, workspaceId);
+    const session = await securedSession(request, workspaceId);
     const body = simulateSchema.parse(request.body);
     const result = await store.processIncomingMail({
       workspaceId,
@@ -261,8 +273,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
 
   app.get("/api/v1/workspaces/:workspaceId/realtime", { websocket: true }, async (socket, request) => {
     const { workspaceId } = request.params as { workspaceId: string };
-    const session = await store.getSession(sessionCookie(request.cookies));
-    await store.requireMember(session, workspaceId);
+    await securedSession(request, workspaceId);
     realtimeHub.add(workspaceId, socket);
     socket.send(JSON.stringify({ type: "connected", workspaceId }));
   });

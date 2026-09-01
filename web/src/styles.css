@@ -465,6 +465,26 @@ h3 {
   padding: 24px;
 }
 
+.setup-panel {
+  width: min(100%, 620px);
+}
+
+.login-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.login-copy h1 {
+  font-size: 1.8rem;
+  line-height: 1.05;
+  margin-bottom: 0;
+}
+
+.login-copy p {
+  color: #52635d;
+  margin-bottom: 0;
+}
+
 label {
   display: grid;
   gap: 6px;
@@ -618,6 +638,10 @@ input, select {
   margin-top: 14px;
 }
 
+.security-note {
+  margin-top: 12px;
+}
+
 .security-setup {
   margin-top: 14px;
   padding-top: 14px;
@@ -644,6 +668,31 @@ input, select {
   white-space: pre-wrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   line-height: 1.7;
+}
+
+.setup-checklist {
+  display: grid;
+  gap: 12px;
+}
+
+.setup-step {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: #fff8f5;
+  border: 1px solid #e4a08d;
+  border-radius: 8px;
+}
+
+.setup-step.complete {
+  background: #f2f8f4;
+  border-color: #a8d8b7;
+}
+
+.setup-step > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
 
 .map-grid {

@@ -1,4 +1,4 @@
-export const appVersion = "0.5.0";
+export const appVersion = "0.6.0";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.6.0-passkey-first-mandatory-security",
+    version: "0.6.0",
+    releasedAt: "2026-09-01T14:00:00.000Z",
+    title: "Passkey-first mandatory security",
+    summary:
+      "The login screen now starts with passkey sign-in. Password sign-in is a fallback for setup, and users must add both a passkey and authenticator 2FA before entering the app.",
+    audience: "ALL"
+  },
   {
     id: "0.5.0-page-buildout",
     version: "0.5.0",

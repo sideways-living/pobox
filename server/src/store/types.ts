@@ -96,7 +96,7 @@ export interface AppStore {
   beginPasskeyRegistration(session: Session): Promise<PasskeyRegistrationOptions>;
   verifyPasskeyRegistration(session: Session, response: RegistrationResponseJSON, friendlyName?: string): Promise<SecurityStatus>;
   beginPasskeyAuthentication(email?: string): Promise<PasskeyAuthenticationOptions>;
-  verifyPasskeyAuthentication(response: AuthenticationResponseJSON): Promise<Session>;
+  verifyPasskeyAuthentication(response: AuthenticationResponseJSON): Promise<LoginResult>;
   requireMember(session: Session, workspaceId: string, role?: "ADMIN"): Promise<WorkspaceMember>;
   dashboard(session: Session, workspaceId: string): Promise<DashboardSnapshot>;
   outstandingMailboxCount(workspaceId: string): Promise<number>;

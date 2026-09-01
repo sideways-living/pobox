@@ -308,7 +308,7 @@ export class PrismaStore implements AppStore {
     return { options };
   }
 
-  async verifyPasskeyAuthentication(response: AuthenticationResponseJSON): Promise<Session> {
+  async verifyPasskeyAuthentication(response: AuthenticationResponseJSON): Promise<LoginResult> {
     const credential = await this.prisma.passkeyCredential.findUnique({
       where: { credentialId: response.id },
       include: { user: true }
@@ -345,7 +345,19 @@ export class PrismaStore implements AppStore {
       }),
       this.prisma.webAuthnChallenge.delete({ where: { id: challenge.id } })
     ]);
-    return this.createSession(credential.userId, credential.user.lastLoginAt?.toISOString());
+    if (credential.user.totpEnabled) {
+      const expiresAt = new Date(Date.now() + 1000 * 60 * 10);
+      const authChallenge = await this.prisma.authChallenge.create({
+        data: { id: randomBytes(32).toString("base64url"), userId: credential.userId, expiresAt }
+      });
+      return {
+        kind: "two_factor_required",
+        challengeId: authChallenge.id,
+        expiresAt: authChallenge.expiresAt.toISOString(),
+        methods: ["totp", "recovery_code"]
+      };
+    }
+    return { kind: "session", ...(await this.createSession(credential.userId, credential.user.lastLoginAt?.toISOString())) };
   }
 
   private async createSession(userId: string, previousLoginAt?: string): Promise<Session> {
