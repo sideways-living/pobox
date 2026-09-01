@@ -105,3 +105,12 @@ public struct CollectionEvent: Codable, Identifiable, Sendable {
     public let source: MailboxCollectionSource
     public let method: String
 }
+
+public struct ReviewItem: Codable, Identifiable, Sendable {
+    public let id: String
+    public let providerMessageId: String
+    public let subject: String?
+    public let mailboxNumber: String?
+    public let confidence: Double?
+    public let createdAt: String
+}

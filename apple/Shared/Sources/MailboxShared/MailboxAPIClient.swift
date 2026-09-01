@@ -20,7 +20,7 @@ public actor MailboxAPIClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(LoginRequest(email: email, password: password))
         let (data, response) = try await session.data(for: request)
-        try validate(response)
+        try validate(response, data: data)
         return try decoder.decode(LoginResult.self, from: data)
     }
 
@@ -31,7 +31,7 @@ public actor MailboxAPIClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(TwoFactorRequest(challengeId: challengeId, code: code))
         let (data, response) = try await session.data(for: request)
-        try validate(response)
+        try validate(response, data: data)
         return try decoder.decode(LoginResult.self, from: data)
     }
 
@@ -39,15 +39,22 @@ public actor MailboxAPIClient {
         let url = baseURL.appending(path: "/api/v1/auth/logout")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        let (_, response) = try await session.data(for: request)
-        try validate(response)
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
     }
 
     public func dashboard(workspaceId: String) async throws -> MailboxDashboardSnapshot {
         let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/dashboard")
         let (data, response) = try await session.data(from: url)
-        try validate(response)
+        try validate(response, data: data)
         return try decoder.decode(MailboxDashboardSnapshot.self, from: data)
+    }
+
+    public func reviewItems(workspaceId: String) async throws -> [ReviewItem] {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/review-items")
+        let (data, response) = try await session.data(from: url)
+        try validate(response, data: data)
+        return try decoder.decode([ReviewItem].self, from: data)
     }
 
     public func collectMailbox(workspaceId: String, mailboxId: String, source: MailboxCollectionSource) async throws {
@@ -56,19 +63,32 @@ public actor MailboxAPIClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(["source": source.rawValue])
-        let (_, response) = try await session.data(for: request)
-        try validate(response)
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
     }
 
-    private func validate(_ response: URLResponse) throws {
+    private func validate(_ response: URLResponse, data: Data) throws {
         guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
-            throw MailboxAPIError.requestFailed
+            if let errorResponse = try? decoder.decode(ErrorResponse.self, from: data) {
+                throw MailboxAPIError.requestFailed(errorResponse.message)
+            }
+            throw MailboxAPIError.requestFailed("Request failed. Please check your login details and connection.")
         }
     }
 }
 
-public enum MailboxAPIError: Error {
-    case requestFailed
+public enum MailboxAPIError: LocalizedError {
+    case requestFailed(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .requestFailed(let message): message
+        }
+    }
+}
+
+private struct ErrorResponse: Decodable {
+    let message: String
 }
 
 private struct LoginRequest: Encodable {

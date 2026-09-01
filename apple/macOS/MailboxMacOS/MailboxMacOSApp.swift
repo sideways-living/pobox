@@ -18,13 +18,13 @@ final class MailboxMacOSAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720),
+            contentRect: NSRect(x: 0, y: 0, width: 1120, height: 760),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "pobox.watch"
-        window.contentMinSize = NSSize(width: 900, height: 600)
+        window.contentMinSize = NSSize(width: 940, height: 620)
         window.contentView = NSHostingView(rootView: MacRootView())
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -40,18 +40,25 @@ final class MailboxMacOSAppDelegate: NSObject, NSApplicationDelegate {
 @MainActor
 final class MacMailboxViewModel: ObservableObject {
     @Published var email = "daniel@example.com"
-    @Published var password = "Password123!"
+    @Published var password = ""
     @Published var twoFactorCode = ""
     @Published var twoFactorChallengeId: String?
     @Published var snapshot: MailboxDashboardSnapshot?
+    @Published var reviewItems: [ReviewItem] = []
     @Published var errorMessage: String?
     @Published var isLoading = false
     @Published var busyMailboxId: String?
+    @Published var passwordMode = false
 
     private let client = MailboxAPIClient.live
     private let workspaceId = "ws_company"
 
-    func signIn() async {
+    func openPasskeySignIn() {
+        guard let url = URL(string: "https://pobox.watch") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    func signInWithPassword() async {
         await run {
             let result = try await client.login(email: email, password: password)
             if result.twoFactorRequired == true, let challengeId = result.challengeId {
@@ -59,7 +66,7 @@ final class MacMailboxViewModel: ObservableObject {
                 twoFactorCode = ""
                 return
             }
-            snapshot = try await client.dashboard(workspaceId: workspaceId)
+            try await loadWorkspace()
         }
     }
 
@@ -69,13 +76,13 @@ final class MacMailboxViewModel: ObservableObject {
             _ = try await client.verifySecondFactor(challengeId: challengeId, code: twoFactorCode)
             twoFactorChallengeId = nil
             twoFactorCode = ""
-            snapshot = try await client.dashboard(workspaceId: workspaceId)
+            try await loadWorkspace()
         }
     }
 
     func refresh() async {
         await run {
-            snapshot = try await client.dashboard(workspaceId: workspaceId)
+            try await loadWorkspace()
         }
     }
 
@@ -84,8 +91,27 @@ final class MacMailboxViewModel: ObservableObject {
         defer { busyMailboxId = nil }
         await run {
             try await client.collectMailbox(workspaceId: workspaceId, mailboxId: mailbox.id, source: .macOS)
-            snapshot = try await client.dashboard(workspaceId: workspaceId)
+            try await loadWorkspace()
         }
+    }
+
+    func logout() async {
+        await run {
+            try await client.logout()
+            snapshot = nil
+            reviewItems = []
+            twoFactorChallengeId = nil
+            twoFactorCode = ""
+            password = ""
+            passwordMode = false
+        }
+    }
+
+    private func loadWorkspace() async throws {
+        async let dashboard = client.dashboard(workspaceId: workspaceId)
+        async let reviews = client.reviewItems(workspaceId: workspaceId)
+        snapshot = try await dashboard
+        reviewItems = try await reviews
     }
 
     private func run(_ operation: () async throws -> Void) async {
@@ -94,7 +120,7 @@ final class MacMailboxViewModel: ObservableObject {
         do {
             try await operation()
         } catch {
-            errorMessage = "Load failed. Check your connection and login details."
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? "Load failed. Check your connection and login details."
         }
         isLoading = false
     }
@@ -116,46 +142,71 @@ struct MacLoginView: View {
     @ObservedObject var model: MacMailboxViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("pobox.watch")
-                .font(.largeTitle.bold())
-            Text("Sign in to pobox.watch")
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("pobox.watch")
+                    .font(.largeTitle.bold())
+                Text(model.twoFactorChallengeId == nil ? "Sign in with your passkey" : "Enter your authenticator code")
+                    .font(.title3.weight(.semibold))
+                Text("pobox.watch requires a passkey and authenticator 2FA for every account.")
+                    .foregroundStyle(.secondary)
+            }
 
             if model.twoFactorChallengeId == nil {
                 TextField("Email", text: $model.email)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 360)
-                SecureField("Password", text: $model.password)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 360)
+                    .frame(width: 380)
+
+                if model.passwordMode {
+                    SecureField("Password", text: $model.password)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 380)
+                }
             } else {
                 TextField("Authenticator or recovery code", text: $model.twoFactorCode)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 360)
+                    .frame(width: 380)
             }
 
-            HStack {
-                if model.twoFactorChallengeId == nil {
-                    Button {
-                        Task { await model.signIn() }
-                    } label: {
-                        Label("Sign In", systemImage: "person.crop.circle.badge.checkmark")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.isLoading)
-                } else {
+            HStack(spacing: 10) {
+                if model.twoFactorChallengeId != nil {
                     Button {
                         Task { await model.verifySecondFactor() }
                     } label: {
                         Label("Verify Code", systemImage: "checkmark.shield")
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(model.isLoading)
+                    .disabled(model.isLoading || model.twoFactorCode.isEmpty)
 
-                    Button("Use Password Instead") {
+                    Button("Cancel") {
                         model.twoFactorChallengeId = nil
                         model.twoFactorCode = ""
+                    }
+                } else if model.passwordMode {
+                    Button {
+                        Task { await model.signInWithPassword() }
+                    } label: {
+                        Label("Continue with Password", systemImage: "lock")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.isLoading || model.email.isEmpty || model.password.isEmpty)
+
+                    Button {
+                        model.passwordMode = false
+                        model.password = ""
+                    } label: {
+                        Label("Back to Passkey", systemImage: "key")
+                    }
+                } else {
+                    Button {
+                        model.openPasskeySignIn()
+                    } label: {
+                        Label("Continue with Passkey", systemImage: "key.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button("Use Password to Set Up Security") {
+                        model.passwordMode = true
                     }
                 }
 
@@ -165,14 +216,20 @@ struct MacLoginView: View {
                 }
             }
 
+            Text("Passkey setup and first secure sign-in currently happen at pobox.watch in your browser. After setup, use the Mac app with the same secured account.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: 520, alignment: .leading)
+
             if let errorMessage = model.errorMessage {
                 Text(errorMessage)
                     .foregroundStyle(.red)
+                    .frame(maxWidth: 520, alignment: .leading)
             }
 
             Spacer()
         }
-        .padding(32)
+        .padding(36)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
@@ -196,89 +253,43 @@ struct MacOverviewView: View {
                     } label: {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
+                    .disabled(model.isLoading)
+
+                    Button {
+                        Task { await model.logout() }
+                    } label: {
+                        Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
+                    }
+                    .disabled(model.isLoading)
                 }
         }
     }
 
     @ViewBuilder
     private func detailView(for item: String) -> some View {
-        let snapshot = model.snapshot
         switch item {
         case "Overview":
-            MacSectionView(
-                title: snapshot?.workspace.name ?? "Overview",
-                subtitle: snapshot.map { "Signed in as \($0.currentUser.displayName)" } ?? "Live summary of all shared PO box locations.",
-                rows: [
-                    ("Outstanding", "\(snapshot?.outstandingMailboxCount ?? 0) PO boxes need checking."),
-                    ("Post offices", "\(snapshot?.postOffices.count ?? 0) locations loaded from pobox.watch."),
-                    ("PO Boxes", "\(snapshot?.postOffices.flatMap(\.mailboxes).count ?? 0) shared boxes are configured.")
-                ]
-            )
+            MacOverviewDashboardView(snapshot: model.snapshot, reviewItems: model.reviewItems)
         case "PO Boxes":
-            MacMailboxListView(snapshot: snapshot, busyMailboxId: model.busyMailboxId) { mailbox in
+            MacMailboxListView(snapshot: model.snapshot, busyMailboxId: model.busyMailboxId) { mailbox in
                 await model.collect(mailbox)
             }
         case "Map":
-            MacSectionView(
-                title: "Map",
-                subtitle: "Post office locations configured for this workspace.",
-                rows: snapshot?.postOffices.map { ($0.name, "\($0.address) - \($0.geofenceRadius)m geofence") } ?? []
-            )
+            MacMapView(snapshot: model.snapshot)
         case "History":
-            MacSectionView(
-                title: "History",
-                subtitle: "Recent mail detections and collection events.",
-                rows: snapshot?.history.prefix(30).map(historyRow) ?? []
-            )
+            MacHistoryView(snapshot: model.snapshot, mode: .history)
         case "Activity":
-            MacSectionView(
-                title: "Activity",
-                subtitle: "Operational feed for the shared workspace.",
-                rows: snapshot?.history.prefix(30).map(historyRow) ?? []
-            )
+            MacHistoryView(snapshot: model.snapshot, mode: .activity)
         case "Needs Review":
-            let reviewRows = snapshot?.history.compactMap { event -> (String, String)? in
-                if case .mail(let mail) = event, mail.parserConfidence < 0.8 {
-                    return (mail.subject, "Parser confidence \(Int(mail.parserConfidence * 100))%")
-                }
-                return nil
-            } ?? []
-            MacSectionView(
-                title: "Needs Review",
-                subtitle: "Low-confidence mail detection events.",
-                rows: reviewRows.isEmpty ? [("Clear", "No review items returned by the live dashboard.")] : reviewRows
-            )
+            MacNeedsReviewView(reviewItems: model.reviewItems)
         case "Team":
-            MacSectionView(
-                title: "Team",
-                subtitle: "Current authenticated user.",
-                rows: [
-                    ("Name", snapshot?.currentUser.displayName ?? "Unknown"),
-                    ("Email", snapshot?.currentUser.email ?? "Unknown"),
-                    ("Role", snapshot?.currentUser.role ?? "Unknown")
-                ]
-            )
+            MacTeamView(snapshot: model.snapshot)
         case "Settings":
-            MacSectionView(
-                title: "Settings",
-                subtitle: "Configuration for the native Mac client.",
-                rows: [
-                    ("Server", "https://pobox.watch"),
-                    ("Workspace", snapshot?.workspace.name ?? "Unknown"),
-                    ("Storage", "Prisma/PostgreSQL through the VPS API.")
-                ]
-            )
+            MacSettingsView(snapshot: model.snapshot, logout: {
+                await model.logout()
+            })
         default:
-            MacSectionView(title: item, subtitle: "Section pending.", rows: [])
-        }
-    }
-
-    private func historyRow(_ event: MailboxHistoryEvent) -> (String, String) {
-        switch event {
-        case .mail(let mail):
-            return (mail.subject, "PO box \(mail.mailboxId) from \(mail.sender)")
-        case .collection(let collection):
-            return ("Collected from \(collection.source.rawValue)", "By \(collection.collectedBy) at \(collection.collectedAt)")
+            MacEmptyStateView(title: item, subtitle: "No information is available for this section.")
         }
     }
 
@@ -296,49 +307,340 @@ struct MacOverviewView: View {
     }
 }
 
+struct MacOverviewDashboardView: View {
+    let snapshot: MailboxDashboardSnapshot?
+    let reviewItems: [ReviewItem]
+
+    private var waitingMailboxes: [Mailbox] {
+        snapshot?.postOffices.flatMap(\.mailboxes).filter(\.mailWaiting) ?? []
+    }
+
+    var body: some View {
+        MacPage(title: snapshot?.workspace.name ?? "Overview", subtitle: signedInText) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
+                MacMetricCard(value: "\(snapshot?.outstandingMailboxCount ?? 0)", label: "PO boxes needing collection", systemImage: "tray.full.fill", tint: .orange)
+                MacMetricCard(value: "\(snapshot?.postOffices.count ?? 0)", label: "Post office locations", systemImage: "building.2", tint: .blue)
+                MacMetricCard(value: "\(reviewItems.count)", label: "Review queue items", systemImage: "exclamationmark.triangle.fill", tint: .red)
+            }
+
+            MacPanel(title: "Collection Queue", aside: "\(waitingMailboxes.count) waiting") {
+                if waitingMailboxes.isEmpty {
+                    MacEmptyStateView(title: "Nothing waiting", subtitle: "All shared PO boxes are currently clear.")
+                } else {
+                    ForEach(waitingMailboxes) { mailbox in
+                        MacInfoRow(
+                            title: mailbox.name,
+                            detail: "PO Box \(mailbox.boxNumber)",
+                            systemImage: "tray.full.fill",
+                            tint: .orange
+                        )
+                    }
+                }
+            }
+
+            if let nextOffice = snapshot?.postOffices.first(where: { $0.mailboxes.contains(where: \.mailWaiting) }) {
+                MacPanel(title: "Next Location", aside: "Apple Maps") {
+                    MacOfficeRow(office: nextOffice)
+                }
+            }
+        }
+    }
+
+    private var signedInText: String {
+        guard let snapshot else { return "Loading live pobox.watch data." }
+        return "Signed in as \(snapshot.currentUser.displayName)."
+    }
+}
+
 struct MacMailboxListView: View {
     let snapshot: MailboxDashboardSnapshot?
     let busyMailboxId: String?
     let collect: (Mailbox) async -> Void
 
     var body: some View {
+        MacPage(title: "PO Boxes", subtitle: "Live shared state from pobox.watch.") {
+            ForEach(snapshot?.postOffices ?? []) { office in
+                MacPanel(title: office.name, aside: office.address) {
+                    ForEach(office.mailboxes) { mailbox in
+                        HStack(spacing: 12) {
+                            Image(systemName: mailbox.mailWaiting ? "tray.full.fill" : "checkmark.circle.fill")
+                                .foregroundStyle(mailbox.mailWaiting ? .orange : .green)
+                                .frame(width: 24)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(mailbox.name)
+                                    .font(.headline)
+                                Text(mailbox.mailWaiting ? "Mail waiting in PO Box \(mailbox.boxNumber)" : "PO Box \(mailbox.boxNumber) is clear")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if mailbox.mailWaiting {
+                                Button {
+                                    Task { await collect(mailbox) }
+                                } label: {
+                                    Label("Collect", systemImage: "checkmark.circle")
+                                }
+                                .disabled(busyMailboxId == mailbox.id)
+                            }
+                        }
+                        .padding(12)
+                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct MacMapView: View {
+    let snapshot: MailboxDashboardSnapshot?
+
+    var body: some View {
+        MacPage(title: "Map", subtitle: "Open post office locations in Apple Maps.") {
+            ForEach(snapshot?.postOffices ?? []) { office in
+                MacOfficeRow(office: office)
+            }
+        }
+    }
+}
+
+struct MacHistoryView: View {
+    enum Mode {
+        case history
+        case activity
+    }
+
+    let snapshot: MailboxDashboardSnapshot?
+    let mode: Mode
+
+    var body: some View {
+        MacPage(title: mode == .history ? "History" : "Activity", subtitle: subtitle) {
+            let events = Array(snapshot?.history.prefix(40) ?? [])
+            if events.isEmpty {
+                MacEmptyStateView(title: "No activity yet", subtitle: "New detections and collection events will appear here.")
+            } else {
+                ForEach(events) { event in
+                    MacInfoRow(title: title(for: event), detail: detail(for: event), systemImage: icon(for: event), tint: tint(for: event))
+                }
+            }
+        }
+    }
+
+    private var subtitle: String {
+        mode == .history ? "Recent mail detections and collection records." : "Operational feed for the shared workspace."
+    }
+
+    private func title(for event: MailboxHistoryEvent) -> String {
+        switch event {
+        case .mail(let mail): mail.subject
+        case .collection(let collection): "Collected by \(collection.collectedBy)"
+        }
+    }
+
+    private func detail(for event: MailboxHistoryEvent) -> String {
+        switch event {
+        case .mail(let mail):
+            return "\(mail.sender) - confidence \(Int(mail.parserConfidence * 100))% - \(mail.processedAt)"
+        case .collection(let collection):
+            return "\(collection.source.rawValue) - \(collection.collectedAt)"
+        }
+    }
+
+    private func icon(for event: MailboxHistoryEvent) -> String {
+        switch event {
+        case .mail: "envelope.badge"
+        case .collection: "checkmark.circle"
+        }
+    }
+
+    private func tint(for event: MailboxHistoryEvent) -> Color {
+        switch event {
+        case .mail(let mail): mail.parserConfidence < 0.8 ? .red : .blue
+        case .collection: .green
+        }
+    }
+}
+
+struct MacNeedsReviewView: View {
+    let reviewItems: [ReviewItem]
+
+    var body: some View {
+        MacPage(title: "Needs Review", subtitle: "Parser exceptions and low-confidence mail detections.") {
+            if reviewItems.isEmpty {
+                MacEmptyStateView(title: "Queue clear", subtitle: "No review items are waiting.")
+            } else {
+                ForEach(reviewItems) { item in
+                    MacInfoRow(
+                        title: item.subject ?? "Unmatched mail notice",
+                        detail: reviewDetail(item),
+                        systemImage: "exclamationmark.triangle.fill",
+                        tint: .red
+                    )
+                }
+            }
+        }
+    }
+
+    private func reviewDetail(_ item: ReviewItem) -> String {
+        let box = item.mailboxNumber.map { "PO Box \($0)" } ?? "No PO box match"
+        let confidence = item.confidence.map { "confidence \(Int($0 * 100))%" } ?? "confidence unknown"
+        return "\(box) - \(confidence) - \(item.createdAt)"
+    }
+}
+
+struct MacTeamView: View {
+    let snapshot: MailboxDashboardSnapshot?
+
+    var body: some View {
+        MacPage(title: "Team", subtitle: "Current signed-in pobox.watch account.") {
+            MacInfoRow(title: snapshot?.currentUser.displayName ?? "Unknown user", detail: snapshot?.currentUser.email ?? "No email loaded", systemImage: "person.crop.circle", tint: .blue)
+            MacInfoRow(title: "Role", detail: snapshot?.currentUser.role ?? "Unknown", systemImage: "person.badge.key", tint: .purple)
+            MacInfoRow(title: "Team management", detail: "Create and manage real users from the web Settings page while the native admin forms are being built.", systemImage: "person.2", tint: .indigo)
+        }
+    }
+}
+
+struct MacSettingsView: View {
+    let snapshot: MailboxDashboardSnapshot?
+    let logout: () async -> Void
+
+    var body: some View {
+        MacPage(title: "Settings", subtitle: "Configuration for this native pobox.watch client.") {
+            MacInfoRow(title: "Server", detail: "https://pobox.watch", systemImage: "network", tint: .blue)
+            MacInfoRow(title: "Workspace", detail: snapshot?.workspace.name ?? "Unknown", systemImage: "building.2", tint: .green)
+            MacInfoRow(title: "Security", detail: "Passkey and authenticator setup is mandatory. Use the web app to add passkeys and manage setup.", systemImage: "key.fill", tint: .orange)
+            Button {
+                Task { await logout() }
+            } label: {
+                Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+}
+
+struct MacOfficeRow: View {
+    let office: PostOffice
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "map.fill")
+                .foregroundStyle(.blue)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(office.name)
+                    .font(.headline)
+                Text("\(office.address) - \(office.geofenceRadius)m geofence")
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                openAppleMaps(office)
+            } label: {
+                Label("Open in Apple Maps", systemImage: "arrow.up.right.square")
+            }
+        }
+        .padding(14)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+struct MacMetricCard: View {
+    let value: String
+    let label: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: systemImage)
+                .foregroundStyle(tint)
+            Text(value)
+                .font(.system(size: 34, weight: .bold))
+            Text(label)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+struct MacInfoRow: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: systemImage)
+                .foregroundStyle(tint)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                Text(detail)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(14)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+struct MacPanel<Content: View>: View {
+    let title: String
+    let aside: String?
+    @ViewBuilder let content: Content
+
+    init(title: String, aside: String? = nil, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.aside = aside
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(title)
+                    .font(.title3.bold())
+                Spacer()
+                if let aside {
+                    Text(aside)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            content
+        }
+        .frame(maxWidth: 840, alignment: .leading)
+    }
+}
+
+struct MacPage<Content: View>: View {
+    let title: String
+    let subtitle: String
+    @ViewBuilder let content: Content
+
+    init(title: String, subtitle: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.subtitle = subtitle
+        self.content = content()
+    }
+
+    var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("PO Boxes")
+                    Text(title)
                         .font(.largeTitle.bold())
-                    Text("Current shared state from pobox.watch")
+                    Text(subtitle)
                         .foregroundStyle(.secondary)
                 }
-
-                ForEach(snapshot?.postOffices ?? []) { office in
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(office.name)
-                            .font(.title3.bold())
-                        ForEach(office.mailboxes) { mailbox in
-                            HStack {
-                                Image(systemName: mailbox.mailWaiting ? "tray.full.fill" : "checkmark.circle")
-                                    .foregroundStyle(mailbox.mailWaiting ? .orange : .green)
-                                VStack(alignment: .leading) {
-                                    Text(mailbox.name)
-                                        .font(.headline)
-                                    Text(mailbox.mailWaiting ? "Mail waiting" : "Clear")
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                if mailbox.mailWaiting {
-                                    Button("Collect") {
-                                        Task { await collect(mailbox) }
-                                    }
-                                    .disabled(busyMailboxId == mailbox.id)
-                                }
-                            }
-                            .padding(12)
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-                        }
-                    }
-                    .frame(maxWidth: 780, alignment: .leading)
-                }
+                content
+                Spacer(minLength: 20)
             }
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -346,42 +648,32 @@ struct MacMailboxListView: View {
     }
 }
 
-struct MacSectionView: View {
+struct MacEmptyStateView: View {
     let title: String
     let subtitle: String
-    let rows: [(String, String)]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(title)
-                    .font(.largeTitle.bold())
-                Text(subtitle)
-                    .foregroundStyle(.secondary)
-            }
-
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(rows, id: \.0) { row in
-                    HStack(alignment: .top, spacing: 14) {
-                        Image(systemName: "checkmark.circle")
-                            .foregroundStyle(.green)
-                            .frame(width: 20)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(row.0)
-                                .font(.headline)
-                            Text(row.1)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(14)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-                }
-            }
-            .frame(maxWidth: 720, alignment: .leading)
-
-            Spacer()
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.headline)
+            Text(subtitle)
+                .foregroundStyle(.secondary)
         }
-        .padding(28)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: 720, alignment: .leading)
+        .padding(14)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
     }
+}
+
+private func openAppleMaps(_ office: PostOffice) {
+    NSWorkspace.shared.open(appleMapsURL(for: office))
+}
+
+private func appleMapsURL(for office: PostOffice) -> URL {
+    var components = URLComponents(string: "https://maps.apple.com/")!
+    components.queryItems = [
+        URLQueryItem(name: "ll", value: "\(office.latitude),\(office.longitude)"),
+        URLQueryItem(name: "q", value: office.name)
+    ]
+    return components.url!
 }
