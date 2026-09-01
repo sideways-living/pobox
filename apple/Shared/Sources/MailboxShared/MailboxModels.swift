@@ -28,6 +28,15 @@ public struct CurrentUser: Codable, Identifiable, Sendable {
     public let role: String
 }
 
+public struct TeamMember: Codable, Identifiable, Sendable {
+    public let id: String
+    public let email: String
+    public let displayName: String
+    public let role: String
+    public let status: String
+    public let active: Bool
+}
+
 public struct PostOffice: Codable, Identifiable, Sendable {
     public let id: String
     public let name: String
@@ -113,4 +122,46 @@ public struct ReviewItem: Codable, Identifiable, Sendable {
     public let mailboxNumber: String?
     public let confidence: Double?
     public let createdAt: String
+}
+
+public struct CreateUserInput: Codable, Sendable {
+    public let email: String
+    public let displayName: String
+    public let password: String
+    public let role: String
+
+    public init(email: String, displayName: String, password: String, role: String) {
+        self.email = email
+        self.displayName = displayName
+        self.password = password
+        self.role = role
+    }
+}
+
+public struct CreatePostOfficeInput: Codable, Sendable {
+    public let name: String
+    public let address: String
+    public let latitude: Double
+    public let longitude: Double
+    public let geofenceRadius: Int
+
+    public init(name: String, address: String, latitude: Double, longitude: Double, geofenceRadius: Int) {
+        self.name = name
+        self.address = address
+        self.latitude = latitude
+        self.longitude = longitude
+        self.geofenceRadius = geofenceRadius
+    }
+}
+
+public struct CreateMailboxInput: Codable, Sendable {
+    public let postOfficeId: String
+    public let name: String
+    public let boxNumber: String
+
+    public init(postOfficeId: String, name: String, boxNumber: String) {
+        self.postOfficeId = postOfficeId
+        self.name = name
+        self.boxNumber = boxNumber
+    }
 }

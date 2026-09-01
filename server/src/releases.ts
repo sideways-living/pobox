@@ -1,4 +1,4 @@
-export const appVersion = "0.7.0";
+export const appVersion = "0.7.1";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.7.1-native-admin-setup",
+    version: "0.7.1",
+    releasedAt: "2026-09-01T19:30:00.000Z",
+    title: "Native Apple admin setup",
+    summary:
+      "Admins can now create real users, post offices, and PO boxes from the Mac and iPhone apps as well as the web app.",
+    audience: "ADMIN"
+  },
   {
     id: "0.7.0-apple-maps-operations",
     version: "0.7.0",

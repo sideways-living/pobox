@@ -45,6 +45,7 @@ final class MacMailboxViewModel: ObservableObject {
     @Published var twoFactorChallengeId: String?
     @Published var snapshot: MailboxDashboardSnapshot?
     @Published var reviewItems: [ReviewItem] = []
+    @Published var members: [TeamMember] = []
     @Published var errorMessage: String?
     @Published var isLoading = false
     @Published var busyMailboxId: String?
@@ -100,6 +101,7 @@ final class MacMailboxViewModel: ObservableObject {
             try await client.logout()
             snapshot = nil
             reviewItems = []
+            members = []
             twoFactorChallengeId = nil
             twoFactorCode = ""
             password = ""
@@ -110,8 +112,40 @@ final class MacMailboxViewModel: ObservableObject {
     private func loadWorkspace() async throws {
         async let dashboard = client.dashboard(workspaceId: workspaceId)
         async let reviews = client.reviewItems(workspaceId: workspaceId)
+        async let team = client.teamMembers(workspaceId: workspaceId)
         snapshot = try await dashboard
         reviewItems = try await reviews
+        members = try await team
+    }
+
+    func createUser(email: String, displayName: String, password: String, role: String) async {
+        await run {
+            _ = try await client.createUser(
+                workspaceId: workspaceId,
+                input: CreateUserInput(email: email, displayName: displayName, password: password, role: role)
+            )
+            try await loadWorkspace()
+        }
+    }
+
+    func createPostOffice(name: String, address: String, latitude: Double, longitude: Double, geofenceRadius: Int) async {
+        await run {
+            _ = try await client.createPostOffice(
+                workspaceId: workspaceId,
+                input: CreatePostOfficeInput(name: name, address: address, latitude: latitude, longitude: longitude, geofenceRadius: geofenceRadius)
+            )
+            try await loadWorkspace()
+        }
+    }
+
+    func createMailbox(postOfficeId: String, name: String, boxNumber: String) async {
+        await run {
+            _ = try await client.createMailbox(
+                workspaceId: workspaceId,
+                input: CreateMailboxInput(postOfficeId: postOfficeId, name: name, boxNumber: boxNumber)
+            )
+            try await loadWorkspace()
+        }
     }
 
     private func run(_ operation: () async throws -> Void) async {
@@ -283,10 +317,16 @@ struct MacOverviewView: View {
         case "Needs Review":
             MacNeedsReviewView(reviewItems: model.reviewItems)
         case "Team":
-            MacTeamView(snapshot: model.snapshot)
+            MacTeamView(snapshot: model.snapshot, members: model.members) { email, displayName, password, role in
+                await model.createUser(email: email, displayName: displayName, password: password, role: role)
+            }
         case "Settings":
             MacSettingsView(snapshot: model.snapshot, logout: {
                 await model.logout()
+            }, createPostOffice: { name, address, latitude, longitude, radius in
+                await model.createPostOffice(name: name, address: address, latitude: latitude, longitude: longitude, geofenceRadius: radius)
+            }, createMailbox: { postOfficeId, name, boxNumber in
+                await model.createMailbox(postOfficeId: postOfficeId, name: name, boxNumber: boxNumber)
             })
         default:
             MacEmptyStateView(title: item, subtitle: "No information is available for this section.")
@@ -489,12 +529,29 @@ struct MacNeedsReviewView: View {
 
 struct MacTeamView: View {
     let snapshot: MailboxDashboardSnapshot?
+    let members: [TeamMember]
+    let createUser: (String, String, String, String) async -> Void
 
     var body: some View {
-        MacPage(title: "Team", subtitle: "Current signed-in pobox.watch account.") {
+        MacPage(title: "Team", subtitle: "Users with access to this pobox.watch workspace.") {
             MacInfoRow(title: snapshot?.currentUser.displayName ?? "Unknown user", detail: snapshot?.currentUser.email ?? "No email loaded", systemImage: "person.crop.circle", tint: .blue)
             MacInfoRow(title: "Role", detail: snapshot?.currentUser.role ?? "Unknown", systemImage: "person.badge.key", tint: .purple)
-            MacInfoRow(title: "Team management", detail: "Create and manage real users from the web Settings page while the native admin forms are being built.", systemImage: "person.2", tint: .indigo)
+
+            MacPanel(title: "Members", aside: "\(members.count) users") {
+                if members.isEmpty {
+                    MacEmptyStateView(title: "No team list loaded", subtitle: "Refresh after signing in to load the workspace members.")
+                } else {
+                    ForEach(members) { member in
+                        MacInfoRow(title: member.displayName, detail: "\(member.email) - \(member.role) - \(member.status)", systemImage: member.active ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.xmark", tint: member.active ? .green : .gray)
+                    }
+                }
+            }
+
+            if snapshot?.currentUser.role == "ADMIN" {
+                MacCreateUserForm(createUser: createUser)
+            } else {
+                MacInfoRow(title: "Admin required", detail: "Only admins can create new users.", systemImage: "lock", tint: .orange)
+            }
         }
     }
 }
@@ -502,18 +559,153 @@ struct MacTeamView: View {
 struct MacSettingsView: View {
     let snapshot: MailboxDashboardSnapshot?
     let logout: () async -> Void
+    let createPostOffice: (String, String, Double, Double, Int) async -> Void
+    let createMailbox: (String, String, String) async -> Void
 
     var body: some View {
         MacPage(title: "Settings", subtitle: "Configuration for this native pobox.watch client.") {
             MacInfoRow(title: "Server", detail: "https://pobox.watch", systemImage: "network", tint: .blue)
             MacInfoRow(title: "Workspace", detail: snapshot?.workspace.name ?? "Unknown", systemImage: "building.2", tint: .green)
             MacInfoRow(title: "Security", detail: "Passkey and authenticator setup is mandatory. Use the web app to add passkeys and manage setup.", systemImage: "key.fill", tint: .orange)
+
+            if snapshot?.currentUser.role == "ADMIN" {
+                MacCreatePostOfficeForm(createPostOffice: createPostOffice)
+                MacCreateMailboxForm(postOffices: snapshot?.postOffices ?? [], createMailbox: createMailbox)
+            } else {
+                MacInfoRow(title: "Admin required", detail: "Only admins can add post offices and PO boxes.", systemImage: "lock", tint: .orange)
+            }
+
             Button {
                 Task { await logout() }
             } label: {
                 Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
             }
             .buttonStyle(.borderedProminent)
+        }
+    }
+}
+
+struct MacCreateUserForm: View {
+    let createUser: (String, String, String, String) async -> Void
+    @State private var displayName = ""
+    @State private var email = ""
+    @State private var password = ""
+    @State private var role = "MEMBER"
+
+    var body: some View {
+        MacPanel(title: "Add User", aside: "Admin") {
+            VStack(alignment: .leading, spacing: 10) {
+                TextField("Name", text: $displayName)
+                    .textFieldStyle(.roundedBorder)
+                TextField("Email", text: $email)
+                    .textFieldStyle(.roundedBorder)
+                SecureField("Temporary password", text: $password)
+                    .textFieldStyle(.roundedBorder)
+                Picker("Role", selection: $role) {
+                    Text("Member").tag("MEMBER")
+                    Text("Admin").tag("ADMIN")
+                }
+                .pickerStyle(.segmented)
+                Button {
+                    Task {
+                        await createUser(email, displayName, password, role)
+                        displayName = ""
+                        email = ""
+                        password = ""
+                        role = "MEMBER"
+                    }
+                } label: {
+                    Label("Create User", systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(displayName.isEmpty || email.isEmpty || password.count < 12)
+            }
+            .frame(maxWidth: 480, alignment: .leading)
+        }
+    }
+}
+
+struct MacCreatePostOfficeForm: View {
+    let createPostOffice: (String, String, Double, Double, Int) async -> Void
+    @State private var name = ""
+    @State private var address = ""
+    @State private var latitude = ""
+    @State private var longitude = ""
+    @State private var geofenceRadius = "200"
+
+    var body: some View {
+        MacPanel(title: "Add Post Office", aside: "Admin") {
+            VStack(alignment: .leading, spacing: 10) {
+                TextField("Name", text: $name)
+                    .textFieldStyle(.roundedBorder)
+                TextField("Address", text: $address)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    TextField("Latitude", text: $latitude)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("Longitude", text: $longitude)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("Radius", text: $geofenceRadius)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 90)
+                }
+                Button {
+                    Task {
+                        await createPostOffice(name, address, Double(latitude) ?? 0, Double(longitude) ?? 0, Int(geofenceRadius) ?? 200)
+                        name = ""
+                        address = ""
+                        latitude = ""
+                        longitude = ""
+                        geofenceRadius = "200"
+                    }
+                } label: {
+                    Label("Create Post Office", systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(name.isEmpty || address.isEmpty || Double(latitude) == nil || Double(longitude) == nil || Int(geofenceRadius) == nil)
+            }
+            .frame(maxWidth: 560, alignment: .leading)
+        }
+    }
+}
+
+struct MacCreateMailboxForm: View {
+    let postOffices: [PostOffice]
+    let createMailbox: (String, String, String) async -> Void
+    @State private var postOfficeId = ""
+    @State private var name = ""
+    @State private var boxNumber = ""
+
+    var body: some View {
+        MacPanel(title: "Add PO Box", aside: "Admin") {
+            VStack(alignment: .leading, spacing: 10) {
+                Picker("Post office", selection: $postOfficeId) {
+                    ForEach(postOffices) { office in
+                        Text(office.name).tag(office.id)
+                    }
+                }
+                .onAppear {
+                    if postOfficeId.isEmpty {
+                        postOfficeId = postOffices.first?.id ?? ""
+                    }
+                }
+                TextField("Name", text: $name)
+                    .textFieldStyle(.roundedBorder)
+                TextField("Box number", text: $boxNumber)
+                    .textFieldStyle(.roundedBorder)
+                Button {
+                    Task {
+                        await createMailbox(postOfficeId, name, boxNumber)
+                        name = ""
+                        boxNumber = ""
+                    }
+                } label: {
+                    Label("Create PO Box", systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(postOfficeId.isEmpty || name.isEmpty || boxNumber.isEmpty)
+            }
+            .frame(maxWidth: 560, alignment: .leading)
         }
     }
 }

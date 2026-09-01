@@ -57,6 +57,13 @@ public actor MailboxAPIClient {
         return try decoder.decode([ReviewItem].self, from: data)
     }
 
+    public func teamMembers(workspaceId: String) async throws -> [TeamMember] {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/team/members")
+        let (data, response) = try await session.data(from: url)
+        try validate(response, data: data)
+        return try decoder.decode([TeamMember].self, from: data)
+    }
+
     public func collectMailbox(workspaceId: String, mailboxId: String, source: MailboxCollectionSource) async throws {
         let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/mailboxes/\(mailboxId)/collect")
         var request = URLRequest(url: url)
@@ -67,10 +74,43 @@ public actor MailboxAPIClient {
         try validate(response, data: data)
     }
 
+    public func createUser(workspaceId: String, input: CreateUserInput) async throws -> TeamMember {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/team/users")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(input)
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+        return try decoder.decode(TeamMember.self, from: data)
+    }
+
+    public func createPostOffice(workspaceId: String, input: CreatePostOfficeInput) async throws -> PostOffice {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/post-offices")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(input)
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+        return try decoder.decode(PostOffice.self, from: data)
+    }
+
+    public func createMailbox(workspaceId: String, input: CreateMailboxInput) async throws -> Mailbox {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/mailboxes")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(input)
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+        return try decoder.decode(Mailbox.self, from: data)
+    }
+
     private func validate(_ response: URLResponse, data: Data) throws {
         guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
             if let errorResponse = try? decoder.decode(ErrorResponse.self, from: data) {
-                throw MailboxAPIError.requestFailed(errorResponse.message)
+                throw MailboxAPIError.requestFailed(errorResponse.error)
             }
             throw MailboxAPIError.requestFailed("Request failed. Please check your login details and connection.")
         }
@@ -88,7 +128,7 @@ public enum MailboxAPIError: LocalizedError {
 }
 
 private struct ErrorResponse: Decodable {
-    let message: String
+    let error: String
 }
 
 private struct LoginRequest: Encodable {

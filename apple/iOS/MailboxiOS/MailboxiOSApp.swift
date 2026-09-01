@@ -19,6 +19,7 @@ final class iPhoneMailboxViewModel: ObservableObject {
     @Published var twoFactorChallengeId: String?
     @Published var snapshot: MailboxDashboardSnapshot?
     @Published var reviewItems: [ReviewItem] = []
+    @Published var members: [TeamMember] = []
     @Published var errorMessage: String?
     @Published var isLoading = false
     @Published var busyMailboxId: String?
@@ -74,6 +75,7 @@ final class iPhoneMailboxViewModel: ObservableObject {
             try await client.logout()
             snapshot = nil
             reviewItems = []
+            members = []
             twoFactorChallengeId = nil
             twoFactorCode = ""
             password = ""
@@ -84,8 +86,40 @@ final class iPhoneMailboxViewModel: ObservableObject {
     private func loadWorkspace() async throws {
         async let dashboard = client.dashboard(workspaceId: workspaceId)
         async let reviews = client.reviewItems(workspaceId: workspaceId)
+        async let team = client.teamMembers(workspaceId: workspaceId)
         snapshot = try await dashboard
         reviewItems = try await reviews
+        members = try await team
+    }
+
+    func createUser(email: String, displayName: String, password: String, role: String) async {
+        await run {
+            _ = try await client.createUser(
+                workspaceId: workspaceId,
+                input: CreateUserInput(email: email, displayName: displayName, password: password, role: role)
+            )
+            try await loadWorkspace()
+        }
+    }
+
+    func createPostOffice(name: String, address: String, latitude: Double, longitude: Double, geofenceRadius: Int) async {
+        await run {
+            _ = try await client.createPostOffice(
+                workspaceId: workspaceId,
+                input: CreatePostOfficeInput(name: name, address: address, latitude: latitude, longitude: longitude, geofenceRadius: geofenceRadius)
+            )
+            try await loadWorkspace()
+        }
+    }
+
+    func createMailbox(postOfficeId: String, name: String, boxNumber: String) async {
+        await run {
+            _ = try await client.createMailbox(
+                workspaceId: workspaceId,
+                input: CreateMailboxInput(postOfficeId: postOfficeId, name: name, boxNumber: boxNumber)
+            )
+            try await loadWorkspace()
+        }
     }
 
     private func run(_ operation: () async throws -> Void) async {
@@ -231,9 +265,19 @@ struct iPhoneDashboardView: View {
                 iPhoneReviewList(reviewItems: model.reviewItems)
             }
 
+            iPhoneTab(title: "Team", systemImage: "person.2") {
+                iPhoneTeamView(snapshot: model.snapshot, members: model.members, createUser: { email, displayName, password, role in
+                    await model.createUser(email: email, displayName: displayName, password: password, role: role)
+                })
+            }
+
             iPhoneTab(title: "Settings", systemImage: "gearshape") {
                 iPhoneSettingsView(snapshot: model.snapshot, logout: {
                     await model.logout()
+                }, createPostOffice: { name, address, latitude, longitude, radius in
+                    await model.createPostOffice(name: name, address: address, latitude: latitude, longitude: longitude, geofenceRadius: radius)
+                }, createMailbox: { postOfficeId, name, boxNumber in
+                    await model.createMailbox(postOfficeId: postOfficeId, name: name, boxNumber: boxNumber)
                 })
             }
         }
@@ -445,9 +489,53 @@ struct iPhoneReviewList: View {
     }
 }
 
+struct iPhoneTeamView: View {
+    let snapshot: MailboxDashboardSnapshot?
+    let members: [TeamMember]
+    let createUser: (String, String, String, String) async -> Void
+
+    var body: some View {
+        Form {
+            Section("Current Account") {
+                Text(snapshot?.currentUser.displayName ?? "Unknown user")
+                Text(snapshot?.currentUser.email ?? "")
+                    .foregroundStyle(.secondary)
+                Text(snapshot?.currentUser.role ?? "")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Members") {
+                if members.isEmpty {
+                    Label("No team list loaded", systemImage: "person.2")
+                } else {
+                    ForEach(members) { member in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(member.displayName)
+                                .font(.headline)
+                            Text("\(member.email) - \(member.role) - \(member.status)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
+            if snapshot?.currentUser.role == "ADMIN" {
+                iPhoneCreateUserForm(createUser: createUser)
+            } else {
+                Section("Add User") {
+                    Label("Admin required", systemImage: "lock")
+                }
+            }
+        }
+    }
+}
+
 struct iPhoneSettingsView: View {
     let snapshot: MailboxDashboardSnapshot?
     let logout: () async -> Void
+    let createPostOffice: (String, String, Double, Double, Int) async -> Void
+    let createMailbox: (String, String, String) async -> Void
 
     var body: some View {
         Form {
@@ -473,6 +561,15 @@ struct iPhoneSettingsView: View {
                 Text("https://pobox.watch")
             }
 
+            if snapshot?.currentUser.role == "ADMIN" {
+                iPhoneCreatePostOfficeForm(createPostOffice: createPostOffice)
+                iPhoneCreateMailboxForm(postOffices: snapshot?.postOffices ?? [], createMailbox: createMailbox)
+            } else {
+                Section("Admin Setup") {
+                    Label("Admin required to add post offices and PO boxes", systemImage: "lock")
+                }
+            }
+
             Section {
                 Button(role: .destructive) {
                     Task { await logout() }
@@ -480,6 +577,113 @@ struct iPhoneSettingsView: View {
                     Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
                 }
             }
+        }
+    }
+}
+
+struct iPhoneCreateUserForm: View {
+    let createUser: (String, String, String, String) async -> Void
+    @State private var displayName = ""
+    @State private var email = ""
+    @State private var password = ""
+    @State private var role = "MEMBER"
+
+    var body: some View {
+        Section("Add User") {
+            TextField("Name", text: $displayName)
+                .textContentType(.name)
+            TextField("Email", text: $email)
+                .textContentType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .keyboardType(.emailAddress)
+            SecureField("Temporary password", text: $password)
+                .textContentType(.newPassword)
+            Picker("Role", selection: $role) {
+                Text("Member").tag("MEMBER")
+                Text("Admin").tag("ADMIN")
+            }
+            Button {
+                Task {
+                    await createUser(email, displayName, password, role)
+                    displayName = ""
+                    email = ""
+                    password = ""
+                    role = "MEMBER"
+                }
+            } label: {
+                Label("Create User", systemImage: "plus")
+            }
+            .disabled(displayName.isEmpty || email.isEmpty || password.count < 12)
+        }
+    }
+}
+
+struct iPhoneCreatePostOfficeForm: View {
+    let createPostOffice: (String, String, Double, Double, Int) async -> Void
+    @State private var name = ""
+    @State private var address = ""
+    @State private var latitude = ""
+    @State private var longitude = ""
+    @State private var geofenceRadius = "200"
+
+    var body: some View {
+        Section("Add Post Office") {
+            TextField("Name", text: $name)
+            TextField("Address", text: $address)
+            TextField("Latitude", text: $latitude)
+                .keyboardType(.decimalPad)
+            TextField("Longitude", text: $longitude)
+                .keyboardType(.decimalPad)
+            TextField("Geofence radius", text: $geofenceRadius)
+                .keyboardType(.numberPad)
+            Button {
+                Task {
+                    await createPostOffice(name, address, Double(latitude) ?? 0, Double(longitude) ?? 0, Int(geofenceRadius) ?? 200)
+                    name = ""
+                    address = ""
+                    latitude = ""
+                    longitude = ""
+                    geofenceRadius = "200"
+                }
+            } label: {
+                Label("Create Post Office", systemImage: "plus")
+            }
+            .disabled(name.isEmpty || address.isEmpty || Double(latitude) == nil || Double(longitude) == nil || Int(geofenceRadius) == nil)
+        }
+    }
+}
+
+struct iPhoneCreateMailboxForm: View {
+    let postOffices: [PostOffice]
+    let createMailbox: (String, String, String) async -> Void
+    @State private var postOfficeId = ""
+    @State private var name = ""
+    @State private var boxNumber = ""
+
+    var body: some View {
+        Section("Add PO Box") {
+            Picker("Post office", selection: $postOfficeId) {
+                ForEach(postOffices) { office in
+                    Text(office.name).tag(office.id)
+                }
+            }
+            .onAppear {
+                if postOfficeId.isEmpty {
+                    postOfficeId = postOffices.first?.id ?? ""
+                }
+            }
+            TextField("Name", text: $name)
+            TextField("Box number", text: $boxNumber)
+            Button {
+                Task {
+                    await createMailbox(postOfficeId, name, boxNumber)
+                    name = ""
+                    boxNumber = ""
+                }
+            } label: {
+                Label("Create PO Box", systemImage: "plus")
+            }
+            .disabled(postOfficeId.isEmpty || name.isEmpty || boxNumber.isEmpty)
         }
     }
 }
