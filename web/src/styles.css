@@ -92,6 +92,14 @@ nav {
   align-items: flex-start;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .workspace {
   margin: 0 0 4px;
   color: #52635d;
@@ -126,6 +134,39 @@ h3 {
 .live.is-live {
   border-color: #34855f;
   color: #16613e;
+}
+
+.account-menu {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 6px 8px 6px 12px;
+  background: #ffffff;
+  border: 1px solid #c8d3cd;
+  border-radius: 8px;
+}
+
+.account-menu span {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  max-width: 220px;
+}
+
+.account-menu strong, .account-menu small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu small {
+  color: #65736c;
+  font-size: 0.78rem;
+}
+
+.logout-button {
+  white-space: nowrap;
 }
 
 .summary-band {
@@ -489,7 +530,12 @@ input, select {
     padding: 18px;
   }
 
-  .topbar, .summary-band, .mailbox, .panel-heading, .office-title {
+  .topbar, .topbar-actions, .summary-band, .mailbox, .panel-heading, .office-title {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .account-menu {
     align-items: stretch;
     flex-direction: column;
   }
@@ -498,7 +544,7 @@ input, select {
     justify-content: stretch;
   }
 
-  .dev-controls button, .mailbox button {
+  .dev-controls button, .mailbox button, .logout-button {
     width: 100%;
   }
 }

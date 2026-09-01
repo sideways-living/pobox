@@ -1,4 +1,4 @@
-export const appVersion = "0.4.0";
+export const appVersion = "0.4.1";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.4.1-clear-logout",
+    version: "0.4.1",
+    releasedAt: "2026-09-01T12:00:00.000Z",
+    title: "Clear logout button",
+    summary:
+      "The web app now shows your signed-in account in the top bar with a clear Log Out button, so ending a session no longer depends on a hidden API link.",
+    audience: "ALL"
+  },
   {
     id: "0.4.0-passkeys",
     version: "0.4.0",

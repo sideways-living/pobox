@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
-import { Bell, Check, KeyRound, LogIn, Mail, MapPin, Plus, RefreshCw, Shield, Users } from "lucide-react";
+import { Bell, Check, KeyRound, LogIn, LogOut, Mail, MapPin, Plus, RefreshCw, Shield, Users } from "lucide-react";
 import {
   authenticatePasskey,
   beginPasskeyAuthentication,
@@ -18,6 +18,7 @@ import {
   loadMembers,
   loadSecurityStatus,
   login,
+  logout,
   registerPasskey,
   realtimeUrl,
   simulateMail,
@@ -69,6 +70,22 @@ function App() {
     }
   }
 
+  async function handleLogout() {
+    try {
+      await logout();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to log out.");
+      return;
+    }
+    setSnapshot(null);
+    setMembers([]);
+    setChangeNotice(null);
+    setConnected(false);
+    setBusyId(null);
+    setSection("Overview");
+    setError(null);
+  }
+
   if (!snapshot) {
     return <LoginScreen onLogin={handleLogin} error={error} setError={setError} />;
   }
@@ -104,7 +121,18 @@ function App() {
             <p className="workspace">{snapshot.workspace.name}</p>
             <h1>{snapshot.outstandingMailboxCount === 0 ? "All Clear" : `${snapshot.outstandingMailboxCount} PO Boxes Need Checking`}</h1>
           </div>
-          <div className={connected ? "live is-live" : "live"}>{connected ? "Live" : "Live connection unavailable"}</div>
+          <div className="topbar-actions">
+            <div className={connected ? "live is-live" : "live"}>{connected ? "Live" : "Live connection unavailable"}</div>
+            <div className="account-menu" aria-label="Signed-in account">
+              <span>
+                <strong>{snapshot.currentUser.displayName}</strong>
+                <small>{snapshot.currentUser.email}</small>
+              </span>
+              <button type="button" className="secondary logout-button" onClick={handleLogout}>
+                <LogOut size={17} />Log Out
+              </button>
+            </div>
+          </div>
         </header>
 
         {error && <div className="alert">{error}</div>}

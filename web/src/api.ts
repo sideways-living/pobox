@@ -85,6 +85,14 @@ export async function authenticatePasskey(responseJson: unknown): Promise<LoginR
   return response.json();
 }
 
+export async function logout(): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/auth/logout`, {
+    method: "POST",
+    credentials: "include"
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+}
+
 export async function beginTotpSetup(): Promise<TotpSetup> {
   const response = await fetch(`${apiBase}/api/v1/auth/2fa/setup`, {
     method: "POST",
