@@ -7,6 +7,7 @@ import type {
   LoginResult,
   PasskeyAuthenticationOptions,
   PasskeyRegistrationOptions,
+  ReviewItem,
   SecurityStatus,
   TeamMember,
   TotpSetup
@@ -149,6 +150,12 @@ export async function collectMailbox(mailboxId: string) {
 
 export async function loadMembers(): Promise<TeamMember[]> {
   const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/team/members`, { credentials: "include" });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function loadReviewItems(): Promise<ReviewItem[]> {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/review-items`, { credentials: "include" });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
 }

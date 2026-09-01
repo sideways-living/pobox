@@ -1,4 +1,4 @@
-export const appVersion = "0.6.0";
+export const appVersion = "0.7.0";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.7.0-apple-maps-operations",
+    version: "0.7.0",
+    releasedAt: "2026-09-01T15:00:00.000Z",
+    title: "Apple Maps and review queue",
+    summary:
+      "Post office location links now open in Apple Maps. The Map page has a clearer operations view, and parser exceptions now have a dedicated Needs Review queue.",
+    audience: "ALL"
+  },
   {
     id: "0.6.0-passkey-first-mandatory-security",
     version: "0.6.0",

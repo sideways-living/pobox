@@ -63,6 +63,15 @@ export interface TeamMember {
   active: boolean;
 }
 
+export interface ReviewItem {
+  id: string;
+  providerMessageId: string;
+  subject?: string;
+  mailboxNumber?: string;
+  confidence?: number;
+  createdAt: string;
+}
+
 export interface CreateUserInput {
   email: string;
   displayName: string;

@@ -171,7 +171,7 @@ h3 {
 
 .summary-band {
   display: grid;
-  grid-template-columns: repeat(4, minmax(130px, 1fr)) minmax(260px, auto);
+  grid-template-columns: repeat(5, minmax(120px, 1fr)) minmax(260px, auto);
   align-items: stretch;
   gap: 16px;
   background: #dfe7dc;
@@ -701,20 +701,81 @@ input, select {
   gap: 14px;
 }
 
-.map-embed-wrap {
+.apple-map-board {
+  display: grid;
+  grid-template-rows: auto minmax(320px, 1fr);
+  gap: 14px;
   width: 100%;
   aspect-ratio: 16 / 9;
-  min-height: 320px;
-  overflow: hidden;
+  min-height: 380px;
   border: 1px solid #d8ded8;
   border-radius: 8px;
-  background: #edf2ed;
+  padding: 14px;
+  background:
+    linear-gradient(90deg, rgba(20, 51, 41, 0.08) 1px, transparent 1px),
+    linear-gradient(rgba(20, 51, 41, 0.08) 1px, transparent 1px),
+    #edf2ed;
+  background-size: 44px 44px;
 }
 
-.map-embed {
-  width: 100%;
-  height: 100%;
-  border: 0;
+.map-board-copy {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid #d8ded8;
+  border-radius: 8px;
+}
+
+.map-board-copy div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.map-board-copy span {
+  color: #65736c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-board-grid {
+  position: relative;
+  min-height: 260px;
+  border: 1px solid rgba(20, 51, 41, 0.12);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 22% 34%, rgba(73, 165, 109, 0.14), transparent 18%),
+    radial-gradient(circle at 78% 68%, rgba(199, 67, 55, 0.12), transparent 20%),
+    rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+}
+
+.map-point {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: #34855f;
+  color: #ffffff;
+  text-decoration: none;
+  box-shadow: 0 10px 24px rgba(16, 35, 29, 0.22);
+}
+
+.map-point.waiting {
+  background: #c74337;
+}
+
+.map-point span {
+  font-size: 0.78rem;
+  font-weight: 850;
 }
 
 .route-list, .priority-list {
@@ -766,6 +827,42 @@ input, select {
   grid-template-columns: 22px 1fr;
   gap: 10px;
   color: #52635d;
+}
+
+.review-list {
+  display: grid;
+  gap: 12px;
+}
+
+.review-item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  background: #fff8f5;
+  border: 1px solid #e4a08d;
+  border-radius: 8px;
+}
+
+.review-item > div:not(.review-icon) {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.review-item span, .review-item small {
+  color: #65736c;
+}
+
+.review-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #ffe8df;
+  color: #a73524;
 }
 
 .modal-backdrop {
@@ -843,6 +940,10 @@ input, select {
     flex-direction: column;
   }
 
+  .map-board-copy {
+    grid-template-columns: 1fr;
+  }
+
   .summary-band {
     grid-template-columns: 1fr;
   }
@@ -852,6 +953,10 @@ input, select {
   }
 
   .mailbox-row {
+    grid-template-columns: 1fr;
+  }
+
+  .review-item {
     grid-template-columns: 1fr;
   }
 

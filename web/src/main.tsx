@@ -15,6 +15,7 @@ import {
   loadAppChanges,
   loadDashboard,
   loadMembers,
+  loadReviewItems,
   loadSecurityStatus,
   login,
   logout,
@@ -23,10 +24,10 @@ import {
   simulateMail,
   verifySecondFactor
 } from "./api";
-import type { AppChangesResponse, CollectionHistoryEvent, DashboardSnapshot, Mailbox, MailHistoryEvent, PostOffice, SecurityStatus, TeamMember, TotpSetup } from "./types";
+import type { AppChangesResponse, CollectionHistoryEvent, DashboardSnapshot, Mailbox, MailHistoryEvent, PostOffice, ReviewItem, SecurityStatus, TeamMember, TotpSetup } from "./types";
 import "./styles.css";
 
-type Section = "Overview" | "Mailboxes" | "Map" | "History" | "Team" | "Settings";
+type Section = "Overview" | "Mailboxes" | "Map" | "History" | "Needs Review" | "Team" | "Settings";
 type MailboxFilter = "all" | "waiting" | "clear";
 
 function App() {
@@ -36,6 +37,7 @@ function App() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [section, setSection] = useState<Section>("Overview");
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [changeNotice, setChangeNotice] = useState<AppChangesResponse | null>(null);
   const [securityGate, setSecurityGate] = useState<{ previousLoginAt?: string } | null>(null);
 
@@ -45,6 +47,7 @@ function App() {
     if (nextSnapshot.currentUser.role === "ADMIN") {
       setMembers(await loadMembers());
     }
+    setReviewItems(await loadReviewItems());
     setError(null);
   }
 
@@ -90,6 +93,7 @@ function App() {
     }
     setSnapshot(null);
     setMembers([]);
+    setReviewItems([]);
     setChangeNotice(null);
     setConnected(false);
     setBusyId(null);
@@ -138,6 +142,7 @@ function App() {
           <NavItem icon={<Mail size={17} />} label="PO Boxes" active={section === "Mailboxes"} onClick={() => setSection("Mailboxes")} />
           <NavItem icon={<MapPin size={17} />} label="Map" active={section === "Map"} onClick={() => setSection("Map")} />
           <NavItem icon={<RefreshCw size={17} />} label="History" active={section === "History"} onClick={() => setSection("History")} />
+          <NavItem icon={<AlertTriangle size={17} />} label="Needs Review" active={section === "Needs Review"} onClick={() => setSection("Needs Review")} />
           <NavItem icon={<Users size={17} />} label="Team" active={section === "Team"} onClick={() => setSection("Team")} />
           <NavItem icon={<Shield size={17} />} label="Settings" active={section === "Settings"} onClick={() => setSection("Settings")} />
         </nav>
@@ -168,6 +173,7 @@ function App() {
           <MetricCard value={snapshot.outstandingMailboxCount} label="Outstanding PO boxes" />
           <MetricCard value={totalMailboxes(snapshot)} label="Total PO boxes" />
           <MetricCard value={snapshot.postOffices.length} label="Post offices" />
+          <MetricCard value={reviewItems.length} label="Needs review" />
           <MetricCard value={snapshot.currentUser.role} label="Access level" />
           <div className="dev-controls">
             <button onClick={() => mutate(() => simulateMail("1234"))}>Simulate New Mail 1234</button>
@@ -180,6 +186,7 @@ function App() {
           section={section}
           snapshot={snapshot}
           members={members}
+          reviewItems={reviewItems}
           busyId={busyId}
           mutate={mutate}
           refresh={refresh}
@@ -208,6 +215,7 @@ function SectionView({
   section,
   snapshot,
   members,
+  reviewItems,
   busyId,
   mutate,
   refresh,
@@ -216,6 +224,7 @@ function SectionView({
   section: Section;
   snapshot: DashboardSnapshot;
   members: TeamMember[];
+  reviewItems: ReviewItem[];
   busyId: string | null;
   mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>;
   refresh: () => Promise<void>;
@@ -225,6 +234,7 @@ function SectionView({
   if (section === "Settings") return <SettingsSection snapshot={snapshot} refresh={refresh} setError={setError} />;
   if (section === "Map") return <MapSection snapshot={snapshot} />;
   if (section === "History") return <HistorySection snapshot={snapshot} />;
+  if (section === "Needs Review") return <NeedsReviewSection reviewItems={reviewItems} mutate={mutate} refresh={refresh} />;
   if (section === "Mailboxes") return <MailboxSection snapshot={snapshot} busyId={busyId} mutate={mutate} />;
   return <OverviewSection snapshot={snapshot} busyId={busyId} mutate={mutate} />;
 }
@@ -266,6 +276,12 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
       const options = await beginPasskeyAuthentication(email.includes("@") ? email : undefined);
       const response = await startAuthentication({ optionsJSON: options.options });
       const result = await authenticatePasskey(response);
+      if (!result.ok && result.twoFactorRequired) {
+        setChallengeId(result.challengeId);
+        setTwoFactorCode("");
+        setError(null);
+        return;
+      }
       if (result.ok) await onLogin(result.previousLoginAt);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in with passkey.");
@@ -461,7 +477,7 @@ function OverviewSection({ snapshot, busyId, mutate }: { snapshot: DashboardSnap
                         <h3>{office.name}</h3>
                         <p>{office.address}</p>
                       </div>
-                      <a className="text-link" href={mapUrl(office.latitude, office.longitude)} target="_blank" rel="noreferrer"><Route size={16} />Directions</a>
+                      <a className="text-link" href={appleMapsUrl(office)} target="_blank" rel="noreferrer"><Route size={16} />Directions</a>
                     </div>
                     <div className="mailbox-list">
                       {waiting.map((box) => (
@@ -534,7 +550,7 @@ function OfficeSection({ office, filter, busyId, mutate }: { office: PostOffice;
         </div>
         <div className="office-actions">
           <StatusPill tone={waiting > 0 ? "warning" : "ok"}>{waiting > 0 ? `${waiting} waiting` : "Clear"}</StatusPill>
-          <a className="text-link" href={mapUrl(office.latitude, office.longitude)} target="_blank" rel="noreferrer"><ExternalLink size={15} />Map</a>
+          <a className="text-link" href={appleMapsUrl(office)} target="_blank" rel="noreferrer"><ExternalLink size={15} />Apple Maps</a>
         </div>
       </div>
       <div className="mailbox-table">
@@ -564,7 +580,7 @@ function MapSummary({ snapshot }: { snapshot: DashboardSnapshot }) {
       {snapshot.postOffices.map((office) => {
         const waiting = office.mailboxes.filter((box) => box.mailWaiting).length;
         return (
-          <a className="map-location" href={mapUrl(office.latitude, office.longitude)} target="_blank" rel="noreferrer" key={office.id}>
+          <a className="map-location" href={appleMapsUrl(office)} target="_blank" rel="noreferrer" key={office.id}>
             <MapPin size={18} />
             <span>{office.name}</span>
             <strong>{waiting > 0 ? `${waiting} waiting` : "Clear"}</strong>
@@ -580,15 +596,36 @@ function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
   return (
     <div className="page-grid map-page">
       <section className="page-main">
-        <Panel title="Live Collection Map" aside={activeOffice ? `${activeOffice.latitude.toFixed(4)}, ${activeOffice.longitude.toFixed(4)}` : undefined}>
+        <Panel title="Apple Maps Collection View" aside={activeOffice ? `${activeOffice.latitude.toFixed(4)}, ${activeOffice.longitude.toFixed(4)}` : undefined}>
           {activeOffice ? (
-            <div className="map-embed-wrap">
-              <iframe
-                title={`${activeOffice.name} map`}
-                className="map-embed"
-                loading="lazy"
-                src={embedMapUrl(activeOffice.latitude, activeOffice.longitude)}
-              />
+            <div className="apple-map-board" aria-label="Post office map overview">
+              <div className="map-board-copy">
+                <MapPin size={22} />
+                <div>
+                  <strong>{activeOffice.name}</strong>
+                  <span>{activeOffice.address}</span>
+                </div>
+                <a className="primary map-button" href={appleMapsUrl(activeOffice)} target="_blank" rel="noreferrer"><ExternalLink size={17} />Open in Apple Maps</a>
+              </div>
+              <div className="map-board-grid">
+                {snapshot.postOffices.map((office) => {
+                  const waiting = office.mailboxes.filter((box) => box.mailWaiting).length;
+                  const point = mapPoint(snapshot.postOffices, office);
+                  return (
+                    <a
+                      className={waiting > 0 ? "map-point waiting" : "map-point"}
+                      href={appleMapsUrl(office)}
+                      key={office.id}
+                      style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`${office.name}, ${waiting > 0 ? `${waiting} waiting` : "clear"}`}
+                    >
+                      <span>{waiting}</span>
+                    </a>
+                  );
+                })}
+              </div>
             </div>
           ) : (
             <p className="small">Add a post office to show the operational map.</p>
@@ -606,6 +643,7 @@ function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
             <DetailRow label="Tracked locations" value={String(snapshot.postOffices.length)} />
             <DetailRow label="PO boxes mapped" value={String(totalMailboxes(snapshot))} />
             <DetailRow label="Needs collection" value={String(snapshot.outstandingMailboxCount)} />
+            <DetailRow label="Map provider" value="Apple Maps" />
           </div>
         </Panel>
         <Panel title="Priority Stops">
@@ -613,7 +651,7 @@ function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
             <div className="priority-list">
               {snapshot.postOffices
                 .filter((office) => office.mailboxes.some((box) => box.mailWaiting))
-                .map((office) => <a href={mapUrl(office.latitude, office.longitude)} target="_blank" rel="noreferrer" key={office.id}>{office.name}</a>)}
+                .map((office) => <a href={appleMapsUrl(office)} target="_blank" rel="noreferrer" key={office.id}>{office.name}</a>)}
             </div>
           ) : (
             <p className="small">No priority stops right now.</p>
@@ -740,6 +778,54 @@ function HistorySection({ snapshot }: { snapshot: DashboardSnapshot }) {
   );
 }
 
+function NeedsReviewSection({ reviewItems, mutate, refresh }: { reviewItems: ReviewItem[]; mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>; refresh: () => Promise<void> }) {
+  async function simulateUnclearMail() {
+    await mutate(async () => {
+      await simulateMail("unknown-box");
+      await refresh();
+    });
+  }
+
+  return (
+    <div className="page-grid">
+      <section className="page-main">
+        <Panel title="Needs Review Queue" aside={`${reviewItems.length} items`}>
+          {reviewItems.length > 0 ? (
+            <div className="review-list">
+              {reviewItems.map((item) => (
+                <article className="review-item" key={item.id}>
+                  <div className="review-icon"><AlertTriangle size={18} /></div>
+                  <div>
+                    <strong>{item.subject ?? "Unmatched mail notification"}</strong>
+                    <span>{item.mailboxNumber ? `Possible PO box ${item.mailboxNumber}` : "No PO box number could be matched."}</span>
+                    <small>{item.providerMessageId} - {new Date(item.createdAt).toLocaleString()}</small>
+                  </div>
+                  <StatusPill tone="warning">{confidenceLabel(item.confidence)}</StatusPill>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state"><Check size={22} />No mail notifications need manual review.</div>
+          )}
+        </Panel>
+      </section>
+      <aside className="side-panels">
+        <Panel title="Review Summary">
+          <div className="detail-list">
+            <DetailRow label="Waiting review" value={String(reviewItems.length)} />
+            <DetailRow label="Low confidence" value={String(reviewItems.filter((item) => (item.confidence ?? 1) < 0.7).length)} />
+            <DetailRow label="Unmatched box" value={String(reviewItems.filter((item) => !item.mailboxNumber).length)} />
+          </div>
+        </Panel>
+        <Panel title="Review Test">
+          <p className="small">Create an unmatched notification to confirm the review queue is receiving parser exceptions.</p>
+          <button className="primary security-action" onClick={simulateUnclearMail}><AlertTriangle size={17} />Simulate Review Item</button>
+        </Panel>
+      </aside>
+    </div>
+  );
+}
+
 function OfficeMapCard({ office }: { office: PostOffice }) {
   const waiting = office.mailboxes.filter((box) => box.mailWaiting).length;
   return (
@@ -751,7 +837,7 @@ function OfficeMapCard({ office }: { office: PostOffice }) {
       </div>
       <div className="map-card-footer">
         <StatusPill tone={waiting > 0 ? "warning" : "ok"}>{waiting > 0 ? `${waiting} waiting` : "Clear"}</StatusPill>
-        <a className="primary map-button" href={mapUrl(office.latitude, office.longitude)} target="_blank" rel="noreferrer"><MapPin size={17} />Open Map</a>
+        <a className="primary map-button" href={appleMapsUrl(office)} target="_blank" rel="noreferrer"><MapPin size={17} />Apple Maps</a>
       </div>
     </article>
   );
@@ -1052,12 +1138,29 @@ function isCollectionEvent(event: MailHistoryEvent | CollectionHistoryEvent): ev
   return "collectedAt" in event;
 }
 
-function embedMapUrl(latitude: number, longitude: number) {
-  return `https://maps.google.com/maps?q=${latitude},${longitude}&z=15&output=embed`;
+function confidenceLabel(confidence?: number) {
+  if (confidence === undefined) return "Needs review";
+  return `${Math.round(confidence * 100)}% confidence`;
 }
 
-function mapUrl(latitude: number, longitude: number) {
-  return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+function appleMapsUrl(office: PostOffice) {
+  const params = new URLSearchParams({
+    ll: `${office.latitude},${office.longitude}`,
+    q: office.name
+  });
+  return `https://maps.apple.com/?${params.toString()}`;
+}
+
+function mapPoint(offices: PostOffice[], office: PostOffice) {
+  const latitudes = offices.map((item) => item.latitude);
+  const longitudes = offices.map((item) => item.longitude);
+  const minLat = Math.min(...latitudes);
+  const maxLat = Math.max(...latitudes);
+  const minLng = Math.min(...longitudes);
+  const maxLng = Math.max(...longitudes);
+  const x = maxLng === minLng ? 50 : 12 + ((office.longitude - minLng) / (maxLng - minLng)) * 76;
+  const y = maxLat === minLat ? 50 : 88 - ((office.latitude - minLat) / (maxLat - minLat)) * 76;
+  return { x, y };
 }
 
 createRoot(document.getElementById("root")!).render(<App />);

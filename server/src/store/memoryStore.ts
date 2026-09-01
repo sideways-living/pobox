@@ -36,6 +36,7 @@ import type {
   LoginResult,
   PasskeyAuthenticationOptions,
   PasskeyRegistrationOptions,
+  ReviewItem,
   SecurityStatus,
   TeamMemberSummary
 } from "./types.js";
@@ -508,6 +509,22 @@ export class MemoryStore implements AppStore {
         };
       })
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }
+
+  async listReviewItems(session: Session, workspaceId: string): Promise<ReviewItem[]> {
+    await this.requireMember(session, workspaceId);
+    return [...this.auditEvents.values()]
+      .filter((event) => event.workspaceId === workspaceId && event.eventType === "mail.needs_review")
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 50)
+      .map((event) => ({
+        id: event.id,
+        providerMessageId: event.entityId,
+        subject: typeof event.metadata.subject === "string" ? event.metadata.subject : undefined,
+        mailboxNumber: typeof event.metadata.mailboxNumber === "string" ? event.metadata.mailboxNumber : undefined,
+        confidence: typeof event.metadata.confidence === "number" ? event.metadata.confidence : undefined,
+        createdAt: event.createdAt
+      }));
   }
 
   async createUser(session: Session, workspaceId: string, input: CreateUserInput): Promise<TeamMemberSummary> {

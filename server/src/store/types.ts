@@ -35,6 +35,15 @@ export interface TeamMemberSummary {
   active: boolean;
 }
 
+export interface ReviewItem {
+  id: string;
+  providerMessageId: string;
+  subject?: string;
+  mailboxNumber?: string;
+  confidence?: number;
+  createdAt: string;
+}
+
 export interface CreateUserInput {
   email: string;
   displayName: string;
@@ -103,6 +112,7 @@ export interface AppStore {
   processIncomingMail(input: IncomingProviderMessage): Promise<IncomingMailResult>;
   collectMailbox(session: Session, workspaceId: string, mailboxId: string, source: CollectionSource): Promise<CollectionEvent>;
   listMembers(session: Session, workspaceId: string): Promise<TeamMemberSummary[]>;
+  listReviewItems(session: Session, workspaceId: string): Promise<ReviewItem[]>;
   createUser(session: Session, workspaceId: string, input: CreateUserInput): Promise<TeamMemberSummary>;
   createPostOffice(session: Session, workspaceId: string, input: CreatePostOfficeInput): Promise<PostOffice>;
   createMailbox(session: Session, workspaceId: string, input: CreateMailboxInput): Promise<Mailbox>;

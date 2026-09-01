@@ -67,6 +67,27 @@ describe("shared mailbox state", () => {
     expect(event.collectedBy).toBe("usr_john");
   });
 
+  it("lists parser exceptions that need review", async () => {
+    const john = await loginSession("john@example.com");
+    const result = await store.processIncomingMail({
+      workspaceId: "ws_company",
+      provider: "mock",
+      providerMessageId: "message-review-1",
+      sender: "mailroom@example.com",
+      subject: "There is mail in PO Box UNKNOWN"
+    });
+    expect(result.kind).toBe("needs_review");
+
+    const reviewItems = await store.listReviewItems(john, "ws_company");
+    expect(reviewItems).toHaveLength(1);
+    expect(reviewItems[0]).toMatchObject({
+      providerMessageId: "message-review-1",
+      subject: "There is mail in PO Box UNKNOWN",
+      mailboxNumber: "UNKNOWN",
+      confidence: 0.55
+    });
+  });
+
   it("returns the previous login time on later logins", async () => {
     const first = await loginSession("john@example.com");
     expect(first.previousLoginAt).toBeUndefined();

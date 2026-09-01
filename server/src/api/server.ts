@@ -54,13 +54,7 @@ function sessionCookie(cookies: Record<string, string | undefined>) {
 export async function buildServer(store: AppStore = new MemoryStore()) {
   await store.seedDemo();
   const app = Fastify({ logger: true });
-  await app.register(helmet, {
-    contentSecurityPolicy: {
-      directives: {
-        "frame-src": ["'self'", "https://maps.google.com", "https://www.google.com"]
-      }
-    }
-  });
+  await app.register(helmet);
   await app.register(cookie, { secret: process.env.SESSION_SECRET || "dev-session-secret-change-me" });
   await app.register(cors, {
     origin: process.env.CORS_ORIGIN || "http://localhost:5173",
@@ -225,6 +219,12 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const { workspaceId } = request.params as { workspaceId: string };
     const session = await securedSession(request, workspaceId);
     return store.listMembers(session, workspaceId);
+  });
+
+  app.get("/api/v1/workspaces/:workspaceId/review-items", async (request) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const session = await securedSession(request, workspaceId);
+    return store.listReviewItems(session, workspaceId);
   });
 
   app.post("/api/v1/workspaces/:workspaceId/team/users", async (request) => {

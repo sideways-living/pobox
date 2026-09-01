@@ -37,6 +37,7 @@ import type {
   LoginResult,
   PasskeyAuthenticationOptions,
   PasskeyRegistrationOptions,
+  ReviewItem,
   SecurityStatus,
   TeamMemberSummary
 } from "./types.js";
@@ -562,6 +563,28 @@ export class PrismaStore implements AppStore {
         active: member.user.active
       }))
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }
+
+  async listReviewItems(session: Session, workspaceId: string): Promise<ReviewItem[]> {
+    await this.requireMember(session, workspaceId);
+    const events = await this.prisma.auditEvent.findMany({
+      where: { workspaceId, eventType: "mail.needs_review" },
+      orderBy: { createdAt: "desc" },
+      take: 50
+    });
+    return events.map((event) => {
+      const metadata = event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
+        ? event.metadata as Record<string, unknown>
+        : {};
+      return {
+        id: event.id,
+        providerMessageId: event.entityId,
+        subject: typeof metadata.subject === "string" ? metadata.subject : undefined,
+        mailboxNumber: typeof metadata.mailboxNumber === "string" ? metadata.mailboxNumber : undefined,
+        confidence: typeof metadata.confidence === "number" ? metadata.confidence : undefined,
+        createdAt: event.createdAt.toISOString()
+      };
+    });
   }
 
   async createUser(session: Session, workspaceId: string, input: CreateUserInput): Promise<TeamMemberSummary> {
