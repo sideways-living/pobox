@@ -102,6 +102,14 @@ export interface PostOfficeLocationResult {
   hours?: string;
 }
 
+export interface PostOfficeDirectoryStatus {
+  status: string;
+  rowCount: number;
+  activeRowCount: number;
+  syncedAt?: string;
+  message?: string;
+}
+
 export interface CreateMailboxInput {
   postOfficeId: string;
   name: string;

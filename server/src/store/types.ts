@@ -5,6 +5,7 @@ import type {
   RegistrationResponseJSON
 } from "@simplewebauthn/server";
 import type { LctrPostOfficeLocation } from "../lctr/postOfficeLookup.js";
+import type { PostOfficeDirectoryStatus } from "../lctr/postOfficeDirectory.js";
 import type { CollectionEvent, CollectionSource, DashboardSnapshot, Mailbox, PostOffice, Session, WorkspaceMember } from "../domain.js";
 
 export class ForbiddenError extends Error {}
@@ -116,6 +117,8 @@ export interface AppStore {
   listMembers(session: Session, workspaceId: string): Promise<TeamMemberSummary[]>;
   listReviewItems(session: Session, workspaceId: string): Promise<ReviewItem[]>;
   searchPostOfficeLocations(session: Session, workspaceId: string, query: string): Promise<LctrPostOfficeLocation[]>;
+  postOfficeDirectoryStatus(session: Session, workspaceId: string): Promise<PostOfficeDirectoryStatus>;
+  syncPostOfficeDirectory(session: Session, workspaceId: string): Promise<PostOfficeDirectoryStatus>;
   createUser(session: Session, workspaceId: string, input: CreateUserInput): Promise<TeamMemberSummary>;
   createPostOffice(session: Session, workspaceId: string, input: CreatePostOfficeInput): Promise<PostOffice>;
   createMailbox(session: Session, workspaceId: string, input: CreateMailboxInput): Promise<Mailbox>;

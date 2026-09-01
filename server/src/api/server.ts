@@ -236,6 +236,18 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     return store.searchPostOfficeLocations(session, workspaceId, query.query);
   });
 
+  app.get("/api/v1/workspaces/:workspaceId/post-office-locations/status", async (request) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const session = await securedSession(request, workspaceId);
+    return store.postOfficeDirectoryStatus(session, workspaceId);
+  });
+
+  app.post("/api/v1/workspaces/:workspaceId/post-office-locations/sync", async (request) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const session = await securedSession(request, workspaceId);
+    return store.syncPostOfficeDirectory(session, workspaceId);
+  });
+
   app.post("/api/v1/workspaces/:workspaceId/team/users", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };
     const body = createUserSchema.parse(request.body);

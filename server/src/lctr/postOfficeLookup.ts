@@ -79,7 +79,7 @@ export function rankedLocations(locations: LctrPostOfficeLocation[], normalizedQ
 }
 
 export async function fetchAllLctrPostOffices(): Promise<LctrPostOfficeLocation[]> {
-  return loadAustraliaPostLocations();
+  return fetchBrand();
 }
 
 async function loadAustraliaPostLocations(state?: string): Promise<LctrPostOfficeLocation[]> {
@@ -97,6 +97,28 @@ async function loadAustraliaPostLocations(state?: string): Promise<LctrPostOffic
   }
 
   return deduped;
+}
+
+async function fetchBrand(): Promise<LctrPostOfficeLocation[]> {
+  const pageSize = 500;
+  const pages = 100;
+  const locations: LctrPostOfficeLocation[] = [];
+
+  for (let page = 0; page < pages; page += 1) {
+    const url = new URL("/retail-outlets.php", lctrBaseUrl);
+    url.searchParams.set("brand", "Australia Post");
+    url.searchParams.set("limit", String(pageSize));
+    url.searchParams.set("offset", String(page * pageSize));
+
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("LCTR post office lookup failed.");
+    const payload = await response.json() as LctrResponse;
+    const rows = payload.data ?? [];
+    locations.push(...rows.map(mapOutlet).filter((location): location is LctrPostOfficeLocation => location !== null));
+    if (rows.length < pageSize) break;
+  }
+
+  return dedupeLocations(locations);
 }
 
 async function fetchSuburbPostcodeLocations(query: string) {

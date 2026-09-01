@@ -4,18 +4,42 @@ import { fetchAllLctrPostOffices, rankedLocations, searchLctrPostOffices, type L
 const syncKey = "lctr:australia-post:directory";
 const staleAfterMs = 1000 * 60 * 60 * 24 * 7;
 
-export async function searchPostOfficeDirectory(prisma: PrismaClient, query: string): Promise<LctrPostOfficeLocation[]> {
-  let refreshError: unknown;
-  try {
-    await refreshPostOfficeDirectoryIfStale(prisma);
-  } catch (error) {
-    refreshError = error;
-  }
+export interface PostOfficeDirectoryStatus {
+  status: string;
+  rowCount: number;
+  activeRowCount: number;
+  syncedAt?: string;
+  message?: string;
+}
 
+export async function searchPostOfficeDirectory(prisma: PrismaClient, query: string): Promise<LctrPostOfficeLocation[]> {
   const localResults = await searchLocalDirectory(prisma, query);
-  if (localResults.length > 0) return rankedLocations(localResults, query.trim().toLowerCase());
-  if (refreshError) throw refreshError;
+  const status = await postOfficeDirectoryStatus(prisma);
+  if (status.activeRowCount > 0) {
+    void refreshPostOfficeDirectoryIfStale(prisma).catch(() => undefined);
+  }
+  if (localResults.length > 0) {
+    return rankedLocations(localResults, query.trim().toLowerCase());
+  }
+  if (status.activeRowCount === 0) {
+    void refreshPostOfficeDirectoryIfStale(prisma).catch(() => undefined);
+  }
   return searchLctrPostOffices(query);
+}
+
+export async function postOfficeDirectoryStatus(prisma: PrismaClient): Promise<PostOfficeDirectoryStatus> {
+  const [state, activeRowCount] = await Promise.all([
+    prisma.integrationSyncState.findUnique({ where: { key: syncKey } }),
+    prisma.postOfficeDirectory.count({ where: { active: true } })
+  ]);
+
+  return {
+    status: state?.status ?? "not_imported",
+    rowCount: state?.rowCount ?? 0,
+    activeRowCount,
+    syncedAt: state?.syncedAt.toISOString(),
+    message: state?.message ?? undefined
+  };
 }
 
 export async function refreshPostOfficeDirectoryIfStale(prisma: PrismaClient): Promise<void> {
@@ -29,7 +53,7 @@ export async function syncPostOfficeDirectory(prisma: PrismaClient): Promise<{ r
   const startedAt = new Date();
   await prisma.integrationSyncState.upsert({
     where: { key: syncKey },
-    update: { status: "running", message: null },
+    update: { syncedAt: startedAt, status: "running", message: null },
     create: { key: syncKey, syncedAt: startedAt, status: "running" }
   });
 

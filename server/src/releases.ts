@@ -1,4 +1,4 @@
-export const appVersion = "0.9.0";
+export const appVersion = "0.9.1";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.9.1-post-office-directory-controls",
+    version: "0.9.1",
+    releasedAt: "2026-09-01T21:30:00.000Z",
+    title: "Post office directory controls",
+    summary:
+      "Admins can now see the Australia Post directory import status, refresh it manually, and search without waiting for a background refresh to finish.",
+    audience: "ADMIN"
+  },
   {
     id: "0.9.0-synced-post-office-directory",
     version: "0.9.0",

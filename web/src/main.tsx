@@ -15,6 +15,7 @@ import {
   loadAppChanges,
   loadDashboard,
   loadMembers,
+  loadPostOfficeDirectoryStatus,
   loadReviewItems,
   loadSecurityStatus,
   login,
@@ -23,9 +24,10 @@ import {
   realtimeUrl,
   searchPostOfficeLocations,
   simulateMail,
+  syncPostOfficeDirectory,
   verifySecondFactor
 } from "./api";
-import type { AppChangesResponse, CollectionHistoryEvent, DashboardSnapshot, Mailbox, MailHistoryEvent, PostOffice, PostOfficeLocationResult, ReviewItem, SecurityStatus, TeamMember, TotpSetup } from "./types";
+import type { AppChangesResponse, CollectionHistoryEvent, DashboardSnapshot, Mailbox, MailHistoryEvent, PostOffice, PostOfficeDirectoryStatus, PostOfficeLocationResult, ReviewItem, SecurityStatus, TeamMember, TotpSetup } from "./types";
 import "./styles.css";
 
 type Section = "Overview" | "Mailboxes" | "Map" | "History" | "Needs Review" | "Team" | "Settings";
@@ -986,6 +988,7 @@ function ChangeNoticeModal({ notice, onClose }: { notice: AppChangesResponse; on
 function AddPostOfficeForm({ snapshot, refresh, setError }: { snapshot: DashboardSnapshot; refresh: () => Promise<void>; setError: (value: string | null) => void }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PostOfficeLocationResult[]>([]);
+  const [directoryStatus, setDirectoryStatus] = useState<PostOfficeDirectoryStatus | null>(null);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
@@ -993,6 +996,14 @@ function AddPostOfficeForm({ snapshot, refresh, setError }: { snapshot: Dashboar
   const [longitude, setLongitude] = useState("");
   const [geofenceRadius, setGeofenceRadius] = useState("200");
   const [busy, setBusy] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  useEffect(() => {
+    if (snapshot.currentUser.role !== "ADMIN") return;
+    loadPostOfficeDirectoryStatus()
+      .then(setDirectoryStatus)
+      .catch(() => setDirectoryStatus(null));
+  }, [snapshot.currentUser.role]);
 
   if (snapshot.currentUser.role !== "ADMIN") return null;
 
@@ -1001,6 +1012,7 @@ function AddPostOfficeForm({ snapshot, refresh, setError }: { snapshot: Dashboar
     try {
       setBusy(true);
       setResults(await searchPostOfficeLocations(query));
+      setDirectoryStatus(await loadPostOfficeDirectoryStatus());
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to search post office locations.");
@@ -1035,12 +1047,36 @@ function AddPostOfficeForm({ snapshot, refresh, setError }: { snapshot: Dashboar
     }
   }
 
+  async function syncDirectory() {
+    try {
+      setSyncing(true);
+      setDirectoryStatus(await syncPostOfficeDirectory());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to import post office directory.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <Panel title="Add Post Office">
+      <div className="directory-status">
+        <div>
+          <strong>Australia Post directory</strong>
+          <span>{directoryStatusLabel(directoryStatus)}</span>
+        </div>
+        <button className="secondary" type="button" onClick={syncDirectory} disabled={syncing}>
+          <RefreshCw size={16} />{syncing ? "Importing..." : "Refresh Directory"}
+        </button>
+      </div>
       <form className="form-grid" onSubmit={search}>
-        <label>Search LCTR by suburb, postcode, or post office name<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Richmond or 3121" minLength={2} /></label>
+        <label>Search suburb, postcode, post office name, or street<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Richmond, 3121, GPO, or Bourke" minLength={2} /></label>
         <button className="primary" disabled={busy || query.trim().length < 2}><MapPin size={17} />Search Locations</button>
       </form>
+      {!busy && query.trim().length >= 2 && results.length === 0 && (
+        <p className="muted-line">No matching imported post offices yet. Try a postcode for the most precise match, or refresh the directory.</p>
+      )}
       {results.length > 0 && (
         <div className="lookup-results">
           {results.map((location) => (
@@ -1063,6 +1099,17 @@ function AddPostOfficeForm({ snapshot, refresh, setError }: { snapshot: Dashboar
       </form>
     </Panel>
   );
+}
+
+function directoryStatusLabel(status: PostOfficeDirectoryStatus | null) {
+  if (!status) return "Status not loaded yet.";
+  if (status.activeRowCount > 0) {
+    const synced = status.syncedAt ? ` Last refreshed ${new Date(status.syncedAt).toLocaleString()}.` : "";
+    return `${status.activeRowCount.toLocaleString()} imported active locations.${synced}`;
+  }
+  if (status.status === "running") return "Import is currently running.";
+  if (status.status === "failed") return `Import failed${status.message ? `: ${status.message}` : "."}`;
+  return "Not imported yet. Refresh the directory before searching.";
 }
 
 function AddMailboxForm({ snapshot, refresh, setError }: { snapshot: DashboardSnapshot; refresh: () => Promise<void>; setError: (value: string | null) => void }) {

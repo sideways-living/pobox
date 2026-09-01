@@ -538,6 +538,29 @@ input, select {
   justify-self: start;
 }
 
+.directory-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #f8faf8;
+  border: 1px solid #d8ded8;
+  border-radius: 8px;
+}
+
+.directory-status div {
+  display: grid;
+  gap: 3px;
+}
+
+.directory-status span,
+.muted-line {
+  color: #65736c;
+  font-size: 0.9rem;
+}
+
 .lookup-results {
   display: grid;
   gap: 8px;

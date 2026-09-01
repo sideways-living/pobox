@@ -25,6 +25,7 @@ import type {
   WorkspaceMember
 } from "../domain.js";
 import { parseMailNotification } from "../parser/mailParser.js";
+import type { PostOfficeDirectoryStatus } from "../lctr/postOfficeDirectory.js";
 import { searchLctrPostOffices, type LctrPostOfficeLocation } from "../lctr/postOfficeLookup.js";
 import type {
   AppStore,
@@ -534,6 +535,16 @@ export class MemoryStore implements AppStore {
   async searchPostOfficeLocations(session: Session, workspaceId: string, query: string): Promise<LctrPostOfficeLocation[]> {
     await this.requireMember(session, workspaceId, "ADMIN");
     return searchLctrPostOffices(query);
+  }
+
+  async postOfficeDirectoryStatus(session: Session, workspaceId: string): Promise<PostOfficeDirectoryStatus> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    return { status: "live_lookup", rowCount: 0, activeRowCount: 0, message: "In-memory mode uses live LCTR lookup." };
+  }
+
+  async syncPostOfficeDirectory(session: Session, workspaceId: string): Promise<PostOfficeDirectoryStatus> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    return this.postOfficeDirectoryStatus(session, workspaceId);
   }
 
   async createUser(session: Session, workspaceId: string, input: CreateUserInput): Promise<TeamMemberSummary> {
