@@ -266,12 +266,20 @@ function scoreLocation(location: LctrPostOfficeLocation, query: string, suburbAn
   if (suburb === query) return 95;
   if (name === query) return 90;
   if (postcode.startsWith(query)) return 80;
-  if (suburb.startsWith(query)) return 75;
+  if (suburb.startsWith(query)) return 78;
+  if (name.startsWith(query)) return 76;
+  if (startsWithWord(name, query)) return 72;
+  if (startsWithWord(suburb, query)) return 70;
   if (name.includes(query)) return 65;
+  if (suburb.includes(query)) return 60;
   if (address.includes(query)) return 50;
   const nearestAnchorKm = nearestDistanceKm(location, suburbAnchors);
   if (nearestAnchorKm !== undefined && nearestAnchorKm <= 15) return Math.max(1, 45 - nearestAnchorKm);
   return 0;
+}
+
+function startsWithWord(value: string, query: string) {
+  return value.split(/\s+/).some((part) => part.startsWith(query));
 }
 
 function nearestDistanceKm(location: LctrPostOfficeLocation, anchors: LctrPostOfficeLocation[]) {

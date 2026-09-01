@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { searchLctrPostOffices } from "../src/lctr/postOfficeLookup.js";
+import { rankedLocations, searchLctrPostOffices } from "../src/lctr/postOfficeLookup.js";
 
 describe("LCTR post office lookup", () => {
   afterEach(() => {
@@ -80,5 +80,42 @@ describe("LCTR post office lookup", () => {
       address: "Victoria Street, Richmond, VIC, 3121",
       phone: "+61 3 9428 1111"
     });
+  });
+
+  it("ranks typed name suggestions by exact and word-start matches before contains matches", () => {
+    const results = rankedLocations([
+      {
+        sourceId: "south-melbourne",
+        name: "South Melbourne LPO",
+        address: "Clarendon Street, South Melbourne, VIC, 3205",
+        suburb: "South Melbourne",
+        postcode: "3205",
+        state: "VIC",
+        latitude: -37.8331,
+        longitude: 144.9603
+      },
+      {
+        sourceId: "fitzroy-south",
+        name: "Fitzroy South Post Office",
+        address: "Smith Street, Fitzroy, VIC, 3065",
+        suburb: "Fitzroy",
+        postcode: "3065",
+        state: "VIC",
+        latitude: -37.7999,
+        longitude: 144.9829
+      },
+      {
+        sourceId: "east-richmond",
+        name: "East Richmond Post Office",
+        address: "Swan Street, Richmond, VIC, 3121",
+        suburb: "Richmond",
+        postcode: "3121",
+        state: "VIC",
+        latitude: -37.825,
+        longitude: 144.997
+      }
+    ], "south");
+
+    expect(results.map((result) => result.sourceId)).toEqual(["south-melbourne", "fitzroy-south"]);
   });
 });

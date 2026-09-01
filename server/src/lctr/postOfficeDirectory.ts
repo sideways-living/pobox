@@ -129,7 +129,7 @@ async function searchLocalDirectory(prisma: PrismaClient, query: string): Promis
             { address: { contains: normalizedQuery, mode: "insensitive" } }
           ]
     },
-    take: 100
+    take: 500
   });
 
   return rows.map((row) => ({

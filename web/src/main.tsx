@@ -997,6 +997,7 @@ function AddPostOfficeForm({ snapshot, refresh, setError }: { snapshot: Dashboar
   const [geofenceRadius, setGeofenceRadius] = useState("200");
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [searchedQuery, setSearchedQuery] = useState("");
 
   useEffect(() => {
     if (snapshot.currentUser.role !== "ADMIN") return;
@@ -1005,13 +1006,34 @@ function AddPostOfficeForm({ snapshot, refresh, setError }: { snapshot: Dashboar
       .catch(() => setDirectoryStatus(null));
   }, [snapshot.currentUser.role]);
 
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (snapshot.currentUser.role !== "ADMIN") return;
+    if (trimmed.length < 2) {
+      setResults([]);
+      setSearchedQuery("");
+      return;
+    }
+
+    const handle = window.setTimeout(() => {
+      void searchSuggestions(trimmed);
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [query, snapshot.currentUser.role]);
+
   if (snapshot.currentUser.role !== "ADMIN") return null;
 
   async function search(event: React.FormEvent) {
     event.preventDefault();
+    await searchSuggestions(query.trim());
+  }
+
+  async function searchSuggestions(searchQuery: string) {
+    if (searchQuery.length < 2) return;
     try {
       setBusy(true);
-      setResults(await searchPostOfficeLocations(query));
+      setResults(await searchPostOfficeLocations(searchQuery));
+      setSearchedQuery(searchQuery);
       setDirectoryStatus(await loadPostOfficeDirectoryStatus());
       setError(null);
     } catch (err) {
@@ -1071,10 +1093,10 @@ function AddPostOfficeForm({ snapshot, refresh, setError }: { snapshot: Dashboar
         </button>
       </div>
       <form className="form-grid" onSubmit={search}>
-        <label>Search suburb, postcode, post office name, or street<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Richmond, 3121, GPO, or Bourke" minLength={2} /></label>
+        <label>Search suburb, postcode, post office name, or street<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="South, Fitzroy South, 3121, or Bourke" minLength={2} autoComplete="off" /></label>
         <button className="primary" disabled={busy || query.trim().length < 2}><MapPin size={17} />Search Locations</button>
       </form>
-      {!busy && query.trim().length >= 2 && results.length === 0 && (
+      {!busy && searchedQuery && results.length === 0 && (
         <p className="muted-line">No matching imported post offices yet. Try a postcode for the most precise match, or refresh the directory.</p>
       )}
       {results.length > 0 && (

@@ -647,11 +647,15 @@ struct iPhoneCreatePostOfficeForm: View {
     @State private var latitude = ""
     @State private var longitude = ""
     @State private var geofenceRadius = "200"
+    @State private var searchTask: Task<Void, Never>?
 
     var body: some View {
         Section("Add Post Office") {
             TextField("Search suburb, postcode, or name", text: $query)
                 .textInputAutocapitalization(.words)
+                .onChange(of: query) { _, newValue in
+                    scheduleSearch(newValue)
+                }
             Button {
                 Task { await searchPostOfficeLocations(query) }
             } label: {
@@ -712,6 +716,17 @@ struct iPhoneCreatePostOfficeForm: View {
         phone = location.phone ?? ""
         latitude = String(location.latitude)
         longitude = String(location.longitude)
+    }
+
+    private func scheduleSearch(_ value: String) {
+        searchTask?.cancel()
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else { return }
+        searchTask = Task {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            await searchPostOfficeLocations(trimmed)
+        }
     }
 }
 
