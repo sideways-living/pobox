@@ -355,6 +355,31 @@ h3 {
   margin-bottom: 14px;
 }
 
+.post-office-summary-block {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.post-office-summary-block h3 {
+  margin: 0;
+  color: #1d4034;
+  font-size: 0.95rem;
+}
+
+.post-office-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.post-office-summary .detail-row {
+  background: #f8faf8;
+  border: 1px solid #e0e5df;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
 .filter {
   border-color: #c8d3cd;
 }
@@ -1038,6 +1063,10 @@ input, select {
   }
 
   .summary-band {
+    grid-template-columns: 1fr;
+  }
+
+  .post-office-summary {
     grid-template-columns: 1fr;
   }
 

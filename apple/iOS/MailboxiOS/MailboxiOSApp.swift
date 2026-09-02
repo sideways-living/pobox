@@ -396,7 +396,7 @@ struct iPhoneOverviewList: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("\(snapshot.outstandingMailboxCount)")
                             .font(.system(size: 46, weight: .bold))
-                        Text(snapshot.outstandingMailboxCount == 1 ? "PO box needs checking" : "PO boxes need checking")
+                        Text(snapshot.outstandingMailboxCount == 1 ? "Box needs checking" : "Boxes need checking")
                             .foregroundStyle(.secondary)
                         Text("Signed in as \(snapshot.currentUser.displayName)")
                             .font(.callout)
@@ -407,7 +407,7 @@ struct iPhoneOverviewList: View {
 
                 Section("Collection Queue") {
                     if waitingMailboxes.isEmpty {
-                        Label("All shared PO boxes are clear", systemImage: "checkmark.circle")
+                        Label("All shared boxes are clear", systemImage: "checkmark.circle")
                     } else {
                         ForEach(waitingMailboxes) { mailbox in
                             iPhoneMailboxRow(mailbox: mailbox, busy: model.busyMailboxId == mailbox.id) {
@@ -419,7 +419,7 @@ struct iPhoneOverviewList: View {
 
                 Section("Workspace") {
                     iPhoneDetailRow(label: "Post offices", value: "\(snapshot.postOffices.count)")
-                    iPhoneDetailRow(label: "PO boxes", value: "\(snapshot.postOffices.flatMap(\.mailboxes).count)")
+                    iPhoneDetailRow(label: "Boxes", value: "\(snapshot.postOffices.flatMap(\.mailboxes).count)")
                     iPhoneDetailRow(label: "Needs review", value: "\(model.reviewItems.count)")
                 }
             }
@@ -653,7 +653,7 @@ struct iPhonePostOfficeSection: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This also removes its PO boxes from active pobox.watch views.")
+            Text("This also removes its boxes from active pobox.watch views.")
         }
     }
 }
@@ -835,7 +835,7 @@ struct iPhoneSettingsView: View {
                 iPhoneCreateMailboxForm(postOffices: snapshot?.postOffices ?? [], createMailbox: createMailbox)
             } else {
                 Section("Admin Setup") {
-                    Label("Admin required to add post offices and PO boxes", systemImage: "lock")
+                    Label("Admin required to add post offices and boxes", systemImage: "lock")
                 }
             }
 

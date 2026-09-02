@@ -160,7 +160,7 @@ function App() {
         <header className="topbar">
           <div>
             <p className="workspace">{snapshot.workspace.name}</p>
-            <h1>{snapshot.outstandingMailboxCount === 0 ? "All Clear" : `${snapshot.outstandingMailboxCount} PO Boxes Need Checking`}</h1>
+            <h1>{snapshot.outstandingMailboxCount === 0 ? "All Clear" : `${snapshot.outstandingMailboxCount} Boxes Need Checking`}</h1>
           </div>
           <div className="topbar-actions">
             <div className={connected ? "live is-live" : "live"}>{connected ? "Live" : "Live connection unavailable"}</div>
@@ -179,8 +179,8 @@ function App() {
         {error && <div className="alert">{error}</div>}
 
         <section className="summary-band">
-          <MetricCard value={snapshot.outstandingMailboxCount} label="Outstanding PO boxes" />
-          <MetricCard value={totalMailboxes(snapshot)} label="Total PO boxes" />
+          <MetricCard value={snapshot.outstandingMailboxCount} label="Boxes needing collection" />
+          <MetricCard value={snapshot.postOffices.length} label="Tracked post offices" />
           <MetricCard value={snapshot.postOffices.length} label="Post offices" />
           <MetricCard value={reviewItems.length} label="Needs review" />
           <MetricCard value={snapshot.currentUser.role} label="Access level" />
@@ -498,7 +498,7 @@ function OverviewSection({ snapshot, busyId, mutate }: { snapshot: DashboardSnap
               })}
             </div>
           ) : (
-            <div className="empty-state"><Check size={22} />No PO boxes currently need checking.</div>
+            <div className="empty-state"><Check size={22} />No boxes currently need checking.</div>
           )}
         </Panel>
         <Panel title="Recent Activity"><History snapshot={snapshot} limit={6} /></Panel>
@@ -553,7 +553,7 @@ function MailboxSection({
 
   async function removeOffice(office: PostOffice) {
     if (!refresh || !setError) return;
-    if (!window.confirm(`Delete ${office.name}? This will also remove its PO boxes from the active app.`)) return;
+    if (!window.confirm(`Delete ${office.name}? This will also remove its boxes from the active app.`)) return;
     try {
       await deletePostOffice(office.id);
       await refresh();
@@ -587,31 +587,45 @@ function MailboxSection({
   }
 
   return (
-    <Panel title={compact ? "PO Box Snapshot" : "Post Offices"} aside={`Updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}>
+    <Panel title={compact ? "Post Office Snapshot" : "Post Offices"} aside={`Updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}>
       {!compact && (
-        <div className="filter-bar" role="group" aria-label="PO box filter">
+        <div className="filter-bar" role="group" aria-label="Post office filter">
           <button className={filter === "all" ? "filter active" : "filter"} onClick={() => setFilter("all")}>All offices {snapshot.postOffices.length}</button>
           <button className={filter === "waiting" ? "filter active" : "filter"} onClick={() => setFilter("waiting")}>Waiting {waitingCount}</button>
           <button className={filter === "clear" ? "filter active" : "filter"} onClick={() => setFilter("clear")}>Clear {clearCount}</button>
         </div>
       )}
-      <div className="office-list">
-        {snapshot.postOffices.map((office) => (
-          <OfficeSection
-            key={office.id}
-            office={office}
-            postOffices={snapshot.postOffices}
-            filter={filter}
-            busyId={busyId}
-            mutate={mutate}
-            canManage={canManage}
-            onSaveOffice={saveOffice}
-            onDeleteOffice={removeOffice}
-            onSaveMailbox={saveMailbox}
-            onDeleteMailbox={removeMailbox}
-          />
-        ))}
-      </div>
+      {!compact && (
+        <div className="post-office-summary-block">
+          <h3>Post Office Summary</h3>
+          <div className="post-office-summary">
+            <DetailRow label="Post offices" value={String(snapshot.postOffices.length)} />
+            <DetailRow label="Assigned boxes" value={String(totalMailboxes(snapshot))} />
+            <DetailRow label="Locations needing collection" value={String(snapshot.postOffices.filter((office) => office.mailboxes.some((box) => box.mailWaiting)).length)} />
+          </div>
+        </div>
+      )}
+      {snapshot.postOffices.length > 0 ? (
+        <div className="office-list">
+          {snapshot.postOffices.map((office) => (
+            <OfficeSection
+              key={office.id}
+              office={office}
+              postOffices={snapshot.postOffices}
+              filter={filter}
+              busyId={busyId}
+              mutate={mutate}
+              canManage={canManage}
+              onSaveOffice={saveOffice}
+              onDeleteOffice={removeOffice}
+              onSaveMailbox={saveMailbox}
+              onDeleteMailbox={removeMailbox}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state"><MapPin size={22} />No post offices have been added yet.</div>
+      )}
     </Panel>
   );
 }
@@ -701,7 +715,7 @@ function OfficeSection({
       )}
       <div className="mailbox-table">
         <div className="mailbox-table-head">
-          <span>PO box</span>
+          <span>Box</span>
           <span>Status</span>
           <span>Last event</span>
           <span>Action</span>
@@ -802,7 +816,7 @@ function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
         <Panel title="Map Summary">
           <div className="detail-list">
             <DetailRow label="Tracked locations" value={String(snapshot.postOffices.length)} />
-            <DetailRow label="PO boxes mapped" value={String(totalMailboxes(snapshot))} />
+            <DetailRow label="Boxes mapped" value={String(totalMailboxes(snapshot))} />
             <DetailRow label="Needs collection" value={String(snapshot.outstandingMailboxCount)} />
             <DetailRow label="Map provider" value="Apple Maps" />
           </div>
@@ -982,7 +996,7 @@ function SettingsSection({ snapshot, refresh, setError }: { snapshot: DashboardS
             <DetailRow label="Workspace" value={snapshot.workspace.name} />
             <DetailRow label="Current user" value={snapshot.currentUser.email} />
             <DetailRow label="Role" value={snapshot.currentUser.role} />
-            <DetailRow label="Locations" value={`${snapshot.postOffices.length} post offices, ${totalMailboxes(snapshot)} PO boxes`} />
+            <DetailRow label="Locations" value={`${snapshot.postOffices.length} post offices, ${totalMailboxes(snapshot)} boxes`} />
           </div>
         </Panel>
       </section>

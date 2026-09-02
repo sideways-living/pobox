@@ -435,14 +435,14 @@ struct MacOverviewDashboardView: View {
     var body: some View {
         MacPage(title: snapshot?.workspace.name ?? "Overview", subtitle: signedInText) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-                MacMetricCard(value: "\(snapshot?.outstandingMailboxCount ?? 0)", label: "PO boxes needing collection", systemImage: "tray.full.fill", tint: .orange)
+                MacMetricCard(value: "\(snapshot?.outstandingMailboxCount ?? 0)", label: "Boxes needing collection", systemImage: "tray.full.fill", tint: .orange)
                 MacMetricCard(value: "\(snapshot?.postOffices.count ?? 0)", label: "Post office locations", systemImage: "building.2", tint: .blue)
                 MacMetricCard(value: "\(reviewItems.count)", label: "Review queue items", systemImage: "exclamationmark.triangle.fill", tint: .red)
             }
 
             MacPanel(title: "Collection Queue", aside: "\(waitingMailboxes.count) waiting") {
                 if waitingMailboxes.isEmpty {
-                    MacEmptyStateView(title: "Nothing waiting", subtitle: "All shared PO boxes are currently clear.")
+                    MacEmptyStateView(title: "Nothing waiting", subtitle: "All shared boxes are currently clear.")
                 } else {
                     ForEach(waitingMailboxes) { mailbox in
                         MacInfoRow(
@@ -495,7 +495,7 @@ struct MacMailboxListView: View {
     let deleteMailbox: (Mailbox) async -> Void
 
     var body: some View {
-        MacPage(title: "Post Offices", subtitle: "Post offices with their assigned PO boxes.") {
+        MacPage(title: "Post Offices", subtitle: "Post offices with their assigned boxes.") {
             ForEach(snapshot?.postOffices ?? []) { office in
                 MacPanel(title: office.name, aside: office.address) {
                     if office.mailboxes.isEmpty {
@@ -751,7 +751,7 @@ struct MacSettingsView: View {
                 MacCreatePostOfficeForm(locationResults: locationResults, searchPostOfficeLocations: searchPostOfficeLocations, createPostOffice: createPostOffice)
                 MacCreateMailboxForm(postOffices: snapshot?.postOffices ?? [], createMailbox: createMailbox)
             } else {
-                MacInfoRow(title: "Admin required", detail: "Only admins can add post offices and PO boxes.", systemImage: "lock", tint: .orange)
+                MacInfoRow(title: "Admin required", detail: "Only admins can add post offices and boxes.", systemImage: "lock", tint: .orange)
             }
 
             Button {
@@ -1123,7 +1123,7 @@ struct MacOfficeRow: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This also removes its PO boxes from active pobox.watch views.")
+            Text("This also removes its boxes from active pobox.watch views.")
         }
     }
 }

@@ -1,4 +1,4 @@
-export const appVersion = "0.10.2";
+export const appVersion = "0.10.3";
 
 export interface AppChange {
   id: string;
@@ -11,12 +11,21 @@ export interface AppChange {
 
 export const appChanges: AppChange[] = [
   {
+    id: "0.10.3-post-office-page-cleanup",
+    version: "0.10.3",
+    releasedAt: "2026-09-02T12:30:00.000Z",
+    title: "Post Offices page cleanup",
+    summary:
+      "The main location page now uses Post Offices wording, shows a post office summary first, and lists each location even when no box is assigned.",
+    audience: "ALL"
+  },
+  {
     id: "0.10.2-multiple-po-boxes-per-location",
     version: "0.10.2",
     releasedAt: "2026-09-02T12:00:00.000Z",
-    title: "Multiple PO boxes per post office",
+    title: "Multiple boxes per post office",
     summary:
-      "Post Offices remains the main view for managing locations, but one post office can now hold multiple active PO boxes where needed.",
+      "Post Offices remains the main view for managing locations, but one post office can now hold multiple active boxes where needed.",
     audience: "ALL"
   },
   {
@@ -25,7 +34,7 @@ export const appChanges: AppChange[] = [
     releasedAt: "2026-09-02T11:30:00.000Z",
     title: "Post office-first management",
     summary:
-      "The PO Boxes menu is now Post Offices. Each post office shows its assigned PO boxes underneath, so admins can manage locations and boxes together.",
+      "The old boxes page is now Post Offices. Each post office shows its assigned boxes underneath, so admins can manage locations and boxes together.",
     audience: "ALL"
   },
   {
@@ -34,7 +43,7 @@ export const appChanges: AppChange[] = [
     releasedAt: "2026-09-02T10:00:00.000Z",
     title: "Edit, delete, and app icons",
     summary:
-      "Admins can now edit or delete users, post offices, and PO boxes with a confirmation before anything is removed. pobox.watch also has install icons for the website, iPhone, Mac, Android, and Windows.",
+      "Admins can now edit or delete users, post offices, and boxes with a confirmation before anything is removed. pobox.watch also has install icons for the website, iPhone, Mac, Android, and Windows.",
     audience: "ADMIN"
   },
   {
@@ -88,7 +97,7 @@ export const appChanges: AppChange[] = [
     releasedAt: "2026-09-01T19:30:00.000Z",
     title: "Native Apple admin setup",
     summary:
-      "Admins can now create real users, post offices, and PO boxes from the Mac and iPhone apps as well as the web app.",
+      "Admins can now create real users, post offices, and boxes from the Mac and iPhone apps as well as the web app.",
     audience: "ADMIN"
   },
   {
@@ -115,7 +124,7 @@ export const appChanges: AppChange[] = [
     releasedAt: "2026-09-01T13:00:00.000Z",
     title: "Full page layout build-out",
     summary:
-      "Overview, PO Boxes, Map, History, Team, and Settings now have distinct operational layouts with clearer collection queues, filters, map views, activity summaries, and account controls.",
+      "Overview, Post Offices, Map, History, Team, and Settings now have distinct operational layouts with clearer collection queues, filters, map views, activity summaries, and account controls.",
     audience: "ALL"
   },
   {
@@ -178,7 +187,7 @@ export const appChanges: AppChange[] = [
     releasedAt: "2026-08-31T15:00:00.000Z",
     title: "Admin setup tools",
     summary:
-      "Admins can create real team users, post offices, and PO boxes from the Settings area while the product build-out continues.",
+      "Admins can create real team users, post offices, and boxes from the Settings area while the product build-out continues.",
     audience: "ADMIN"
   },
   {
