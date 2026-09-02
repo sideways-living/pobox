@@ -130,6 +130,24 @@ final class MacMailboxViewModel: ObservableObject {
         }
     }
 
+    func updateUser(_ member: TeamMember, email: String, displayName: String, role: String) async {
+        await run {
+            _ = try await client.updateUser(
+                workspaceId: workspaceId,
+                userId: member.id,
+                input: UpdateUserInput(email: email, displayName: displayName, role: role)
+            )
+            try await loadWorkspace()
+        }
+    }
+
+    func deleteUser(_ member: TeamMember) async {
+        await run {
+            try await client.deleteUser(workspaceId: workspaceId, userId: member.id)
+            try await loadWorkspace()
+        }
+    }
+
     func searchPostOfficeLocations(query: String) async {
         await run {
             postOfficeLocationResults = try await client.searchPostOfficeLocations(workspaceId: workspaceId, query: query)
@@ -147,12 +165,48 @@ final class MacMailboxViewModel: ObservableObject {
         }
     }
 
+    func updatePostOffice(_ office: PostOffice, name: String, address: String, phone: String?, latitude: Double, longitude: Double, geofenceRadius: Int) async {
+        await run {
+            _ = try await client.updatePostOffice(
+                workspaceId: workspaceId,
+                postOfficeId: office.id,
+                input: UpdatePostOfficeInput(name: name, address: address, phone: phone, latitude: latitude, longitude: longitude, geofenceRadius: geofenceRadius)
+            )
+            try await loadWorkspace()
+        }
+    }
+
+    func deletePostOffice(_ office: PostOffice) async {
+        await run {
+            try await client.deletePostOffice(workspaceId: workspaceId, postOfficeId: office.id)
+            try await loadWorkspace()
+        }
+    }
+
     func createMailbox(postOfficeId: String, boxNumber: String) async {
         await run {
             _ = try await client.createMailbox(
                 workspaceId: workspaceId,
                 input: CreateMailboxInput(postOfficeId: postOfficeId, boxNumber: boxNumber)
             )
+            try await loadWorkspace()
+        }
+    }
+
+    func updateMailbox(_ mailbox: Mailbox, postOfficeId: String, boxNumber: String) async {
+        await run {
+            _ = try await client.updateMailbox(
+                workspaceId: workspaceId,
+                mailboxId: mailbox.id,
+                input: UpdateMailboxInput(postOfficeId: postOfficeId, boxNumber: boxNumber)
+            )
+            try await loadWorkspace()
+        }
+    }
+
+    func deleteMailbox(_ mailbox: Mailbox) async {
+        await run {
+            try await client.deleteMailbox(workspaceId: workspaceId, mailboxId: mailbox.id)
             try await loadWorkspace()
         }
     }
@@ -314,11 +368,19 @@ struct MacOverviewView: View {
         case "Overview":
             MacOverviewDashboardView(snapshot: model.snapshot, reviewItems: model.reviewItems)
         case "PO Boxes":
-            MacMailboxListView(snapshot: model.snapshot, busyMailboxId: model.busyMailboxId) { mailbox in
+            MacMailboxListView(snapshot: model.snapshot, busyMailboxId: model.busyMailboxId, collect: { mailbox in
                 await model.collect(mailbox)
-            }
+            }, updateMailbox: { mailbox, postOfficeId, boxNumber in
+                await model.updateMailbox(mailbox, postOfficeId: postOfficeId, boxNumber: boxNumber)
+            }, deleteMailbox: { mailbox in
+                await model.deleteMailbox(mailbox)
+            })
         case "Map":
-            MacMapView(snapshot: model.snapshot)
+            MacMapView(snapshot: model.snapshot, updatePostOffice: { office, name, address, phone, latitude, longitude, radius in
+                await model.updatePostOffice(office, name: name, address: address, phone: phone, latitude: latitude, longitude: longitude, geofenceRadius: radius)
+            }, deletePostOffice: { office in
+                await model.deletePostOffice(office)
+            })
         case "History":
             MacHistoryView(snapshot: model.snapshot, mode: .history)
         case "Activity":
@@ -328,6 +390,10 @@ struct MacOverviewView: View {
         case "Team":
             MacTeamView(snapshot: model.snapshot, members: model.members) { email, displayName, password, role in
                 await model.createUser(email: email, displayName: displayName, password: password, role: role)
+            } updateUser: { member, email, displayName, role in
+                await model.updateUser(member, email: email, displayName: displayName, role: role)
+            } deleteUser: { member in
+                await model.deleteUser(member)
             }
         case "Settings":
             MacSettingsView(snapshot: model.snapshot, logout: {
@@ -391,7 +457,25 @@ struct MacOverviewDashboardView: View {
 
             if let nextOffice = snapshot?.postOffices.first(where: { $0.mailboxes.contains(where: \.mailWaiting) }) {
                 MacPanel(title: "Next Location", aside: "Apple Maps") {
-                    MacOfficeRow(office: nextOffice)
+                    HStack(spacing: 12) {
+                        Image(systemName: "map.fill")
+                            .foregroundStyle(.blue)
+                            .frame(width: 24)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(nextOffice.name)
+                                .font(.headline)
+                            Text(nextOffice.address)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button {
+                            openAppleMaps(nextOffice)
+                        } label: {
+                            Label("Open in Apple Maps", systemImage: "arrow.up.right.square")
+                        }
+                    }
+                    .padding(14)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
                 }
             }
         }
@@ -407,34 +491,22 @@ struct MacMailboxListView: View {
     let snapshot: MailboxDashboardSnapshot?
     let busyMailboxId: String?
     let collect: (Mailbox) async -> Void
+    let updateMailbox: (Mailbox, String, String) async -> Void
+    let deleteMailbox: (Mailbox) async -> Void
 
     var body: some View {
         MacPage(title: "PO Boxes", subtitle: "Live shared state from pobox.watch.") {
             ForEach(snapshot?.postOffices ?? []) { office in
                 MacPanel(title: office.name, aside: office.address) {
                     ForEach(office.mailboxes) { mailbox in
-                        HStack(spacing: 12) {
-                            Image(systemName: mailbox.mailWaiting ? "tray.full.fill" : "checkmark.circle.fill")
-                                .foregroundStyle(mailbox.mailWaiting ? .orange : .green)
-                                .frame(width: 24)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(mailbox.name)
-                                    .font(.headline)
-                                Text(mailbox.mailWaiting ? "Mail waiting in PO Box \(mailbox.boxNumber)" : "PO Box \(mailbox.boxNumber) is clear")
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if mailbox.mailWaiting {
-                                Button {
-                                    Task { await collect(mailbox) }
-                                } label: {
-                                    Label("Collect", systemImage: "checkmark.circle")
-                                }
-                                .disabled(busyMailboxId == mailbox.id)
-                            }
-                        }
-                        .padding(12)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                        MacMailboxManageRow(
+                            mailbox: mailbox,
+                            postOffices: snapshot?.postOffices ?? [],
+                            busy: busyMailboxId == mailbox.id,
+                            collect: collect,
+                            updateMailbox: updateMailbox,
+                            deleteMailbox: deleteMailbox
+                        )
                     }
                 }
             }
@@ -442,13 +514,96 @@ struct MacMailboxListView: View {
     }
 }
 
+struct MacMailboxManageRow: View {
+    let mailbox: Mailbox
+    let postOffices: [PostOffice]
+    let busy: Bool
+    let collect: (Mailbox) async -> Void
+    let updateMailbox: (Mailbox, String, String) async -> Void
+    let deleteMailbox: (Mailbox) async -> Void
+    @State private var editing = false
+    @State private var confirmDelete = false
+    @State private var postOfficeId = ""
+    @State private var boxNumber = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Image(systemName: mailbox.mailWaiting ? "tray.full.fill" : "checkmark.circle.fill")
+                    .foregroundStyle(mailbox.mailWaiting ? .orange : .green)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(mailbox.name)
+                        .font(.headline)
+                    Text(mailbox.mailWaiting ? "Mail waiting in PO Box \(mailbox.boxNumber)" : "PO Box \(mailbox.boxNumber) is clear")
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if mailbox.mailWaiting {
+                    Button {
+                        Task { await collect(mailbox) }
+                    } label: {
+                        Label("Collect", systemImage: "checkmark.circle")
+                    }
+                    .disabled(busy)
+                }
+                Button {
+                    postOfficeId = mailbox.postOfficeId
+                    boxNumber = mailbox.boxNumber
+                    editing.toggle()
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+                Button(role: .destructive) {
+                    confirmDelete = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+
+            if editing {
+                HStack {
+                    Picker("Post office", selection: $postOfficeId) {
+                        ForEach(postOffices) { office in
+                            Text(office.name).tag(office.id)
+                        }
+                    }
+                    TextField("PO Box Number", text: $boxNumber)
+                        .textFieldStyle(.roundedBorder)
+                    Button {
+                        Task {
+                            await updateMailbox(mailbox, postOfficeId, boxNumber)
+                            editing = false
+                        }
+                    } label: {
+                        Label("Save", systemImage: "checkmark")
+                    }
+                    .disabled(postOfficeId.isEmpty || boxNumber.isEmpty)
+                }
+            }
+        }
+        .padding(12)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        .confirmationDialog("Delete PO Box \(mailbox.boxNumber)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete PO Box", role: .destructive) {
+                Task { await deleteMailbox(mailbox) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the PO box from active pobox.watch views.")
+        }
+    }
+}
+
 struct MacMapView: View {
     let snapshot: MailboxDashboardSnapshot?
+    let updatePostOffice: (PostOffice, String, String, String?, Double, Double, Int) async -> Void
+    let deletePostOffice: (PostOffice) async -> Void
 
     var body: some View {
         MacPage(title: "Map", subtitle: "Open post office locations in Apple Maps.") {
             ForEach(snapshot?.postOffices ?? []) { office in
-                MacOfficeRow(office: office)
+                MacOfficeRow(office: office, updatePostOffice: updatePostOffice, deletePostOffice: deletePostOffice)
             }
         }
     }
@@ -542,6 +697,8 @@ struct MacTeamView: View {
     let snapshot: MailboxDashboardSnapshot?
     let members: [TeamMember]
     let createUser: (String, String, String, String) async -> Void
+    let updateUser: (TeamMember, String, String, String) async -> Void
+    let deleteUser: (TeamMember) async -> Void
 
     var body: some View {
         MacPage(title: "Team", subtitle: "Users with access to this pobox.watch workspace.") {
@@ -553,7 +710,12 @@ struct MacTeamView: View {
                     MacEmptyStateView(title: "No team list loaded", subtitle: "Refresh after signing in to load the workspace members.")
                 } else {
                     ForEach(members) { member in
-                        MacInfoRow(title: member.displayName, detail: "\(member.email) - \(member.role) - \(member.status)", systemImage: member.active ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.xmark", tint: member.active ? .green : .gray)
+                        MacTeamMemberRow(
+                            member: member,
+                            currentUserId: snapshot?.currentUser.id,
+                            updateUser: updateUser,
+                            deleteUser: deleteUser
+                        )
                     }
                 }
             }
@@ -634,6 +796,85 @@ struct MacCreateUserForm: View {
                 .disabled(displayName.isEmpty || email.isEmpty || password.count < 12)
             }
             .frame(maxWidth: 480, alignment: .leading)
+        }
+    }
+}
+
+struct MacTeamMemberRow: View {
+    let member: TeamMember
+    let currentUserId: String?
+    let updateUser: (TeamMember, String, String, String) async -> Void
+    let deleteUser: (TeamMember) async -> Void
+    @State private var editing = false
+    @State private var confirmDelete = false
+    @State private var displayName = ""
+    @State private var email = ""
+    @State private var role = "MEMBER"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: member.active ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.xmark")
+                    .foregroundStyle(member.active ? .green : .gray)
+                    .frame(width: 22)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(member.displayName)
+                        .font(.headline)
+                    Text("\(member.email) - \(member.role) - \(member.status)")
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    displayName = member.displayName
+                    email = member.email
+                    role = member.role
+                    editing.toggle()
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+                Button(role: .destructive) {
+                    confirmDelete = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                .disabled(member.id == currentUserId)
+            }
+
+            if editing {
+                VStack(alignment: .leading, spacing: 10) {
+                    TextField("Name", text: $displayName)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("Email", text: $email)
+                        .textFieldStyle(.roundedBorder)
+                    Picker("Role", selection: $role) {
+                        Text("Member").tag("MEMBER")
+                        Text("Admin").tag("ADMIN")
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(member.id == currentUserId)
+                    Button {
+                        Task {
+                            await updateUser(member, email, displayName, role)
+                            editing = false
+                        }
+                    } label: {
+                        Label("Save", systemImage: "checkmark")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(displayName.isEmpty || email.isEmpty)
+                }
+                .frame(maxWidth: 480, alignment: .leading)
+            }
+        }
+        .padding(14)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        .confirmationDialog("Delete \(member.displayName)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete User", role: .destructive) {
+                Task { await deleteUser(member) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This disables their pobox.watch access.")
         }
     }
 }
@@ -787,27 +1028,94 @@ struct MacCreateMailboxForm: View {
 
 struct MacOfficeRow: View {
     let office: PostOffice
+    let updatePostOffice: (PostOffice, String, String, String?, Double, Double, Int) async -> Void
+    let deletePostOffice: (PostOffice) async -> Void
+    @State private var editing = false
+    @State private var confirmDelete = false
+    @State private var name = ""
+    @State private var address = ""
+    @State private var phone = ""
+    @State private var latitude = ""
+    @State private var longitude = ""
+    @State private var geofenceRadius = ""
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "map.fill")
-                .foregroundStyle(.blue)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(office.name)
-                    .font(.headline)
-                Text([office.address, office.phone, "\(office.geofenceRadius)m geofence"].compactMap(\.self).joined(separator: " - "))
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Image(systemName: "map.fill")
+                    .foregroundStyle(.blue)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(office.name)
+                        .font(.headline)
+                    Text([office.address, office.phone, "\(office.geofenceRadius)m geofence"].compactMap(\.self).joined(separator: " - "))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    openAppleMaps(office)
+                } label: {
+                    Label("Open in Apple Maps", systemImage: "arrow.up.right.square")
+                }
+                Button {
+                    name = office.name
+                    address = office.address
+                    phone = office.phone ?? ""
+                    latitude = String(office.latitude)
+                    longitude = String(office.longitude)
+                    geofenceRadius = String(office.geofenceRadius)
+                    editing.toggle()
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+                Button(role: .destructive) {
+                    confirmDelete = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
             }
-            Spacer()
-            Button {
-                openAppleMaps(office)
-            } label: {
-                Label("Open in Apple Maps", systemImage: "arrow.up.right.square")
+
+            if editing {
+                VStack(alignment: .leading, spacing: 10) {
+                    TextField("Name", text: $name)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("Address", text: $address)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("Phone", text: $phone)
+                        .textFieldStyle(.roundedBorder)
+                    HStack {
+                        TextField("Latitude", text: $latitude)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("Longitude", text: $longitude)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("Radius", text: $geofenceRadius)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 90)
+                    }
+                    Button {
+                        Task {
+                            await updatePostOffice(office, name, address, phone.isEmpty ? nil : phone, Double(latitude) ?? office.latitude, Double(longitude) ?? office.longitude, Int(geofenceRadius) ?? office.geofenceRadius)
+                            editing = false
+                        }
+                    } label: {
+                        Label("Save", systemImage: "checkmark")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(name.isEmpty || address.isEmpty || Double(latitude) == nil || Double(longitude) == nil || Int(geofenceRadius) == nil)
+                }
+                .frame(maxWidth: 560, alignment: .leading)
             }
         }
         .padding(14)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        .confirmationDialog("Delete \(office.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete Post Office", role: .destructive) {
+                Task { await deletePostOffice(office) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This also removes its PO boxes from active pobox.watch views.")
+        }
     }
 }
 

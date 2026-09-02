@@ -104,6 +104,24 @@ final class iPhoneMailboxViewModel: ObservableObject {
         }
     }
 
+    func updateUser(_ member: TeamMember, email: String, displayName: String, role: String) async {
+        await run {
+            _ = try await client.updateUser(
+                workspaceId: workspaceId,
+                userId: member.id,
+                input: UpdateUserInput(email: email, displayName: displayName, role: role)
+            )
+            try await loadWorkspace()
+        }
+    }
+
+    func deleteUser(_ member: TeamMember) async {
+        await run {
+            try await client.deleteUser(workspaceId: workspaceId, userId: member.id)
+            try await loadWorkspace()
+        }
+    }
+
     func searchPostOfficeLocations(query: String) async {
         await run {
             postOfficeLocationResults = try await client.searchPostOfficeLocations(workspaceId: workspaceId, query: query)
@@ -121,12 +139,48 @@ final class iPhoneMailboxViewModel: ObservableObject {
         }
     }
 
+    func updatePostOffice(_ office: PostOffice, name: String, address: String, phone: String?, latitude: Double, longitude: Double, geofenceRadius: Int) async {
+        await run {
+            _ = try await client.updatePostOffice(
+                workspaceId: workspaceId,
+                postOfficeId: office.id,
+                input: UpdatePostOfficeInput(name: name, address: address, phone: phone, latitude: latitude, longitude: longitude, geofenceRadius: geofenceRadius)
+            )
+            try await loadWorkspace()
+        }
+    }
+
+    func deletePostOffice(_ office: PostOffice) async {
+        await run {
+            try await client.deletePostOffice(workspaceId: workspaceId, postOfficeId: office.id)
+            try await loadWorkspace()
+        }
+    }
+
     func createMailbox(postOfficeId: String, boxNumber: String) async {
         await run {
             _ = try await client.createMailbox(
                 workspaceId: workspaceId,
                 input: CreateMailboxInput(postOfficeId: postOfficeId, boxNumber: boxNumber)
             )
+            try await loadWorkspace()
+        }
+    }
+
+    func updateMailbox(_ mailbox: Mailbox, postOfficeId: String, boxNumber: String) async {
+        await run {
+            _ = try await client.updateMailbox(
+                workspaceId: workspaceId,
+                mailboxId: mailbox.id,
+                input: UpdateMailboxInput(postOfficeId: postOfficeId, boxNumber: boxNumber)
+            )
+            try await loadWorkspace()
+        }
+    }
+
+    func deleteMailbox(_ mailbox: Mailbox) async {
+        await run {
+            try await client.deleteMailbox(workspaceId: workspaceId, mailboxId: mailbox.id)
             try await loadWorkspace()
         }
     }
@@ -267,7 +321,11 @@ struct iPhoneDashboardView: View {
             }
 
             iPhoneTab(title: "Map", systemImage: "map") {
-                iPhoneMapList(snapshot: model.snapshot)
+                iPhoneMapList(snapshot: model.snapshot, updatePostOffice: { office, name, address, phone, latitude, longitude, radius in
+                    await model.updatePostOffice(office, name: name, address: address, phone: phone, latitude: latitude, longitude: longitude, geofenceRadius: radius)
+                }, deletePostOffice: { office in
+                    await model.deletePostOffice(office)
+                })
             }
 
             iPhoneTab(title: "Needs Review", systemImage: "exclamationmark.triangle") {
@@ -277,6 +335,10 @@ struct iPhoneDashboardView: View {
             iPhoneTab(title: "Team", systemImage: "person.2") {
                 iPhoneTeamView(snapshot: model.snapshot, members: model.members, createUser: { email, displayName, password, role in
                     await model.createUser(email: email, displayName: displayName, password: password, role: role)
+                }, updateUser: { member, email, displayName, role in
+                    await model.updateUser(member, email: email, displayName: displayName, role: role)
+                }, deleteUser: { member in
+                    await model.deleteUser(member)
                 })
             }
 
@@ -387,9 +449,13 @@ struct iPhoneMailboxList: View {
                         Label("Open \(office.name) in Apple Maps", systemImage: "map")
                     }
                     ForEach(office.mailboxes) { mailbox in
-                        iPhoneMailboxRow(mailbox: mailbox, busy: model.busyMailboxId == mailbox.id) {
+                        iPhoneMailboxRow(mailbox: mailbox, busy: model.busyMailboxId == mailbox.id, postOffices: model.snapshot?.postOffices ?? [], collect: {
                             await model.collect(mailbox)
-                        }
+                        }, updateMailbox: { box, postOfficeId, boxNumber in
+                            await model.updateMailbox(box, postOfficeId: postOfficeId, boxNumber: boxNumber)
+                        }, deleteMailbox: { box in
+                            await model.deleteMailbox(box)
+                        })
                     }
                 } header: {
                     Text(office.name)
@@ -407,64 +473,184 @@ struct iPhoneMailboxList: View {
 struct iPhoneMailboxRow: View {
     let mailbox: Mailbox
     let busy: Bool
+    var postOffices: [PostOffice] = []
     let collect: () async -> Void
+    var updateMailbox: ((Mailbox, String, String) async -> Void)?
+    var deleteMailbox: ((Mailbox) async -> Void)?
+    @State private var editing = false
+    @State private var confirmDelete = false
+    @State private var postOfficeId = ""
+    @State private var boxNumber = ""
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: mailbox.mailWaiting ? "tray.full.fill" : "checkmark.circle.fill")
-                .foregroundStyle(mailbox.mailWaiting ? .orange : .green)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(mailbox.name)
-                    .font(.headline)
-                Text(mailbox.mailWaiting ? "Mail waiting in PO Box \(mailbox.boxNumber)" : "PO Box \(mailbox.boxNumber) is clear")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Image(systemName: mailbox.mailWaiting ? "tray.full.fill" : "checkmark.circle.fill")
+                    .foregroundStyle(mailbox.mailWaiting ? .orange : .green)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(mailbox.name)
+                        .font(.headline)
+                    Text(mailbox.mailWaiting ? "Mail waiting in PO Box \(mailbox.boxNumber)" : "PO Box \(mailbox.boxNumber) is clear")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if mailbox.mailWaiting {
+                    Button {
+                        Task { await collect() }
+                    } label: {
+                        if busy {
+                            ProgressView()
+                        } else {
+                            Text("Collect")
+                        }
+                    }
+                    .disabled(busy)
+                }
             }
-            Spacer()
-            if mailbox.mailWaiting {
-                Button {
-                    Task { await collect() }
-                } label: {
-                    if busy {
-                        ProgressView()
-                    } else {
-                        Text("Collect")
+
+            if updateMailbox != nil || deleteMailbox != nil {
+                HStack {
+                    Button {
+                        postOfficeId = mailbox.postOfficeId
+                        boxNumber = mailbox.boxNumber
+                        editing.toggle()
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        confirmDelete = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
                     }
                 }
-                .disabled(busy)
             }
+
+            if editing {
+                Picker("Post office", selection: $postOfficeId) {
+                    ForEach(postOffices) { office in
+                        Text(office.name).tag(office.id)
+                    }
+                }
+                TextField("PO Box Number", text: $boxNumber)
+                Button {
+                    Task {
+                        await updateMailbox?(mailbox, postOfficeId, boxNumber)
+                        editing = false
+                    }
+                } label: {
+                    Label("Save", systemImage: "checkmark")
+                }
+                .disabled(postOfficeId.isEmpty || boxNumber.isEmpty)
+            }
+        }
+        .confirmationDialog("Delete PO Box \(mailbox.boxNumber)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete PO Box", role: .destructive) {
+                Task { await deleteMailbox?(mailbox) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the PO box from active pobox.watch views.")
         }
     }
 }
 
 struct iPhoneMapList: View {
     let snapshot: MailboxDashboardSnapshot?
+    let updatePostOffice: (PostOffice, String, String, String?, Double, Double, Int) async -> Void
+    let deletePostOffice: (PostOffice) async -> Void
 
     var body: some View {
         List {
             ForEach(snapshot?.postOffices ?? []) { office in
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label(office.name, systemImage: "building.2")
-                            .font(.headline)
-                        Text(office.address)
-                            .foregroundStyle(.secondary)
-                        if let phone = office.phone {
-                            Text(phone)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Text("\(office.geofenceRadius)m geofence")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Link(destination: appleMapsURL(for: office)) {
-                            Label("Open in Apple Maps", systemImage: "arrow.up.right.square")
-                        }
-                    }
-                    .padding(.vertical, 4)
+                iPhonePostOfficeSection(office: office, updatePostOffice: updatePostOffice, deletePostOffice: deletePostOffice)
+            }
+        }
+    }
+}
+
+struct iPhonePostOfficeSection: View {
+    let office: PostOffice
+    let updatePostOffice: (PostOffice, String, String, String?, Double, Double, Int) async -> Void
+    let deletePostOffice: (PostOffice) async -> Void
+    @State private var editing = false
+    @State private var confirmDelete = false
+    @State private var name = ""
+    @State private var address = ""
+    @State private var phone = ""
+    @State private var latitude = ""
+    @State private var longitude = ""
+    @State private var geofenceRadius = ""
+
+    var body: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(office.name, systemImage: "building.2")
+                    .font(.headline)
+                Text(office.address)
+                    .foregroundStyle(.secondary)
+                if let phone = office.phone {
+                    Text(phone)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text("\(office.geofenceRadius)m geofence")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Link(destination: appleMapsURL(for: office)) {
+                    Label("Open in Apple Maps", systemImage: "arrow.up.right.square")
                 }
             }
+            .padding(.vertical, 4)
+
+            Button {
+                name = office.name
+                address = office.address
+                phone = office.phone ?? ""
+                latitude = String(office.latitude)
+                longitude = String(office.longitude)
+                geofenceRadius = String(office.geofenceRadius)
+                editing.toggle()
+            } label: {
+                Label("Edit Post Office", systemImage: "pencil")
+            }
+
+            Button(role: .destructive) {
+                confirmDelete = true
+            } label: {
+                Label("Delete Post Office", systemImage: "trash")
+            }
+
+            if editing {
+                TextField("Name", text: $name)
+                TextField("Address", text: $address)
+                TextField("Phone", text: $phone)
+                    .keyboardType(.phonePad)
+                TextField("Latitude", text: $latitude)
+                    .keyboardType(.decimalPad)
+                TextField("Longitude", text: $longitude)
+                    .keyboardType(.decimalPad)
+                TextField("Geofence radius", text: $geofenceRadius)
+                    .keyboardType(.numberPad)
+                Button {
+                    Task {
+                        await updatePostOffice(office, name, address, phone.isEmpty ? nil : phone, Double(latitude) ?? office.latitude, Double(longitude) ?? office.longitude, Int(geofenceRadius) ?? office.geofenceRadius)
+                        editing = false
+                    }
+                } label: {
+                    Label("Save", systemImage: "checkmark")
+                }
+                .disabled(name.isEmpty || address.isEmpty || Double(latitude) == nil || Double(longitude) == nil || Int(geofenceRadius) == nil)
+            }
+        }
+        .confirmationDialog("Delete \(office.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete Post Office", role: .destructive) {
+                Task { await deletePostOffice(office) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This also removes its PO boxes from active pobox.watch views.")
         }
     }
 }
@@ -509,6 +695,8 @@ struct iPhoneTeamView: View {
     let snapshot: MailboxDashboardSnapshot?
     let members: [TeamMember]
     let createUser: (String, String, String, String) async -> Void
+    let updateUser: (TeamMember, String, String, String) async -> Void
+    let deleteUser: (TeamMember) async -> Void
 
     var body: some View {
         Form {
@@ -525,13 +713,7 @@ struct iPhoneTeamView: View {
                     Label("No team list loaded", systemImage: "person.2")
                 } else {
                     ForEach(members) { member in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(member.displayName)
-                                .font(.headline)
-                            Text("\(member.email) - \(member.role) - \(member.status)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        iPhoneTeamMemberRow(member: member, currentUserId: snapshot?.currentUser.id, updateUser: updateUser, deleteUser: deleteUser)
                     }
                 }
             }
@@ -543,6 +725,72 @@ struct iPhoneTeamView: View {
                     Label("Admin required", systemImage: "lock")
                 }
             }
+        }
+    }
+}
+
+struct iPhoneTeamMemberRow: View {
+    let member: TeamMember
+    let currentUserId: String?
+    let updateUser: (TeamMember, String, String, String) async -> Void
+    let deleteUser: (TeamMember) async -> Void
+    @State private var editing = false
+    @State private var confirmDelete = false
+    @State private var displayName = ""
+    @State private var email = ""
+    @State private var role = "MEMBER"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(member.displayName)
+                .font(.headline)
+            Text("\(member.email) - \(member.role) - \(member.status)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack {
+                Button {
+                    displayName = member.displayName
+                    email = member.email
+                    role = member.role
+                    editing.toggle()
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+                Button(role: .destructive) {
+                    confirmDelete = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                .disabled(member.id == currentUserId)
+            }
+            if editing {
+                TextField("Name", text: $displayName)
+                TextField("Email", text: $email)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.emailAddress)
+                Picker("Role", selection: $role) {
+                    Text("Member").tag("MEMBER")
+                    Text("Admin").tag("ADMIN")
+                }
+                .disabled(member.id == currentUserId)
+                Button {
+                    Task {
+                        await updateUser(member, email, displayName, role)
+                        editing = false
+                    }
+                } label: {
+                    Label("Save", systemImage: "checkmark")
+                }
+                .disabled(displayName.isEmpty || email.isEmpty)
+            }
+        }
+        .confirmationDialog("Delete \(member.displayName)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete User", role: .destructive) {
+                Task { await deleteUser(member) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This disables their pobox.watch access.")
         }
     }
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
-import { AlertTriangle, Bell, Check, Clock, ExternalLink, KeyRound, LogIn, LogOut, Mail, MapPin, Plus, RefreshCw, Route, Shield, Users } from "lucide-react";
+import { AlertTriangle, Bell, Check, Clock, Edit2, ExternalLink, KeyRound, LogIn, LogOut, Mail, MapPin, Plus, RefreshCw, Route, Save, Shield, Trash2, Users, X } from "lucide-react";
 import {
   authenticatePasskey,
   beginPasskeyAuthentication,
@@ -12,6 +12,9 @@ import {
   createMailbox,
   createPostOffice,
   createUser,
+  deleteMailbox,
+  deletePostOffice,
+  deleteUser,
   loadAppChanges,
   loadDashboard,
   loadMembers,
@@ -25,6 +28,9 @@ import {
   searchPostOfficeLocations,
   simulateMail,
   syncPostOfficeDirectory,
+  updateMailbox,
+  updatePostOffice,
+  updateUser,
   verifySecondFactor
 } from "./api";
 import type { AppChangesResponse, CollectionHistoryEvent, DashboardSnapshot, Mailbox, MailHistoryEvent, PostOffice, PostOfficeDirectoryStatus, PostOfficeLocationResult, ReviewItem, SecurityStatus, TeamMember, TotpSetup } from "./types";
@@ -238,7 +244,7 @@ function SectionView({
   if (section === "Map") return <MapSection snapshot={snapshot} />;
   if (section === "History") return <HistorySection snapshot={snapshot} />;
   if (section === "Needs Review") return <NeedsReviewSection reviewItems={reviewItems} mutate={mutate} refresh={refresh} />;
-  if (section === "Mailboxes") return <MailboxSection snapshot={snapshot} busyId={busyId} mutate={mutate} />;
+  if (section === "Mailboxes") return <MailboxSection snapshot={snapshot} busyId={busyId} mutate={mutate} setError={setError} refresh={refresh} />;
   return <OverviewSection snapshot={snapshot} busyId={busyId} mutate={mutate} />;
 }
 
@@ -514,10 +520,72 @@ function OverviewSection({ snapshot, busyId, mutate }: { snapshot: DashboardSnap
   );
 }
 
-function MailboxSection({ snapshot, busyId, mutate, compact = false }: { snapshot: DashboardSnapshot; busyId: string | null; compact?: boolean; mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void> }) {
+function MailboxSection({
+  snapshot,
+  busyId,
+  mutate,
+  refresh,
+  setError,
+  compact = false
+}: {
+  snapshot: DashboardSnapshot;
+  busyId: string | null;
+  compact?: boolean;
+  mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>;
+  refresh?: () => Promise<void>;
+  setError?: (value: string | null) => void;
+}) {
   const [filter, setFilter] = useState<MailboxFilter>(compact ? "waiting" : "all");
   const waitingCount = snapshot.outstandingMailboxCount;
   const clearCount = totalMailboxes(snapshot) - waitingCount;
+  const canManage = !compact && snapshot.currentUser.role === "ADMIN" && Boolean(refresh && setError);
+
+  async function saveOffice(officeId: string, input: { name: string; address: string; phone?: string; latitude: number; longitude: number; geofenceRadius: number }) {
+    if (!refresh || !setError) return;
+    try {
+      await updatePostOffice(officeId, input);
+      await refresh();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update post office.");
+    }
+  }
+
+  async function removeOffice(office: PostOffice) {
+    if (!refresh || !setError) return;
+    if (!window.confirm(`Delete ${office.name}? This will also remove its PO boxes from the active app.`)) return;
+    try {
+      await deletePostOffice(office.id);
+      await refresh();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete post office.");
+    }
+  }
+
+  async function saveMailbox(mailboxId: string, input: { postOfficeId: string; boxNumber: string }) {
+    if (!refresh || !setError) return;
+    try {
+      await updateMailbox(mailboxId, input);
+      await refresh();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update PO box.");
+    }
+  }
+
+  async function removeMailbox(mailbox: Mailbox) {
+    if (!refresh || !setError) return;
+    if (!window.confirm(`Delete PO Box ${mailbox.boxNumber}? This will remove it from the active app.`)) return;
+    try {
+      await deleteMailbox(mailbox.id);
+      await refresh();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete PO box.");
+    }
+  }
+
   return (
     <Panel title={compact ? "PO Box Snapshot" : "PO Boxes"} aside={`Updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}>
       {!compact && (
@@ -529,14 +597,55 @@ function MailboxSection({ snapshot, busyId, mutate, compact = false }: { snapsho
       )}
       <div className="office-list">
         {snapshot.postOffices.map((office) => (
-          <OfficeSection key={office.id} office={office} filter={filter} busyId={busyId} mutate={mutate} />
+          <OfficeSection
+            key={office.id}
+            office={office}
+            postOffices={snapshot.postOffices}
+            filter={filter}
+            busyId={busyId}
+            mutate={mutate}
+            canManage={canManage}
+            onSaveOffice={saveOffice}
+            onDeleteOffice={removeOffice}
+            onSaveMailbox={saveMailbox}
+            onDeleteMailbox={removeMailbox}
+          />
         ))}
       </div>
     </Panel>
   );
 }
 
-function OfficeSection({ office, filter, busyId, mutate }: { office: PostOffice; filter: MailboxFilter; busyId: string | null; mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void> }) {
+function OfficeSection({
+  office,
+  postOffices,
+  filter,
+  busyId,
+  mutate,
+  canManage,
+  onSaveOffice,
+  onDeleteOffice,
+  onSaveMailbox,
+  onDeleteMailbox
+}: {
+  office: PostOffice;
+  postOffices: PostOffice[];
+  filter: MailboxFilter;
+  busyId: string | null;
+  mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>;
+  canManage: boolean;
+  onSaveOffice: (officeId: string, input: { name: string; address: string; phone?: string; latitude: number; longitude: number; geofenceRadius: number }) => Promise<void>;
+  onDeleteOffice: (office: PostOffice) => Promise<void>;
+  onSaveMailbox: (mailboxId: string, input: { postOfficeId: string; boxNumber: string }) => Promise<void>;
+  onDeleteMailbox: (mailbox: Mailbox) => Promise<void>;
+}) {
+  const [editingOffice, setEditingOffice] = useState(false);
+  const [name, setName] = useState(office.name);
+  const [address, setAddress] = useState(office.address);
+  const [phone, setPhone] = useState(office.phone ?? "");
+  const [latitude, setLatitude] = useState(String(office.latitude));
+  const [longitude, setLongitude] = useState(String(office.longitude));
+  const [geofenceRadius, setGeofenceRadius] = useState(String(office.geofenceRadius));
   const boxes = office.mailboxes.filter((box) => {
     if (filter === "waiting") return box.mailWaiting;
     if (filter === "clear") return !box.mailWaiting;
@@ -546,16 +655,50 @@ function OfficeSection({ office, filter, busyId, mutate }: { office: PostOffice;
   const waiting = office.mailboxes.filter((box) => box.mailWaiting).length;
   return (
     <article className="office">
-      <div className="office-title">
-        <div>
-          <h3>{office.name}</h3>
-          <p>{office.address}</p>
+      {editingOffice ? (
+        <form className="editable-row office-edit" onSubmit={async (event) => {
+          event.preventDefault();
+          await onSaveOffice(office.id, {
+            name,
+            address,
+            phone: phone || undefined,
+            latitude: Number(latitude),
+            longitude: Number(longitude),
+            geofenceRadius: Number(geofenceRadius)
+          });
+          setEditingOffice(false);
+        }}>
+          <div className="edit-fields">
+            <label>Name<input value={name} onChange={(event) => setName(event.target.value)} required /></label>
+            <label>Address<input value={address} onChange={(event) => setAddress(event.target.value)} required /></label>
+            <label>Phone<input value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+            <label>Latitude<input type="number" step="any" value={latitude} onChange={(event) => setLatitude(event.target.value)} required /></label>
+            <label>Longitude<input type="number" step="any" value={longitude} onChange={(event) => setLongitude(event.target.value)} required /></label>
+            <label>Radius<input type="number" min="25" max="5000" value={geofenceRadius} onChange={(event) => setGeofenceRadius(event.target.value)} required /></label>
+          </div>
+          <div className="row-actions">
+            <button className="primary" type="submit"><Save size={16} />Save</button>
+            <button className="secondary" type="button" onClick={() => setEditingOffice(false)}><X size={16} />Cancel</button>
+          </div>
+        </form>
+      ) : (
+        <div className="office-title">
+          <div>
+            <h3>{office.name}</h3>
+            <p>{office.address}</p>
+          </div>
+          <div className="office-actions">
+            <StatusPill tone={waiting > 0 ? "warning" : "ok"}>{waiting > 0 ? `${waiting} waiting` : "Clear"}</StatusPill>
+            <a className="text-link" href={appleMapsUrl(office)} target="_blank" rel="noreferrer"><ExternalLink size={15} />Apple Maps</a>
+            {canManage && (
+              <div className="row-actions">
+                <button type="button" className="icon-button" title="Edit post office" onClick={() => setEditingOffice(true)}><Edit2 size={16} /></button>
+                <button type="button" className="icon-button danger" title="Delete post office" onClick={() => onDeleteOffice(office)}><Trash2 size={16} /></button>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="office-actions">
-          <StatusPill tone={waiting > 0 ? "warning" : "ok"}>{waiting > 0 ? `${waiting} waiting` : "Clear"}</StatusPill>
-          <a className="text-link" href={appleMapsUrl(office)} target="_blank" rel="noreferrer"><ExternalLink size={15} />Apple Maps</a>
-        </div>
-      </div>
+      )}
       <div className="mailbox-table">
         <div className="mailbox-table-head">
           <span>PO box</span>
@@ -569,6 +712,10 @@ function OfficeSection({ office, filter, busyId, mutate }: { office: PostOffice;
             box={box}
             busy={busyId === box.id}
             onCollect={() => mutate(() => collectMailbox(box.id), box.id)}
+            postOffices={postOffices}
+            canManage={canManage}
+            onSave={onSaveMailbox}
+            onDelete={onDeleteMailbox}
             table
           />
         ))}
@@ -685,23 +832,41 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
     }
   }
 
+  async function saveMember(memberId: string, input: { email: string; displayName: string; role: "ADMIN" | "MEMBER" }) {
+    try {
+      await updateUser(memberId, input);
+      await refresh();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update user.");
+    }
+  }
+
+  async function removeMember(member: TeamMember) {
+    if (!window.confirm(`Delete ${member.displayName}? This will disable their access to pobox.watch.`)) return;
+    try {
+      await deleteUser(member.id);
+      await refresh();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete user.");
+    }
+  }
+
   return (
     <div className="page-grid">
       <section className="page-main">
         <Panel title="Team Directory" aside={`${members.length} users`}>
           <div className="team-list">
             {members.map((member) => (
-              <div className="team-member" key={member.id}>
-                <div>
-                  <strong>{member.displayName}</strong>
-                  <span>{member.email}</span>
-                </div>
-                <div className="team-badges">
-                  <StatusPill tone={member.active ? "ok" : "muted"}>{member.active ? "Active" : "Disabled"}</StatusPill>
-                  <StatusPill tone={member.role === "ADMIN" ? "info" : "muted"}>{member.role}</StatusPill>
-                  <small>{member.status}</small>
-                </div>
-              </div>
+              <TeamMemberRow
+                key={member.id}
+                member={member}
+                currentUserId={snapshot.currentUser.id}
+                canManage={snapshot.currentUser.role === "ADMIN"}
+                onSave={saveMember}
+                onDelete={removeMember}
+              />
             ))}
           </div>
         </Panel>
@@ -726,6 +891,72 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
           </Panel>
         )}
       </aside>
+    </div>
+  );
+}
+
+function TeamMemberRow({
+  member,
+  currentUserId,
+  canManage,
+  onSave,
+  onDelete
+}: {
+  member: TeamMember;
+  currentUserId: string;
+  canManage: boolean;
+  onSave: (memberId: string, input: { email: string; displayName: string; role: "ADMIN" | "MEMBER" }) => Promise<void>;
+  onDelete: (member: TeamMember) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [email, setEmail] = useState(member.email);
+  const [displayName, setDisplayName] = useState(member.displayName);
+  const [role, setRole] = useState<"ADMIN" | "MEMBER">(member.role);
+  const self = member.id === currentUserId;
+
+  useEffect(() => {
+    setEmail(member.email);
+    setDisplayName(member.displayName);
+    setRole(member.role);
+  }, [member.email, member.displayName, member.role]);
+
+  if (editing) {
+    return (
+      <form className="team-member editable-row" onSubmit={async (event) => {
+        event.preventDefault();
+        await onSave(member.id, { email, displayName, role });
+        setEditing(false);
+      }}>
+        <div className="edit-fields">
+          <label>Name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></label>
+          <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
+          <label>Role<select value={role} onChange={(event) => setRole(event.target.value as "ADMIN" | "MEMBER")} disabled={self}><option>MEMBER</option><option>ADMIN</option></select></label>
+        </div>
+        <div className="row-actions">
+          <button className="primary" type="submit"><Save size={16} />Save</button>
+          <button className="secondary" type="button" onClick={() => setEditing(false)}><X size={16} />Cancel</button>
+        </div>
+      </form>
+    );
+  }
+
+  return (
+    <div className="team-member">
+      <div>
+        <strong>{member.displayName}</strong>
+        <span>{member.email}</span>
+      </div>
+      <div className="team-badges">
+        <StatusPill tone={member.active ? "ok" : "muted"}>{member.active ? "Active" : "Disabled"}</StatusPill>
+        <StatusPill tone={member.role === "ADMIN" ? "info" : "muted"}>{member.role}</StatusPill>
+        <small>{member.status}</small>
+      </div>
+      {canManage && (
+        <div className="row-actions">
+          <button type="button" className="icon-button" title="Edit user" onClick={() => setEditing(true)}><Edit2 size={16} /></button>
+          <button type="button" className="icon-button danger" title="Delete user" disabled={self} onClick={() => onDelete(member)}><Trash2 size={16} /></button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1174,7 +1405,28 @@ function Panel({ title, aside, children }: { title: string; aside?: string; chil
   );
 }
 
-function MailboxRow({ box, busy, onCollect, table = false }: { box: Mailbox; busy: boolean; onCollect: () => void; table?: boolean }) {
+function MailboxRow({
+  box,
+  busy,
+  onCollect,
+  table = false,
+  postOffices = [],
+  canManage = false,
+  onSave,
+  onDelete
+}: {
+  box: Mailbox;
+  busy: boolean;
+  onCollect: () => void;
+  table?: boolean;
+  postOffices?: PostOffice[];
+  canManage?: boolean;
+  onSave?: (mailboxId: string, input: { postOfficeId: string; boxNumber: string }) => Promise<void>;
+  onDelete?: (mailbox: Mailbox) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [postOfficeId, setPostOfficeId] = useState(box.postOfficeId);
+  const [boxNumber, setBoxNumber] = useState(box.boxNumber);
   const status = box.mailWaiting ? "Mail waiting" : "Clear";
   const lastEvent = box.latestNotificationAt
     ? `Detected ${new Date(box.latestNotificationAt).toLocaleString()}`
@@ -1182,6 +1434,27 @@ function MailboxRow({ box, busy, onCollect, table = false }: { box: Mailbox; bus
       ? `Collected ${new Date(box.lastCollectedAt).toLocaleString()}`
       : "No events yet";
   if (table) {
+    if (editing) {
+      return (
+        <form className="mailbox-row editable-row" onSubmit={async (event) => {
+          event.preventDefault();
+          if (!onSave) return;
+          await onSave(box.id, { postOfficeId, boxNumber });
+          setEditing(false);
+        }}>
+          <div className="edit-fields">
+            <label>Post office<select value={postOfficeId} onChange={(event) => setPostOfficeId(event.target.value)}>{postOffices.map((office) => <option value={office.id} key={office.id}>{office.name}</option>)}</select></label>
+            <label>PO Box Number<input value={boxNumber} onChange={(event) => setBoxNumber(event.target.value)} required /></label>
+          </div>
+          <span>{status}</span>
+          <span>{lastEvent}</span>
+          <div className="row-actions">
+            <button className="primary" type="submit"><Save size={16} />Save</button>
+            <button className="secondary" type="button" onClick={() => setEditing(false)}><X size={16} />Cancel</button>
+          </div>
+        </form>
+      );
+    }
     return (
       <div className={box.mailWaiting ? "mailbox-row waiting" : "mailbox-row"}>
         <div>
@@ -1190,7 +1463,16 @@ function MailboxRow({ box, busy, onCollect, table = false }: { box: Mailbox; bus
         </div>
         <StatusPill tone={box.mailWaiting ? "warning" : "ok"}>{status}</StatusPill>
         <span>{lastEvent}</span>
-        {box.mailWaiting ? <button disabled={busy} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button> : <span className="small">No action</span>}
+        <div className="row-actions">
+          {box.mailWaiting && <button disabled={busy} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button>}
+          {canManage && (
+            <>
+              <button type="button" className="icon-button" title="Edit PO box" onClick={() => setEditing(true)}><Edit2 size={16} /></button>
+              <button type="button" className="icon-button danger" title="Delete PO box" onClick={() => onDelete?.(box)}><Trash2 size={16} /></button>
+            </>
+          )}
+          {!box.mailWaiting && !canManage && <span className="small">No action</span>}
+        </div>
       </div>
     );
   }

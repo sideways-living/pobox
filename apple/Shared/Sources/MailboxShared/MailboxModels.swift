@@ -51,6 +51,7 @@ public struct PostOffice: Codable, Identifiable, Sendable {
 
 public struct Mailbox: Codable, Identifiable, Sendable {
     public let id: String
+    public let postOfficeId: String
     public let name: String
     public let boxNumber: String
     public let active: Bool
@@ -139,6 +140,18 @@ public struct CreateUserInput: Codable, Sendable {
     }
 }
 
+public struct UpdateUserInput: Codable, Sendable {
+    public let email: String?
+    public let displayName: String?
+    public let role: String?
+
+    public init(email: String? = nil, displayName: String? = nil, role: String? = nil) {
+        self.email = email
+        self.displayName = displayName
+        self.role = role
+    }
+}
+
 public struct CreatePostOfficeInput: Codable, Sendable {
     public let name: String
     public let address: String
@@ -157,6 +170,24 @@ public struct CreatePostOfficeInput: Codable, Sendable {
     }
 }
 
+public struct UpdatePostOfficeInput: Codable, Sendable {
+    public let name: String?
+    public let address: String?
+    public let phone: String?
+    public let latitude: Double?
+    public let longitude: Double?
+    public let geofenceRadius: Int?
+
+    public init(name: String? = nil, address: String? = nil, phone: String? = nil, latitude: Double? = nil, longitude: Double? = nil, geofenceRadius: Int? = nil) {
+        self.name = name
+        self.address = address
+        self.phone = phone
+        self.latitude = latitude
+        self.longitude = longitude
+        self.geofenceRadius = geofenceRadius
+    }
+}
+
 public struct CreateMailboxInput: Codable, Sendable {
     public let postOfficeId: String
     public let name: String?
@@ -165,6 +196,16 @@ public struct CreateMailboxInput: Codable, Sendable {
     public init(postOfficeId: String, name: String? = nil, boxNumber: String) {
         self.postOfficeId = postOfficeId
         self.name = name
+        self.boxNumber = boxNumber
+    }
+}
+
+public struct UpdateMailboxInput: Codable, Sendable {
+    public let postOfficeId: String?
+    public let boxNumber: String?
+
+    public init(postOfficeId: String? = nil, boxNumber: String? = nil) {
+        self.postOfficeId = postOfficeId
         self.boxNumber = boxNumber
     }
 }

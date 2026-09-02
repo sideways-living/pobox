@@ -33,6 +33,11 @@ const createUserSchema = z.object({
   password: z.string().min(12).max(200),
   role: z.enum(["ADMIN", "MEMBER"])
 });
+const updateUserSchema = z.object({
+  email: z.string().email().optional(),
+  displayName: z.string().min(1).max(120).optional(),
+  role: z.enum(["ADMIN", "MEMBER"]).optional()
+}).refine((input) => Object.keys(input).length > 0, { message: "At least one field is required." });
 const createPostOfficeSchema = z.object({
   name: z.string().min(1).max(160),
   address: z.string().min(1).max(240),
@@ -41,11 +46,23 @@ const createPostOfficeSchema = z.object({
   longitude: z.number().min(-180).max(180),
   geofenceRadius: z.number().int().min(25).max(5000).default(200)
 });
+const updatePostOfficeSchema = z.object({
+  name: z.string().min(1).max(160).optional(),
+  address: z.string().min(1).max(240).optional(),
+  phone: z.string().max(80).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  geofenceRadius: z.number().int().min(25).max(5000).optional()
+}).refine((input) => Object.keys(input).length > 0, { message: "At least one field is required." });
 const createMailboxSchema = z.object({
   postOfficeId: z.string().min(1),
   name: z.string().min(1).max(160).optional(),
   boxNumber: z.string().min(1).max(40)
 });
+const updateMailboxSchema = z.object({
+  postOfficeId: z.string().min(1).optional(),
+  boxNumber: z.string().min(1).max(40).optional()
+}).refine((input) => Object.keys(input).length > 0, { message: "At least one field is required." });
 const sessionCookieName = "pobox_watch_session";
 const legacySessionCookieName = "mailbox_session";
 
@@ -257,6 +274,23 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     return member;
   });
 
+  app.patch("/api/v1/workspaces/:workspaceId/team/users/:userId", async (request) => {
+    const { workspaceId, userId } = request.params as { workspaceId: string; userId: string };
+    const body = updateUserSchema.parse(request.body);
+    const session = await securedSession(request, workspaceId);
+    const member = await store.updateUser(session, workspaceId, userId, body);
+    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    return member;
+  });
+
+  app.delete("/api/v1/workspaces/:workspaceId/team/users/:userId", async (request, reply) => {
+    const { workspaceId, userId } = request.params as { workspaceId: string; userId: string };
+    const session = await securedSession(request, workspaceId);
+    await store.deleteUser(session, workspaceId, userId);
+    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    return reply.code(204).send();
+  });
+
   app.post("/api/v1/workspaces/:workspaceId/post-offices", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };
     const body = createPostOfficeSchema.parse(request.body);
@@ -266,6 +300,23 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     return postOffice;
   });
 
+  app.patch("/api/v1/workspaces/:workspaceId/post-offices/:postOfficeId", async (request) => {
+    const { workspaceId, postOfficeId } = request.params as { workspaceId: string; postOfficeId: string };
+    const body = updatePostOfficeSchema.parse(request.body);
+    const session = await securedSession(request, workspaceId);
+    const postOffice = await store.updatePostOffice(session, workspaceId, postOfficeId, body);
+    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    return postOffice;
+  });
+
+  app.delete("/api/v1/workspaces/:workspaceId/post-offices/:postOfficeId", async (request, reply) => {
+    const { workspaceId, postOfficeId } = request.params as { workspaceId: string; postOfficeId: string };
+    const session = await securedSession(request, workspaceId);
+    await store.deletePostOffice(session, workspaceId, postOfficeId);
+    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    return reply.code(204).send();
+  });
+
   app.post("/api/v1/workspaces/:workspaceId/mailboxes", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };
     const body = createMailboxSchema.parse(request.body);
@@ -273,6 +324,23 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const mailbox = await store.createMailbox(session, workspaceId, body);
     realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
     return mailbox;
+  });
+
+  app.patch("/api/v1/workspaces/:workspaceId/mailboxes/:mailboxId", async (request) => {
+    const { workspaceId, mailboxId } = request.params as { workspaceId: string; mailboxId: string };
+    const body = updateMailboxSchema.parse(request.body);
+    const session = await securedSession(request, workspaceId);
+    const mailbox = await store.updateMailbox(session, workspaceId, mailboxId, body);
+    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    return mailbox;
+  });
+
+  app.delete("/api/v1/workspaces/:workspaceId/mailboxes/:mailboxId", async (request, reply) => {
+    const { workspaceId, mailboxId } = request.params as { workspaceId: string; mailboxId: string };
+    const session = await securedSession(request, workspaceId);
+    await store.deleteMailbox(session, workspaceId, mailboxId);
+    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    return reply.code(204).send();
   });
 
   app.post("/api/v1/workspaces/:workspaceId/dev/simulate-mail", async (request) => {

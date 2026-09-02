@@ -12,7 +12,10 @@ import type {
   ReviewItem,
   SecurityStatus,
   TeamMember,
-  TotpSetup
+  TotpSetup,
+  UpdateMailboxInput,
+  UpdatePostOfficeInput,
+  UpdateUserInput
 } from "./types";
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? window.location.origin;
@@ -173,6 +176,25 @@ export async function createUser(input: CreateUserInput): Promise<TeamMember> {
   return response.json();
 }
 
+export async function updateUser(userId: string, input: UpdateUserInput): Promise<TeamMember> {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/team/users/${userId}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function deleteUser(userId: string): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/team/users/${userId}`, {
+    method: "DELETE",
+    credentials: "include"
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+}
+
 export async function createPostOffice(input: CreatePostOfficeInput) {
   const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/post-offices`, {
     method: "POST",
@@ -182,6 +204,25 @@ export async function createPostOffice(input: CreatePostOfficeInput) {
   });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
+}
+
+export async function updatePostOffice(postOfficeId: string, input: UpdatePostOfficeInput) {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/post-offices/${postOfficeId}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function deletePostOffice(postOfficeId: string): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/post-offices/${postOfficeId}`, {
+    method: "DELETE",
+    credentials: "include"
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
 }
 
 export async function searchPostOfficeLocations(query: string): Promise<PostOfficeLocationResult[]> {
@@ -216,6 +257,25 @@ export async function createMailbox(input: CreateMailboxInput) {
   });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
+}
+
+export async function updateMailbox(mailboxId: string, input: UpdateMailboxInput) {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/mailboxes/${mailboxId}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function deleteMailbox(mailboxId: string): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/mailboxes/${mailboxId}`, {
+    method: "DELETE",
+    credentials: "include"
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
 }
 
 export async function simulateMail(mailboxNumber: string, duplicate = false) {

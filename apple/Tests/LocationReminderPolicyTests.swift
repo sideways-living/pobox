@@ -14,7 +14,7 @@ final class LocationReminderPolicyTests: XCTestCase {
             geofenceRadius: 200,
             active: true,
             mailboxes: [
-                Mailbox(id: "box", name: "PO Box 1234", boxNumber: "1234", active: true, mailWaiting: false, latestNotificationAt: nil, lastCollectedAt: nil, lastCollectedBy: nil)
+                Mailbox(id: "box", postOfficeId: "office", name: "PO Box 1234", boxNumber: "1234", active: true, mailWaiting: false, latestNotificationAt: nil, lastCollectedAt: nil, lastCollectedBy: nil)
             ]
         )
         XCTAssertFalse(policy.shouldPrompt(postOffice: office, now: Date(), lastPromptAt: nil))

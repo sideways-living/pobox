@@ -53,6 +53,12 @@ export interface CreateUserInput {
   role: "ADMIN" | "MEMBER";
 }
 
+export interface UpdateUserInput {
+  email?: string;
+  displayName?: string;
+  role?: "ADMIN" | "MEMBER";
+}
+
 export interface CreatePostOfficeInput {
   name: string;
   address: string;
@@ -62,10 +68,24 @@ export interface CreatePostOfficeInput {
   geofenceRadius: number;
 }
 
+export interface UpdatePostOfficeInput {
+  name?: string;
+  address?: string;
+  phone?: string;
+  latitude?: number;
+  longitude?: number;
+  geofenceRadius?: number;
+}
+
 export interface CreateMailboxInput {
   postOfficeId: string;
   name?: string;
   boxNumber: string;
+}
+
+export interface UpdateMailboxInput {
+  postOfficeId?: string;
+  boxNumber?: string;
 }
 
 export type LoginResult =
@@ -120,8 +140,14 @@ export interface AppStore {
   postOfficeDirectoryStatus(session: Session, workspaceId: string): Promise<PostOfficeDirectoryStatus>;
   syncPostOfficeDirectory(session: Session, workspaceId: string): Promise<PostOfficeDirectoryStatus>;
   createUser(session: Session, workspaceId: string, input: CreateUserInput): Promise<TeamMemberSummary>;
+  updateUser(session: Session, workspaceId: string, userId: string, input: UpdateUserInput): Promise<TeamMemberSummary>;
+  deleteUser(session: Session, workspaceId: string, userId: string): Promise<void>;
   createPostOffice(session: Session, workspaceId: string, input: CreatePostOfficeInput): Promise<PostOffice>;
+  updatePostOffice(session: Session, workspaceId: string, postOfficeId: string, input: UpdatePostOfficeInput): Promise<PostOffice>;
+  deletePostOffice(session: Session, workspaceId: string, postOfficeId: string): Promise<void>;
   createMailbox(session: Session, workspaceId: string, input: CreateMailboxInput): Promise<Mailbox>;
+  updateMailbox(session: Session, workspaceId: string, mailboxId: string, input: UpdateMailboxInput): Promise<Mailbox>;
+  deleteMailbox(session: Session, workspaceId: string, mailboxId: string): Promise<void>;
   inviteMember(session: Session, workspaceId: string, email: string, role: "ADMIN" | "MEMBER"): Promise<{
     invitationId: string;
     email: string;

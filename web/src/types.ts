@@ -2,6 +2,7 @@ import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequest
 
 export interface Mailbox {
   id: string;
+  postOfficeId: string;
   name: string;
   boxNumber: string;
   active: boolean;
@@ -80,6 +81,12 @@ export interface CreateUserInput {
   role: "ADMIN" | "MEMBER";
 }
 
+export interface UpdateUserInput {
+  email?: string;
+  displayName?: string;
+  role?: "ADMIN" | "MEMBER";
+}
+
 export interface CreatePostOfficeInput {
   name: string;
   address: string;
@@ -87,6 +94,15 @@ export interface CreatePostOfficeInput {
   latitude: number;
   longitude: number;
   geofenceRadius: number;
+}
+
+export interface UpdatePostOfficeInput {
+  name?: string;
+  address?: string;
+  phone?: string;
+  latitude?: number;
+  longitude?: number;
+  geofenceRadius?: number;
 }
 
 export interface PostOfficeLocationResult {
@@ -114,6 +130,11 @@ export interface CreateMailboxInput {
   postOfficeId: string;
   name?: string;
   boxNumber: string;
+}
+
+export interface UpdateMailboxInput {
+  postOfficeId?: string;
+  boxNumber?: string;
 }
 
 export type LoginResult =

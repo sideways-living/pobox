@@ -41,7 +41,10 @@ import type {
   PasskeyRegistrationOptions,
   ReviewItem,
   SecurityStatus,
-  TeamMemberSummary
+  TeamMemberSummary,
+  UpdateMailboxInput,
+  UpdatePostOfficeInput,
+  UpdateUserInput
 } from "./types.js";
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "./types.js";
 
@@ -409,9 +412,9 @@ export class PrismaStore implements AppStore {
       this.prisma.workspace.findUnique({ where: { id: workspaceId } }),
       this.prisma.user.findUnique({ where: { id: session.userId }, include: { profile: true } }),
       this.prisma.postOffice.findMany({
-        where: { workspaceId },
+        where: { workspaceId, active: true },
         orderBy: { name: "asc" },
-        include: { mailboxes: { orderBy: { boxNumber: "asc" } } }
+        include: { mailboxes: { where: { active: true }, orderBy: { boxNumber: "asc" } } }
       }),
       this.prisma.mailEvent.findMany({ where: { workspaceId }, orderBy: { processedAt: "desc" }, take: 50 }),
       this.prisma.collectionEvent.findMany({ where: { workspaceId }, orderBy: { collectedAt: "desc" }, take: 50 })
@@ -645,6 +648,64 @@ export class PrismaStore implements AppStore {
     }
   }
 
+  async updateUser(session: Session, workspaceId: string, userId: string, input: UpdateUserInput): Promise<TeamMemberSummary> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const member = await this.prisma.workspaceMember.findFirst({
+      where: { workspaceId, userId },
+      include: { user: { include: { profile: true } } }
+    });
+    if (!member) throw new NotFoundError("User not found.");
+
+    if (session.userId === userId && input.role && input.role !== member.role) {
+      throw new ConflictError("You cannot change your own role.");
+    }
+
+    try {
+      const updated = await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          ...(input.email ? { email: input.email.toLowerCase() } : {}),
+          ...(input.displayName ? { profile: { upsert: { update: { displayName: input.displayName }, create: { displayName: input.displayName } } } } : {}),
+          ...(input.role ? { memberships: { update: { where: { workspaceId_userId: { workspaceId, userId } }, data: { role: input.role } } } } : {})
+        },
+        include: { profile: true, memberships: { where: { workspaceId } } }
+      });
+      await this.audit(session.userId, workspaceId, "member.updated", "user", userId, {
+        email: input.email?.toLowerCase(),
+        displayName: input.displayName,
+        role: input.role
+      });
+      return {
+        id: updated.id,
+        email: updated.email,
+        displayName: updated.profile?.displayName ?? updated.email,
+        role: updated.memberships[0]?.role ?? member.role,
+        status: updated.memberships[0]?.status ?? member.status,
+        active: updated.active
+      };
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new ConflictError("User email already exists.");
+      }
+      throw error;
+    }
+  }
+
+  async deleteUser(session: Session, workspaceId: string, userId: string): Promise<void> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    if (session.userId === userId) throw new ConflictError("You cannot delete your own user.");
+    const member = await this.prisma.workspaceMember.findFirst({ where: { workspaceId, userId } });
+    if (!member) throw new NotFoundError("User not found.");
+    await this.prisma.$transaction([
+      this.prisma.workspaceMember.update({
+        where: { workspaceId_userId: { workspaceId, userId } },
+        data: { status: "DISABLED" }
+      }),
+      this.prisma.user.update({ where: { id: userId }, data: { active: false } })
+    ]);
+    await this.audit(session.userId, workspaceId, "member.deleted", "user", userId, {});
+  }
+
   async createPostOffice(session: Session, workspaceId: string, input: CreatePostOfficeInput): Promise<PostOffice> {
     await this.requireMember(session, workspaceId, "ADMIN");
     const office = await this.prisma.postOffice.create({
@@ -661,6 +722,36 @@ export class PrismaStore implements AppStore {
     });
     await this.audit(session.userId, workspaceId, "post_office.created", "post_office", office.id, { name: office.name });
     return this.toPostOffice(office);
+  }
+
+  async updatePostOffice(session: Session, workspaceId: string, postOfficeId: string, input: UpdatePostOfficeInput): Promise<PostOffice> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const office = await this.prisma.postOffice.findFirst({ where: { id: postOfficeId, workspaceId, active: true } });
+    if (!office) throw new NotFoundError("Post office not found.");
+    const updated = await this.prisma.postOffice.update({
+      where: { id: postOfficeId },
+      data: {
+        name: input.name,
+        address: input.address,
+        phone: input.phone,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        geofenceRadius: input.geofenceRadius
+      }
+    });
+    await this.audit(session.userId, workspaceId, "post_office.updated", "post_office", postOfficeId, { name: updated.name });
+    return this.toPostOffice(updated);
+  }
+
+  async deletePostOffice(session: Session, workspaceId: string, postOfficeId: string): Promise<void> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const office = await this.prisma.postOffice.findFirst({ where: { id: postOfficeId, workspaceId, active: true } });
+    if (!office) throw new NotFoundError("Post office not found.");
+    await this.prisma.$transaction([
+      this.prisma.mailbox.updateMany({ where: { workspaceId, postOfficeId }, data: { active: false, mailWaiting: false } }),
+      this.prisma.postOffice.update({ where: { id: postOfficeId }, data: { active: false } })
+    ]);
+    await this.audit(session.userId, workspaceId, "post_office.deleted", "post_office", postOfficeId, { name: office.name });
   }
 
   async createMailbox(session: Session, workspaceId: string, input: CreateMailboxInput): Promise<Mailbox> {
@@ -687,6 +778,42 @@ export class PrismaStore implements AppStore {
       }
       throw error;
     }
+  }
+
+  async updateMailbox(session: Session, workspaceId: string, mailboxId: string, input: UpdateMailboxInput): Promise<Mailbox> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const mailbox = await this.prisma.mailbox.findFirst({ where: { id: mailboxId, workspaceId, active: true } });
+    if (!mailbox) throw new NotFoundError("PO box not found.");
+    if (input.postOfficeId) {
+      const office = await this.prisma.postOffice.findFirst({ where: { id: input.postOfficeId, workspaceId, active: true } });
+      if (!office) throw new NotFoundError("Post office not found.");
+    }
+    const boxNumber = input.boxNumber?.trim();
+    try {
+      const updated = await this.prisma.mailbox.update({
+        where: { id: mailboxId },
+        data: {
+          postOfficeId: input.postOfficeId,
+          boxNumber,
+          name: boxNumber ? `PO Box ${boxNumber}` : undefined
+        }
+      });
+      await this.audit(session.userId, workspaceId, "mailbox.updated", "mailbox", mailboxId, { boxNumber: updated.boxNumber });
+      return this.toMailbox(updated);
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new ConflictError("PO box number already exists.");
+      }
+      throw error;
+    }
+  }
+
+  async deleteMailbox(session: Session, workspaceId: string, mailboxId: string): Promise<void> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const mailbox = await this.prisma.mailbox.findFirst({ where: { id: mailboxId, workspaceId, active: true } });
+    if (!mailbox) throw new NotFoundError("PO box not found.");
+    await this.prisma.mailbox.update({ where: { id: mailboxId }, data: { active: false, mailWaiting: false } });
+    await this.audit(session.userId, workspaceId, "mailbox.deleted", "mailbox", mailboxId, { boxNumber: mailbox.boxNumber });
   }
 
   async inviteMember(session: Session, workspaceId: string, email: string, role: "ADMIN" | "MEMBER") {

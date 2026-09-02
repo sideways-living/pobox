@@ -186,6 +186,53 @@ describe("shared mailbox state", () => {
     expect(snapshot.postOffices.flatMap((candidate) => candidate.mailboxes).some((candidate) => candidate.id === mailbox.id)).toBe(true);
   });
 
+  it("allows admins to edit and delete managed records", async () => {
+    const daniel = await loginSession("daniel@example.com");
+    const office = await store.createPostOffice(daniel, "ws_company", {
+      name: "Carlton Post Office",
+      address: "123 Lygon Street, Carlton VIC",
+      phone: "+61 3 9000 0000",
+      latitude: -37.8001,
+      longitude: 144.9671,
+      geofenceRadius: 180
+    });
+    const mailbox = await store.createMailbox(daniel, "ws_company", {
+      postOfficeId: office.id,
+      boxNumber: "9001"
+    });
+    const user = await store.createUser(daniel, "ws_company", {
+      email: "ops-delete@example.com",
+      displayName: "Ops Delete",
+      password: "Temporary123!",
+      role: "MEMBER"
+    });
+
+    const updatedOffice = await store.updatePostOffice(daniel, "ws_company", office.id, { name: "Carlton North Post Office" });
+    expect(updatedOffice.name).toBe("Carlton North Post Office");
+
+    const updatedMailbox = await store.updateMailbox(daniel, "ws_company", mailbox.id, { boxNumber: "9002" });
+    expect(updatedMailbox.name).toBe("PO Box 9002");
+
+    const updatedUser = await store.updateUser(daniel, "ws_company", user.id, { displayName: "Ops Updated", role: "ADMIN" });
+    expect(updatedUser.displayName).toBe("Ops Updated");
+    expect(updatedUser.role).toBe("ADMIN");
+
+    await store.deleteMailbox(daniel, "ws_company", mailbox.id);
+    await store.deletePostOffice(daniel, "ws_company", office.id);
+    await store.deleteUser(daniel, "ws_company", user.id);
+
+    const snapshot = await store.dashboard(daniel, "ws_company");
+    expect(snapshot.postOffices.some((candidate) => candidate.id === office.id)).toBe(false);
+    expect(snapshot.postOffices.flatMap((candidate) => candidate.mailboxes).some((candidate) => candidate.id === mailbox.id)).toBe(false);
+    const members = await store.listMembers(daniel, "ws_company");
+    expect(members.find((candidate) => candidate.id === user.id)?.active).toBe(false);
+  });
+
+  it("does not allow admins to delete themselves", async () => {
+    const daniel = await loginSession("daniel@example.com");
+    await expect(store.deleteUser(daniel, "ws_company", daniel.userId)).rejects.toThrow("You cannot delete your own user.");
+  });
+
   it("makes simultaneous collection idempotent", async () => {
     const sarah = await loginSession("sarah@example.com");
     const daniel = await loginSession("daniel@example.com");

@@ -85,6 +85,25 @@ public actor MailboxAPIClient {
         return try decoder.decode(TeamMember.self, from: data)
     }
 
+    public func updateUser(workspaceId: String, userId: String, input: UpdateUserInput) async throws -> TeamMember {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/team/users/\(userId)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(input)
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+        return try decoder.decode(TeamMember.self, from: data)
+    }
+
+    public func deleteUser(workspaceId: String, userId: String) async throws {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/team/users/\(userId)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+    }
+
     public func createPostOffice(workspaceId: String, input: CreatePostOfficeInput) async throws -> PostOffice {
         let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/post-offices")
         var request = URLRequest(url: url)
@@ -94,6 +113,25 @@ public actor MailboxAPIClient {
         let (data, response) = try await session.data(for: request)
         try validate(response, data: data)
         return try decoder.decode(PostOffice.self, from: data)
+    }
+
+    public func updatePostOffice(workspaceId: String, postOfficeId: String, input: UpdatePostOfficeInput) async throws -> PostOffice {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/post-offices/\(postOfficeId)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(input)
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+        return try decoder.decode(PostOffice.self, from: data)
+    }
+
+    public func deletePostOffice(workspaceId: String, postOfficeId: String) async throws {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/post-offices/\(postOfficeId)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
     }
 
     public func searchPostOfficeLocations(workspaceId: String, query: String) async throws -> [PostOfficeLocationResult] {
@@ -113,6 +151,25 @@ public actor MailboxAPIClient {
         let (data, response) = try await session.data(for: request)
         try validate(response, data: data)
         return try decoder.decode(Mailbox.self, from: data)
+    }
+
+    public func updateMailbox(workspaceId: String, mailboxId: String, input: UpdateMailboxInput) async throws -> Mailbox {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/mailboxes/\(mailboxId)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(input)
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+        return try decoder.decode(Mailbox.self, from: data)
+    }
+
+    public func deleteMailbox(workspaceId: String, mailboxId: String) async throws {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/mailboxes/\(mailboxId)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
     }
 
     private func validate(_ response: URLResponse, data: Data) throws {

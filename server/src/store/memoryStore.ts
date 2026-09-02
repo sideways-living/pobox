@@ -40,7 +40,10 @@ import type {
   PasskeyRegistrationOptions,
   ReviewItem,
   SecurityStatus,
-  TeamMemberSummary
+  TeamMemberSummary,
+  UpdateMailboxInput,
+  UpdatePostOfficeInput,
+  UpdateUserInput
 } from "./types.js";
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "./types.js";
 
@@ -388,10 +391,10 @@ export class MemoryStore implements AppStore {
     const workspace = this.workspaces.get(workspaceId);
     if (!user || !workspace) throw new NotFoundError("Workspace not found.");
     const postOffices = [...this.postOffices.values()]
-      .filter((office) => office.workspaceId === workspaceId)
+      .filter((office) => office.workspaceId === workspaceId && office.active)
       .map((office) => ({
         ...office,
-        mailboxes: [...this.mailboxes.values()].filter((box) => box.postOfficeId === office.id)
+        mailboxes: [...this.mailboxes.values()].filter((box) => box.postOfficeId === office.id && box.active)
       }));
     const history = [
       ...[...this.mailEvents.values()].filter((event) => event.workspaceId === workspaceId),
@@ -573,6 +576,55 @@ export class MemoryStore implements AppStore {
     return { id: user.id, email: user.email, displayName: user.displayName, role: input.role, status: "ACTIVE", active: true };
   }
 
+  async updateUser(session: Session, workspaceId: string, userId: string, input: UpdateUserInput): Promise<TeamMemberSummary> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const member = [...this.members.values()].find((candidate) => candidate.workspaceId === workspaceId && candidate.userId === userId);
+    const user = this.users.get(userId);
+    if (!member || !user) throw new NotFoundError("User not found.");
+    if (session.userId === userId && input.role && input.role !== member.role) {
+      throw new ConflictError("You cannot change your own role.");
+    }
+    const email = input.email?.toLowerCase();
+    if (email && [...this.users.values()].some((candidate) => candidate.id !== userId && candidate.email.toLowerCase() === email)) {
+      throw new ConflictError("User email already exists.");
+    }
+    const updatedUser = {
+      ...user,
+      email: email ?? user.email,
+      displayName: input.displayName ?? user.displayName
+    };
+    const updatedMember = {
+      ...member,
+      role: input.role ?? member.role
+    };
+    this.users.set(userId, updatedUser);
+    this.members.set(member.id, updatedMember);
+    this.audit(session.userId, workspaceId, "member.updated", "user", userId, {
+      email,
+      displayName: input.displayName,
+      role: input.role
+    });
+    return {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      displayName: updatedUser.displayName,
+      role: updatedMember.role,
+      status: updatedMember.status,
+      active: updatedUser.active
+    };
+  }
+
+  async deleteUser(session: Session, workspaceId: string, userId: string): Promise<void> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    if (session.userId === userId) throw new ConflictError("You cannot delete your own user.");
+    const member = [...this.members.values()].find((candidate) => candidate.workspaceId === workspaceId && candidate.userId === userId);
+    const user = this.users.get(userId);
+    if (!member || !user) throw new NotFoundError("User not found.");
+    this.users.set(userId, { ...user, active: false });
+    this.members.set(member.id, { ...member, status: "DISABLED" });
+    this.audit(session.userId, workspaceId, "member.deleted", "user", userId, {});
+  }
+
   async createPostOffice(session: Session, workspaceId: string, input: CreatePostOfficeInput): Promise<PostOffice> {
     await this.requireMember(session, workspaceId, "ADMIN");
     const office: PostOffice = {
@@ -589,6 +641,35 @@ export class MemoryStore implements AppStore {
     this.postOffices.set(office.id, office);
     this.audit(session.userId, workspaceId, "post_office.created", "post_office", office.id, { name: office.name });
     return office;
+  }
+
+  async updatePostOffice(session: Session, workspaceId: string, postOfficeId: string, input: UpdatePostOfficeInput): Promise<PostOffice> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const office = this.postOffices.get(postOfficeId);
+    if (!office || office.workspaceId !== workspaceId || !office.active) throw new NotFoundError("Post office not found.");
+    const updated = {
+      ...office,
+      name: input.name ?? office.name,
+      address: input.address ?? office.address,
+      phone: input.phone ?? office.phone,
+      latitude: input.latitude ?? office.latitude,
+      longitude: input.longitude ?? office.longitude,
+      geofenceRadius: input.geofenceRadius ?? office.geofenceRadius
+    };
+    this.postOffices.set(postOfficeId, updated);
+    this.audit(session.userId, workspaceId, "post_office.updated", "post_office", postOfficeId, { name: updated.name });
+    return updated;
+  }
+
+  async deletePostOffice(session: Session, workspaceId: string, postOfficeId: string): Promise<void> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const office = this.postOffices.get(postOfficeId);
+    if (!office || office.workspaceId !== workspaceId || !office.active) throw new NotFoundError("Post office not found.");
+    this.postOffices.set(postOfficeId, { ...office, active: false });
+    for (const mailbox of [...this.mailboxes.values()].filter((box) => box.workspaceId === workspaceId && box.postOfficeId === postOfficeId)) {
+      this.mailboxes.set(mailbox.id, { ...mailbox, active: false, mailWaiting: false });
+    }
+    this.audit(session.userId, workspaceId, "post_office.deleted", "post_office", postOfficeId, { name: office.name });
   }
 
   async createMailbox(session: Session, workspaceId: string, input: CreateMailboxInput): Promise<Mailbox> {
@@ -613,6 +694,38 @@ export class MemoryStore implements AppStore {
     this.mailboxes.set(mailbox.id, mailbox);
     this.audit(session.userId, workspaceId, "mailbox.created", "mailbox", mailbox.id, { boxNumber: mailbox.boxNumber });
     return mailbox;
+  }
+
+  async updateMailbox(session: Session, workspaceId: string, mailboxId: string, input: UpdateMailboxInput): Promise<Mailbox> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const mailbox = this.mailboxes.get(mailboxId);
+    if (!mailbox || mailbox.workspaceId !== workspaceId || !mailbox.active) throw new NotFoundError("PO box not found.");
+    if (input.postOfficeId) {
+      const office = this.postOffices.get(input.postOfficeId);
+      if (!office || office.workspaceId !== workspaceId || !office.active) throw new NotFoundError("Post office not found.");
+    }
+    const boxNumber = input.boxNumber?.trim();
+    if (boxNumber && [...this.mailboxes.values()].some((box) => box.id !== mailboxId && box.workspaceId === workspaceId && box.boxNumber === boxNumber)) {
+      throw new ConflictError("PO box number already exists.");
+    }
+    const updated = {
+      ...mailbox,
+      postOfficeId: input.postOfficeId ?? mailbox.postOfficeId,
+      boxNumber: boxNumber ?? mailbox.boxNumber,
+      name: boxNumber ? `PO Box ${boxNumber}` : mailbox.name,
+      updatedAt: new Date().toISOString()
+    };
+    this.mailboxes.set(mailboxId, updated);
+    this.audit(session.userId, workspaceId, "mailbox.updated", "mailbox", mailboxId, { boxNumber: updated.boxNumber });
+    return updated;
+  }
+
+  async deleteMailbox(session: Session, workspaceId: string, mailboxId: string): Promise<void> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const mailbox = this.mailboxes.get(mailboxId);
+    if (!mailbox || mailbox.workspaceId !== workspaceId || !mailbox.active) throw new NotFoundError("PO box not found.");
+    this.mailboxes.set(mailboxId, { ...mailbox, active: false, mailWaiting: false, updatedAt: new Date().toISOString() });
+    this.audit(session.userId, workspaceId, "mailbox.deleted", "mailbox", mailboxId, { boxNumber: mailbox.boxNumber });
   }
 
   async inviteMember(session: Session, workspaceId: string, email: string, role: "ADMIN" | "MEMBER") {

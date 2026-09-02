@@ -314,7 +314,7 @@ h3 {
 
 .mailbox-table-head, .mailbox-row {
   display: grid;
-  grid-template-columns: minmax(140px, 1.2fr) minmax(110px, 0.7fr) minmax(180px, 1.2fr) minmax(120px, auto);
+  grid-template-columns: minmax(140px, 1.2fr) minmax(110px, 0.7fr) minmax(180px, 1.2fr) minmax(190px, auto);
   align-items: center;
   gap: 12px;
 }
@@ -615,6 +615,45 @@ input, select {
 
 .team-badges {
   justify-items: end;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.icon-button {
+  width: 38px;
+  min-width: 38px;
+  padding: 0;
+}
+
+.icon-button.danger {
+  border-color: #d65d4f;
+  color: #a73524;
+}
+
+.editable-row {
+  align-items: end;
+  background: #f8faf8;
+}
+
+.edit-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.office-edit {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #d8ded8;
+  border-radius: 8px;
 }
 
 .security-list span {

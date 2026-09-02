@@ -1,4 +1,4 @@
-export const appVersion = "0.9.3";
+export const appVersion = "0.10.0";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.10.0-edit-delete-and-icons",
+    version: "0.10.0",
+    releasedAt: "2026-09-02T10:00:00.000Z",
+    title: "Edit, delete, and app icons",
+    summary:
+      "Admins can now edit or delete users, post offices, and PO boxes with a confirmation before anything is removed. pobox.watch also has install icons for the website, iPhone, Mac, Android, and Windows.",
+    audience: "ADMIN"
+  },
   {
     id: "0.9.3-simpler-po-box-setup",
     version: "0.9.3",
