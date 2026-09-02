@@ -68,7 +68,10 @@ export interface TeamMember {
 export interface ReviewItem {
   id: string;
   providerMessageId: string;
+  provider?: string;
+  sender?: string;
   subject?: string;
+  bodyPreview?: string;
   mailboxNumber?: string;
   confidence?: number;
   createdAt: string;

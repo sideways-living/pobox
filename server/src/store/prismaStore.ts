@@ -461,8 +461,24 @@ export class PrismaStore implements AppStore {
     const boxes = await this.prisma.mailbox.findMany({ where: { workspaceId: input.workspaceId } });
     const parsed = parseMailNotification(input, boxes.map(this.toMailbox));
     if (!parsed.mailboxId || parsed.requiresReview) {
+      const existingReview = await this.prisma.auditEvent.findFirst({
+        where: { workspaceId: input.workspaceId, eventType: "mail.needs_review", entityId: input.providerMessageId }
+      });
+      if (existingReview) {
+        const resolvedReview = await this.prisma.auditEvent.findFirst({
+          where: {
+            workspaceId: input.workspaceId,
+            eventType: { in: ["mail.review_resolved", "mail.review_dismissed"] },
+            entityId: input.providerMessageId
+          }
+        });
+        return resolvedReview ? { kind: "duplicate" } : { kind: "needs_review" };
+      }
       await this.audit("system", input.workspaceId, "mail.needs_review", "mail_message", input.providerMessageId, {
+        provider: input.provider,
+        sender: input.sender,
         subject: input.subject,
+        bodyPreview: input.bodyPreview,
         mailboxNumber: parsed.mailboxNumber,
         confidence: parsed.confidence
       });
@@ -572,24 +588,89 @@ export class PrismaStore implements AppStore {
 
   async listReviewItems(session: Session, workspaceId: string): Promise<ReviewItem[]> {
     await this.requireMember(session, workspaceId);
-    const events = await this.prisma.auditEvent.findMany({
-      where: { workspaceId, eventType: "mail.needs_review" },
-      orderBy: { createdAt: "desc" },
-      take: 50
-    });
-    return events.map((event) => {
+    const [events, resolutions] = await Promise.all([
+      this.prisma.auditEvent.findMany({
+        where: { workspaceId, eventType: "mail.needs_review" },
+        orderBy: { createdAt: "desc" },
+        take: 100
+      }),
+      this.prisma.auditEvent.findMany({
+        where: { workspaceId, eventType: { in: ["mail.review_resolved", "mail.review_dismissed"] } },
+        select: { entityId: true }
+      })
+    ]);
+    const resolvedProviderMessages = new Set(resolutions.map((event) => event.entityId));
+    return events.filter((event) => !resolvedProviderMessages.has(event.entityId)).slice(0, 50).map((event) => {
       const metadata = event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
         ? event.metadata as Record<string, unknown>
         : {};
       return {
         id: event.id,
         providerMessageId: event.entityId,
+        provider: typeof metadata.provider === "string" ? metadata.provider : undefined,
+        sender: typeof metadata.sender === "string" ? metadata.sender : undefined,
         subject: typeof metadata.subject === "string" ? metadata.subject : undefined,
+        bodyPreview: typeof metadata.bodyPreview === "string" ? metadata.bodyPreview : undefined,
         mailboxNumber: typeof metadata.mailboxNumber === "string" ? metadata.mailboxNumber : undefined,
         confidence: typeof metadata.confidence === "number" ? metadata.confidence : undefined,
         createdAt: event.createdAt.toISOString()
       };
     });
+  }
+
+  async resolveReviewItem(session: Session, workspaceId: string, reviewItemId: string, mailboxId: string): Promise<IncomingMailResult> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const [review, mailbox] = await Promise.all([
+      this.prisma.auditEvent.findFirst({ where: { id: reviewItemId, workspaceId, eventType: "mail.needs_review" } }),
+      this.prisma.mailbox.findFirst({ where: { id: mailboxId, workspaceId, active: true } })
+    ]);
+    if (!review) throw new NotFoundError("Review item not found.");
+    if (!mailbox) throw new NotFoundError("PO box not found.");
+    const metadata = review.metadata && typeof review.metadata === "object" && !Array.isArray(review.metadata)
+      ? review.metadata as Record<string, unknown>
+      : {};
+    const provider = typeof metadata.provider === "string" ? metadata.provider : "review";
+    const duplicate = await this.prisma.mailEvent.findUnique({
+      where: {
+        workspaceId_provider_providerMessageId: {
+          workspaceId,
+          provider,
+          providerMessageId: review.entityId
+        }
+      }
+    });
+
+    if (!duplicate) {
+      await this.prisma.$transaction([
+        this.prisma.mailEvent.create({
+          data: {
+            workspaceId,
+            mailboxId,
+            provider,
+            providerMessageId: review.entityId,
+            sender: typeof metadata.sender === "string" ? metadata.sender : "review",
+            subject: typeof metadata.subject === "string" ? metadata.subject : "Reviewed mail notification",
+            receivedAt: review.createdAt,
+            parserConfidence: typeof metadata.confidence === "number" ? metadata.confidence : 1,
+            parserRuleId: "manual-review"
+          }
+        }),
+        this.prisma.mailbox.update({
+          where: { id: mailboxId },
+          data: { mailWaiting: true, latestNotificationAt: review.createdAt }
+        })
+      ]);
+    }
+
+    await this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, { reviewItemId, mailboxId });
+    return { kind: duplicate ? "duplicate" : "processed", mailboxId };
+  }
+
+  async dismissReviewItem(session: Session, workspaceId: string, reviewItemId: string): Promise<void> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const review = await this.prisma.auditEvent.findFirst({ where: { id: reviewItemId, workspaceId, eventType: "mail.needs_review" } });
+    if (!review) throw new NotFoundError("Review item not found.");
+    await this.audit(session.userId, workspaceId, "mail.review_dismissed", "mail_message", review.entityId, { reviewItemId });
   }
 
   async searchPostOfficeLocations(session: Session, workspaceId: string, query: string): Promise<LctrPostOfficeLocation[]> {

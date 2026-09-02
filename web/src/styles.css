@@ -954,7 +954,7 @@ input, select {
 
 .review-item {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns: 34px minmax(0, 1fr) auto minmax(260px, 340px);
   gap: 12px;
   align-items: start;
   padding: 12px;
@@ -963,7 +963,7 @@ input, select {
   border-radius: 8px;
 }
 
-.review-item > div:not(.review-icon) {
+.review-content {
   display: grid;
   gap: 3px;
   min-width: 0;
@@ -971,6 +971,23 @@ input, select {
 
 .review-item span, .review-item small {
   color: #65736c;
+}
+
+.review-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.review-actions label {
+  display: grid;
+  gap: 5px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #52635d;
+}
+
+.review-actions button {
+  width: 100%;
 }
 
 .review-icon {

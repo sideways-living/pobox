@@ -40,7 +40,10 @@ export interface TeamMemberSummary {
 export interface ReviewItem {
   id: string;
   providerMessageId: string;
+  provider?: string;
+  sender?: string;
   subject?: string;
+  bodyPreview?: string;
   mailboxNumber?: string;
   confidence?: number;
   createdAt: string;
@@ -136,6 +139,8 @@ export interface AppStore {
   collectMailbox(session: Session, workspaceId: string, mailboxId: string, source: CollectionSource): Promise<CollectionEvent>;
   listMembers(session: Session, workspaceId: string): Promise<TeamMemberSummary[]>;
   listReviewItems(session: Session, workspaceId: string): Promise<ReviewItem[]>;
+  resolveReviewItem(session: Session, workspaceId: string, reviewItemId: string, mailboxId: string): Promise<IncomingMailResult>;
+  dismissReviewItem(session: Session, workspaceId: string, reviewItemId: string): Promise<void>;
   searchPostOfficeLocations(session: Session, workspaceId: string, query: string): Promise<LctrPostOfficeLocation[]>;
   postOfficeDirectoryStatus(session: Session, workspaceId: string): Promise<PostOfficeDirectoryStatus>;
   syncPostOfficeDirectory(session: Session, workspaceId: string): Promise<PostOfficeDirectoryStatus>;

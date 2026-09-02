@@ -15,6 +15,7 @@ import {
   deleteMailbox,
   deletePostOffice,
   deleteUser,
+  dismissReviewItem,
   loadAppChanges,
   loadDashboard,
   loadMembers,
@@ -25,6 +26,7 @@ import {
   logout,
   registerPasskey,
   realtimeUrl,
+  resolveReviewItem,
   searchPostOfficeLocations,
   simulateMail,
   syncPostOfficeDirectory,
@@ -243,7 +245,7 @@ function SectionView({
   if (section === "Settings") return <SettingsSection snapshot={snapshot} refresh={refresh} setError={setError} />;
   if (section === "Map") return <MapSection snapshot={snapshot} />;
   if (section === "History") return <HistorySection snapshot={snapshot} />;
-  if (section === "Needs Review") return <NeedsReviewSection reviewItems={reviewItems} mutate={mutate} refresh={refresh} />;
+  if (section === "Needs Review") return <NeedsReviewSection snapshot={snapshot} reviewItems={reviewItems} mutate={mutate} refresh={refresh} />;
   if (section === "Mailboxes") return <MailboxSection snapshot={snapshot} busyId={busyId} mutate={mutate} setError={setError} refresh={refresh} />;
   return <OverviewSection snapshot={snapshot} busyId={busyId} mutate={mutate} />;
 }
@@ -1037,7 +1039,9 @@ function HistorySection({ snapshot }: { snapshot: DashboardSnapshot }) {
   );
 }
 
-function NeedsReviewSection({ reviewItems, mutate, refresh }: { reviewItems: ReviewItem[]; mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>; refresh: () => Promise<void> }) {
+function NeedsReviewSection({ snapshot, reviewItems, mutate, refresh }: { snapshot: DashboardSnapshot; reviewItems: ReviewItem[]; mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>; refresh: () => Promise<void> }) {
+  const mailboxes = snapshot.postOffices.flatMap((office) => office.mailboxes.map((box) => ({ ...box, officeName: office.name })));
+
   async function simulateUnclearMail() {
     await mutate(async () => {
       await simulateMail("unknown-box");
@@ -1052,15 +1056,7 @@ function NeedsReviewSection({ reviewItems, mutate, refresh }: { reviewItems: Rev
           {reviewItems.length > 0 ? (
             <div className="review-list">
               {reviewItems.map((item) => (
-                <article className="review-item" key={item.id}>
-                  <div className="review-icon"><AlertTriangle size={18} /></div>
-                  <div>
-                    <strong>{item.subject ?? "Unmatched mail notification"}</strong>
-                    <span>{item.mailboxNumber ? `Possible PO box ${item.mailboxNumber}` : "No PO box number could be matched."}</span>
-                    <small>{item.providerMessageId} - {new Date(item.createdAt).toLocaleString()}</small>
-                  </div>
-                  <StatusPill tone="warning">{confidenceLabel(item.confidence)}</StatusPill>
-                </article>
+                <ReviewItemRow key={item.id} item={item} mailboxes={mailboxes} mutate={mutate} refresh={refresh} />
               ))}
             </div>
           ) : (
@@ -1082,6 +1078,69 @@ function NeedsReviewSection({ reviewItems, mutate, refresh }: { reviewItems: Rev
         </Panel>
       </aside>
     </div>
+  );
+}
+
+function ReviewItemRow({
+  item,
+  mailboxes,
+  mutate,
+  refresh
+}: {
+  item: ReviewItem;
+  mailboxes: Array<Mailbox & { officeName: string }>;
+  mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>;
+  refresh: () => Promise<void>;
+}) {
+  const defaultMailbox = mailboxes.find((box) => item.mailboxNumber && normalizeBoxNumber(box.boxNumber) === normalizeBoxNumber(item.mailboxNumber)) ?? mailboxes[0];
+  const [selectedMailboxId, setSelectedMailboxId] = useState(defaultMailbox?.id ?? "");
+  const selectedMailbox = mailboxes.find((box) => box.id === selectedMailboxId);
+
+  useEffect(() => {
+    if (!mailboxes.some((box) => box.id === selectedMailboxId)) {
+      setSelectedMailboxId(defaultMailbox?.id ?? "");
+    }
+  }, [defaultMailbox?.id, mailboxes.map((box) => box.id).join(","), selectedMailboxId]);
+
+  async function resolve() {
+    if (!selectedMailboxId) return;
+    await mutate(async () => {
+      await resolveReviewItem(item.id, selectedMailboxId);
+      await refresh();
+    }, selectedMailboxId);
+  }
+
+  async function dismiss() {
+    if (!window.confirm("Dismiss this review item without marking a box as having mail?")) return;
+    await mutate(async () => {
+      await dismissReviewItem(item.id);
+      await refresh();
+    });
+  }
+
+  return (
+    <article className="review-item actionable">
+      <div className="review-icon"><AlertTriangle size={18} /></div>
+      <div className="review-content">
+        <strong>{item.subject ?? "Unmatched mail notification"}</strong>
+        <span>{item.mailboxNumber ? `Possible box ${item.mailboxNumber}` : "No box number could be matched."}</span>
+        {item.sender && <span>From {item.sender}</span>}
+        {item.bodyPreview && <small>{item.bodyPreview}</small>}
+        <small>{item.provider ?? "mail"} - {item.providerMessageId} - {new Date(item.createdAt).toLocaleString()}</small>
+      </div>
+      <StatusPill tone="warning">{confidenceLabel(item.confidence)}</StatusPill>
+      <div className="review-actions">
+        {mailboxes.length > 0 ? (
+          <>
+            <label>Assign to<select value={selectedMailboxId} onChange={(event) => setSelectedMailboxId(event.target.value)}>{mailboxes.map((box) => <option key={box.id} value={box.id}>{box.officeName} - Box {box.boxNumber}</option>)}</select></label>
+            <button className="primary" disabled={!selectedMailbox} onClick={resolve}><Check size={16} />Mark Box Waiting</button>
+          </>
+        ) : (
+          <p className="small">Add a post office and box before resolving review items.</p>
+        )}
+        <button className="secondary" onClick={dismiss}><X size={16} />Dismiss</button>
+      </div>
+    </article>
   );
 }
 
@@ -1557,6 +1616,10 @@ function totalMailboxes(snapshot: DashboardSnapshot) {
 
 function mailboxNameMap(snapshot: DashboardSnapshot) {
   return new Map(snapshot.postOffices.flatMap((office) => office.mailboxes.map((box) => [box.id, box.name] as const)));
+}
+
+function normalizeBoxNumber(value: string) {
+  return value.replace(/[^a-z0-9]/gi, "").toUpperCase();
 }
 
 function isMailEvent(event: MailHistoryEvent | CollectionHistoryEvent): event is MailHistoryEvent {

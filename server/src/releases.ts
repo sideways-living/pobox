@@ -1,4 +1,4 @@
-export const appVersion = "0.11.0";
+export const appVersion = "0.11.1";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.11.1-actionable-review-queue",
+    version: "0.11.1",
+    releasedAt: "2026-09-03T00:30:00.000Z",
+    title: "Actionable review queue",
+    summary:
+      "Review items can now be opened in the web app, assigned to a saved box, marked as waiting, or dismissed when they are not useful.",
+    audience: "ADMIN"
+  },
   {
     id: "0.11.0-gmail-mail-polling",
     version: "0.11.0",

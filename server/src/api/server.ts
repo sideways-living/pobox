@@ -63,6 +63,7 @@ const updateMailboxSchema = z.object({
   postOfficeId: z.string().min(1).optional(),
   boxNumber: z.string().min(1).max(40).optional()
 }).refine((input) => Object.keys(input).length > 0, { message: "At least one field is required." });
+const resolveReviewSchema = z.object({ mailboxId: z.string().min(1) });
 const sessionCookieName = "pobox_watch_session";
 const legacySessionCookieName = "mailbox_session";
 
@@ -244,6 +245,23 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const { workspaceId } = request.params as { workspaceId: string };
     const session = await securedSession(request, workspaceId);
     return store.listReviewItems(session, workspaceId);
+  });
+
+  app.post("/api/v1/workspaces/:workspaceId/review-items/:reviewItemId/resolve", async (request) => {
+    const { workspaceId, reviewItemId } = request.params as { workspaceId: string; reviewItemId: string };
+    const body = resolveReviewSchema.parse(request.body);
+    const session = await securedSession(request, workspaceId);
+    const result = await store.resolveReviewItem(session, workspaceId, reviewItemId, body.mailboxId);
+    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    return result;
+  });
+
+  app.post("/api/v1/workspaces/:workspaceId/review-items/:reviewItemId/dismiss", async (request, reply) => {
+    const { workspaceId, reviewItemId } = request.params as { workspaceId: string; reviewItemId: string };
+    const session = await securedSession(request, workspaceId);
+    await store.dismissReviewItem(session, workspaceId, reviewItemId);
+    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    return reply.code(204).send();
   });
 
   app.get("/api/v1/workspaces/:workspaceId/post-office-locations/search", async (request) => {

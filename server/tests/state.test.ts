@@ -88,6 +88,51 @@ describe("shared mailbox state", () => {
     });
   });
 
+  it("lets admins resolve and dismiss review items", async () => {
+    const daniel = await loginSession("daniel@example.com");
+    await store.processIncomingMail({
+      workspaceId: "ws_company",
+      provider: "mock",
+      providerMessageId: "message-review-resolve",
+      sender: "mailroom@example.com",
+      subject: "Mail waiting somewhere",
+      bodyPreview: "Please check the unknown box."
+    });
+
+    const [reviewItem] = await store.listReviewItems(daniel, "ws_company");
+    expect(reviewItem).toMatchObject({
+      providerMessageId: "message-review-resolve",
+      sender: "mailroom@example.com",
+      bodyPreview: "Please check the unknown box."
+    });
+
+    const resolved = await store.resolveReviewItem(daniel, "ws_company", reviewItem.id, "box_1234");
+    expect(resolved).toEqual({ kind: "processed", mailboxId: "box_1234" });
+    await expect(store.outstandingMailboxCount("ws_company")).resolves.toBe(1);
+    await expect(store.listReviewItems(daniel, "ws_company")).resolves.toHaveLength(0);
+    await expect(
+      store.processIncomingMail({
+        workspaceId: "ws_company",
+        provider: "mock",
+        providerMessageId: "message-review-resolve",
+        sender: "mailroom@example.com",
+        subject: "Mail waiting somewhere"
+      })
+    ).resolves.toEqual({ kind: "duplicate", mailboxId: "box_1234" });
+
+    await store.processIncomingMail({
+      workspaceId: "ws_company",
+      provider: "mock",
+      providerMessageId: "message-review-dismiss",
+      sender: "mailroom@example.com",
+      subject: "No useful box number"
+    });
+    const dismissItems = await store.listReviewItems(daniel, "ws_company");
+    expect(dismissItems).toHaveLength(1);
+    await store.dismissReviewItem(daniel, "ws_company", dismissItems[0].id);
+    await expect(store.listReviewItems(daniel, "ws_company")).resolves.toHaveLength(0);
+  });
+
   it("returns the previous login time on later logins", async () => {
     const first = await loginSession("john@example.com");
     expect(first.previousLoginAt).toBeUndefined();

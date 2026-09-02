@@ -427,8 +427,22 @@ export class MemoryStore implements AppStore {
     const workspaceBoxes = [...this.mailboxes.values()].filter((box) => box.workspaceId === input.workspaceId);
     const parsed = parseMailNotification(input, workspaceBoxes);
     if (!parsed.mailboxId || parsed.requiresReview) {
+      const existingReview = [...this.auditEvents.values()].find(
+        (event) => event.workspaceId === input.workspaceId && event.eventType === "mail.needs_review" && event.entityId === input.providerMessageId
+      );
+      if (existingReview) {
+        const resolvedReview = [...this.auditEvents.values()].find(
+          (event) => event.workspaceId === input.workspaceId
+            && (event.eventType === "mail.review_resolved" || event.eventType === "mail.review_dismissed")
+            && event.entityId === input.providerMessageId
+        );
+        return resolvedReview ? { kind: "duplicate" } : { kind: "needs_review" };
+      }
       this.audit("system", input.workspaceId, "mail.needs_review", "mail_message", input.providerMessageId, {
+        provider: input.provider,
+        sender: input.sender,
         subject: input.subject,
+        bodyPreview: input.bodyPreview,
         mailboxNumber: parsed.mailboxNumber,
         confidence: parsed.confidence
       });
@@ -521,18 +535,71 @@ export class MemoryStore implements AppStore {
 
   async listReviewItems(session: Session, workspaceId: string): Promise<ReviewItem[]> {
     await this.requireMember(session, workspaceId);
+    const resolvedProviderMessages = new Set(
+      [...this.auditEvents.values()]
+        .filter((event) => event.workspaceId === workspaceId && (event.eventType === "mail.review_resolved" || event.eventType === "mail.review_dismissed"))
+        .map((event) => event.entityId)
+    );
     return [...this.auditEvents.values()]
-      .filter((event) => event.workspaceId === workspaceId && event.eventType === "mail.needs_review")
+      .filter((event) => event.workspaceId === workspaceId && event.eventType === "mail.needs_review" && !resolvedProviderMessages.has(event.entityId))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, 50)
       .map((event) => ({
         id: event.id,
         providerMessageId: event.entityId,
+        provider: typeof event.metadata.provider === "string" ? event.metadata.provider : undefined,
+        sender: typeof event.metadata.sender === "string" ? event.metadata.sender : undefined,
         subject: typeof event.metadata.subject === "string" ? event.metadata.subject : undefined,
+        bodyPreview: typeof event.metadata.bodyPreview === "string" ? event.metadata.bodyPreview : undefined,
         mailboxNumber: typeof event.metadata.mailboxNumber === "string" ? event.metadata.mailboxNumber : undefined,
         confidence: typeof event.metadata.confidence === "number" ? event.metadata.confidence : undefined,
         createdAt: event.createdAt
       }));
+  }
+
+  async resolveReviewItem(session: Session, workspaceId: string, reviewItemId: string, mailboxId: string): Promise<IncomingMailResult> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const review = this.auditEvents.get(reviewItemId);
+    if (!review || review.workspaceId !== workspaceId || review.eventType !== "mail.needs_review") throw new NotFoundError("Review item not found.");
+    const mailbox = this.mailboxes.get(mailboxId);
+    if (!mailbox || mailbox.workspaceId !== workspaceId || !mailbox.active) throw new NotFoundError("PO box not found.");
+
+    const duplicate = [...this.mailEvents.values()].find(
+      (event) => event.workspaceId === workspaceId && event.provider === (review.metadata.provider ?? "review") && event.providerMessageId === review.entityId
+    );
+    if (!duplicate) {
+      const now = new Date().toISOString();
+      const mailEvent: MailEvent = {
+        id: nanoid(),
+        workspaceId,
+        mailboxId,
+        provider: typeof review.metadata.provider === "string" ? review.metadata.provider : "review",
+        providerMessageId: review.entityId,
+        sender: typeof review.metadata.sender === "string" ? review.metadata.sender : "review",
+        subject: typeof review.metadata.subject === "string" ? review.metadata.subject : "Reviewed mail notification",
+        receivedAt: review.createdAt,
+        parserConfidence: typeof review.metadata.confidence === "number" ? review.metadata.confidence : 1,
+        parserRuleId: "manual-review",
+        processedAt: now
+      };
+      this.mailEvents.set(mailEvent.id, mailEvent);
+      this.mailboxes.set(mailbox.id, {
+        ...mailbox,
+        mailWaiting: true,
+        latestNotificationAt: review.createdAt,
+        updatedAt: now
+      });
+    }
+
+    this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, { reviewItemId, mailboxId });
+    return { kind: duplicate ? "duplicate" : "processed", mailboxId };
+  }
+
+  async dismissReviewItem(session: Session, workspaceId: string, reviewItemId: string): Promise<void> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const review = this.auditEvents.get(reviewItemId);
+    if (!review || review.workspaceId !== workspaceId || review.eventType !== "mail.needs_review") throw new NotFoundError("Review item not found.");
+    this.audit(session.userId, workspaceId, "mail.review_dismissed", "mail_message", review.entityId, { reviewItemId });
   }
 
   async searchPostOfficeLocations(session: Session, workspaceId: string, query: string): Promise<LctrPostOfficeLocation[]> {
