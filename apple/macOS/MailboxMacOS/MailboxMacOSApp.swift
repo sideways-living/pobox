@@ -429,7 +429,7 @@ struct MacOverviewDashboardView: View {
     let reviewItems: [ReviewItem]
 
     private var waitingMailboxes: [Mailbox] {
-        snapshot?.postOffices.flatMap(\.mailboxes).filter(\.mailWaiting) ?? []
+        snapshot?.postOffices.flatMap(\.mailboxes).filter(hasWaitingItem) ?? []
     }
 
     var body: some View {
@@ -455,7 +455,7 @@ struct MacOverviewDashboardView: View {
                 }
             }
 
-            if let nextOffice = snapshot?.postOffices.first(where: { $0.mailboxes.contains(where: \.mailWaiting) }) {
+            if let nextOffice = snapshot?.postOffices.first(where: { $0.mailboxes.contains(where: hasWaitingItem) }) {
                 MacPanel(title: "Next Location", aside: "Apple Maps") {
                     HStack(spacing: 12) {
                         Image(systemName: "map.fill")
@@ -533,17 +533,17 @@ struct MacMailboxManageRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                Image(systemName: mailbox.mailWaiting ? "tray.full.fill" : "checkmark.circle.fill")
-                    .foregroundStyle(mailbox.mailWaiting ? .orange : .green)
+                Image(systemName: hasWaitingItem(mailbox) ? "tray.full.fill" : "checkmark.circle.fill")
+                    .foregroundStyle(hasWaitingItem(mailbox) ? .orange : .green)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(mailbox.name)
                         .font(.headline)
-                    Text(mailbox.mailWaiting ? "Mail waiting in PO Box \(mailbox.boxNumber)" : "PO Box \(mailbox.boxNumber) is clear")
+                    Text(mailboxStatusLine(mailbox))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                if mailbox.mailWaiting {
+                if hasWaitingItem(mailbox) {
                     Button {
                         Task { await collect(mailbox) }
                     } label: {
@@ -691,9 +691,10 @@ struct MacNeedsReviewView: View {
     }
 
     private func reviewDetail(_ item: ReviewItem) -> String {
-        let box = item.mailboxNumber.map { "PO Box \($0)" } ?? "No PO box match"
+        let type = item.notificationType == "PARCEL" ? "Parcel" : "Mail"
+        let box = item.mailboxNumber.map { "PO Box \($0)" } ?? item.postOfficeName.map { "Collect from \($0)" } ?? "No PO box match"
         let confidence = item.confidence.map { "confidence \(Int($0 * 100))%" } ?? "confidence unknown"
-        return "\(box) - \(confidence) - \(item.createdAt)"
+        return "\(type) - \(box) - \(confidence) - \(item.receivedAt ?? item.createdAt)"
     }
 }
 
@@ -1251,6 +1252,27 @@ struct MacEmptyStateView: View {
 
 private func openAppleMaps(_ office: PostOffice) {
     NSWorkspace.shared.open(appleMapsURL(for: office))
+}
+
+private func hasWaitingItem(_ mailbox: Mailbox) -> Bool {
+    mailbox.mailWaiting || mailbox.parcelWaiting
+}
+
+private func mailboxStatus(_ mailbox: Mailbox) -> String {
+    if mailbox.mailWaiting && mailbox.parcelWaiting {
+        return "Mail and parcel waiting"
+    }
+    if mailbox.parcelWaiting {
+        return "Parcel waiting"
+    }
+    if mailbox.mailWaiting {
+        return "Mail waiting"
+    }
+    return "Clear"
+}
+
+private func mailboxStatusLine(_ mailbox: Mailbox) -> String {
+    hasWaitingItem(mailbox) ? "\(mailboxStatus(mailbox)) in PO Box \(mailbox.boxNumber)" : "PO Box \(mailbox.boxNumber) is clear"
 }
 
 private func appleMapsURL(for office: PostOffice) -> URL {

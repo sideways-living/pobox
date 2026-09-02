@@ -210,7 +210,9 @@ model Mailbox {
   boxNumber            String
   active               Boolean           @default(true)
   mailWaiting          Boolean           @default(false)
+  parcelWaiting        Boolean           @default(false)
   latestNotificationAt DateTime?
+  latestParcelNotificationAt DateTime?
   lastCollectedAt      DateTime?
   lastCollectedBy      String?
   createdAt            DateTime          @default(now())
@@ -232,6 +234,7 @@ model MailEvent {
   providerMessageId String
   sender            String
   subject           String
+  notificationType  String    @default("MAIL")
   receivedAt        DateTime
   parserConfidence  Float
   parserRuleId      String?

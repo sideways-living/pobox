@@ -1,4 +1,4 @@
-export const appVersion = "0.11.2";
+export const appVersion = "0.11.3";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.11.3-parcel-pickup-notifications",
+    version: "0.11.3",
+    releasedAt: "2026-09-03T01:15:00.000Z",
+    title: "Parcel pickup notifications",
+    summary:
+      "pobox.watch can now recognise parcel pickup emails with the subject 'Your PO Box item is ready to collect', match the Collect from post office, and show a separate parcel waiting flag.",
+    audience: "ALL"
+  },
   {
     id: "0.11.2-mail2day-review-timestamps",
     version: "0.11.2",

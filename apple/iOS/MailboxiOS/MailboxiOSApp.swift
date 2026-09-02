@@ -386,7 +386,7 @@ struct iPhoneOverviewList: View {
     @ObservedObject var model: iPhoneMailboxViewModel
 
     private var waitingMailboxes: [Mailbox] {
-        model.snapshot?.postOffices.flatMap(\.mailboxes).filter(\.mailWaiting) ?? []
+        model.snapshot?.postOffices.flatMap(\.mailboxes).filter(hasWaitingItem) ?? []
     }
 
     var body: some View {
@@ -488,18 +488,18 @@ struct iPhoneMailboxRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                Image(systemName: mailbox.mailWaiting ? "tray.full.fill" : "checkmark.circle.fill")
-                    .foregroundStyle(mailbox.mailWaiting ? .orange : .green)
+                Image(systemName: hasWaitingItem(mailbox) ? "tray.full.fill" : "checkmark.circle.fill")
+                    .foregroundStyle(hasWaitingItem(mailbox) ? .orange : .green)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(mailbox.name)
                         .font(.headline)
-                    Text(mailbox.mailWaiting ? "Mail waiting in PO Box \(mailbox.boxNumber)" : "PO Box \(mailbox.boxNumber) is clear")
+                    Text(mailboxStatusLine(mailbox))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                if mailbox.mailWaiting {
+                if hasWaitingItem(mailbox) {
                     Button {
                         Task { await collect() }
                     } label: {
@@ -688,9 +688,10 @@ struct iPhoneReviewList: View {
     }
 
     private func reviewDetail(_ item: ReviewItem) -> String {
-        let box = item.mailboxNumber.map { "PO Box \($0)" } ?? "No PO box match"
+        let type = item.notificationType == "PARCEL" ? "Parcel" : "Mail"
+        let box = item.mailboxNumber.map { "PO Box \($0)" } ?? item.postOfficeName.map { "Collect from \($0)" } ?? "No PO box match"
         let confidence = item.confidence.map { "confidence \(Int($0 * 100))%" } ?? "confidence unknown"
-        return "\(box) - \(confidence) - \(item.createdAt)"
+        return "\(type) - \(box) - \(confidence) - \(item.receivedAt ?? item.createdAt)"
     }
 }
 
@@ -1030,6 +1031,27 @@ struct iPhoneDetailRow: View {
                 .foregroundStyle(.secondary)
         }
     }
+}
+
+private func hasWaitingItem(_ mailbox: Mailbox) -> Bool {
+    mailbox.mailWaiting || mailbox.parcelWaiting
+}
+
+private func mailboxStatus(_ mailbox: Mailbox) -> String {
+    if mailbox.mailWaiting && mailbox.parcelWaiting {
+        return "Mail and parcel waiting"
+    }
+    if mailbox.parcelWaiting {
+        return "Parcel waiting"
+    }
+    if mailbox.mailWaiting {
+        return "Mail waiting"
+    }
+    return "Clear"
+}
+
+private func mailboxStatusLine(_ mailbox: Mailbox) -> String {
+    hasWaitingItem(mailbox) ? "\(mailboxStatus(mailbox)) in PO Box \(mailbox.boxNumber)" : "PO Box \(mailbox.boxNumber) is clear"
 }
 
 private func appleMapsURL(for office: PostOffice) -> URL {

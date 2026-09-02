@@ -26,6 +26,7 @@ export interface IncomingProviderMessage {
 export interface IncomingMailResult {
   kind: "processed" | "duplicate" | "needs_review";
   mailboxId?: string;
+  notificationType?: "MAIL" | "PARCEL";
 }
 
 export interface TeamMemberSummary {
@@ -45,6 +46,8 @@ export interface ReviewItem {
   subject?: string;
   bodyPreview?: string;
   mailboxNumber?: string;
+  postOfficeName?: string;
+  notificationType?: "MAIL" | "PARCEL";
   confidence?: number;
   receivedAt?: string;
   createdAt: string;

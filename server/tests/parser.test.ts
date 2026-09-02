@@ -10,8 +10,20 @@ const mailbox = {
   boxNumber: "1234",
   active: true,
   mailWaiting: false,
+  parcelWaiting: false,
   updatedAt: new Date().toISOString()
 } satisfies Mailbox;
+
+const postOffice = {
+  id: "po",
+  workspaceId: "ws",
+  name: "SOUTH MELBOURNE",
+  address: "South Melbourne VIC",
+  latitude: -37.832,
+  longitude: 144.957,
+  geofenceRadius: 200,
+  active: true
+};
 
 describe("mail parser", () => {
   it.each([
@@ -32,5 +44,40 @@ describe("mail parser", () => {
     const parsed = parseMailNotification({ sender: "mailroom@example.com", subject: "Mail waiting in PO Box AB142" }, [mailbox]);
     expect(parsed.requiresReview).toBe(true);
     expect(parsed.mailboxNumber).toBe("AB142");
+  });
+
+  it("matches parcel pickup notices by collect-from post office", () => {
+    const parsed = parseMailNotification(
+      {
+        sender: "mailroom@example.com",
+        subject: "Your PO Box item is ready to collect",
+        bodyPreview: "| Collect from: | **SOUTH MELBOURNE ** |"
+      },
+      [mailbox],
+      [postOffice]
+    );
+    expect(parsed).toMatchObject({
+      requiresReview: false,
+      mailboxId: "box_1234",
+      notificationType: "PARCEL",
+      postOfficeName: "SOUTH MELBOURNE"
+    });
+  });
+
+  it("requires review when a parcel pickup location has no saved box", () => {
+    const parsed = parseMailNotification(
+      {
+        sender: "mailroom@example.com",
+        subject: "Your PO Box item is ready to collect",
+        bodyPreview: "| Collect from: | **SOUTH MELBOURNE ** |"
+      },
+      [],
+      [postOffice]
+    );
+    expect(parsed).toMatchObject({
+      requiresReview: true,
+      notificationType: "PARCEL",
+      postOfficeName: "SOUTH MELBOURNE"
+    });
   });
 });

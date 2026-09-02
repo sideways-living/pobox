@@ -145,6 +145,7 @@ export class MemoryStore implements AppStore {
         boxNumber,
         active: true,
         mailWaiting: false,
+        parcelWaiting: false,
         updatedAt: new Date().toISOString()
       });
     }
@@ -414,7 +415,7 @@ export class MemoryStore implements AppStore {
   }
 
   async outstandingMailboxCount(workspaceId: string): Promise<number> {
-    return [...this.mailboxes.values()].filter((box) => box.workspaceId === workspaceId && box.active && box.mailWaiting).length;
+    return [...this.mailboxes.values()].filter((box) => box.workspaceId === workspaceId && box.active && (box.mailWaiting || box.parcelWaiting)).length;
   }
 
   async processIncomingMail(input: IncomingProviderMessage): Promise<IncomingMailResult> {
@@ -422,10 +423,11 @@ export class MemoryStore implements AppStore {
     const duplicate = [...this.mailEvents.values()].find(
       (event) => `${event.provider}:${event.providerMessageId}` === duplicateKey && event.workspaceId === input.workspaceId
     );
-    if (duplicate) return { kind: "duplicate", mailboxId: duplicate.mailboxId };
+    if (duplicate) return { kind: "duplicate", mailboxId: duplicate.mailboxId, notificationType: duplicate.notificationType };
 
     const workspaceBoxes = [...this.mailboxes.values()].filter((box) => box.workspaceId === input.workspaceId);
-    const parsed = parseMailNotification(input, workspaceBoxes);
+    const workspacePostOffices = [...this.postOffices.values()].filter((office) => office.workspaceId === input.workspaceId);
+    const parsed = parseMailNotification(input, workspaceBoxes, workspacePostOffices);
     if (!parsed.mailboxId || parsed.requiresReview) {
       const existingReview = [...this.auditEvents.values()].find(
         (event) => event.workspaceId === input.workspaceId && event.eventType === "mail.needs_review" && event.entityId === input.providerMessageId
@@ -436,7 +438,7 @@ export class MemoryStore implements AppStore {
             && (event.eventType === "mail.review_resolved" || event.eventType === "mail.review_dismissed")
             && event.entityId === input.providerMessageId
         );
-        return resolvedReview ? { kind: "duplicate" } : { kind: "needs_review" };
+        return resolvedReview ? { kind: "duplicate", notificationType: parsed.notificationType } : { kind: "needs_review", notificationType: parsed.notificationType };
       }
       this.audit("system", input.workspaceId, "mail.needs_review", "mail_message", input.providerMessageId, {
         provider: input.provider,
@@ -445,9 +447,11 @@ export class MemoryStore implements AppStore {
         bodyPreview: input.bodyPreview,
         receivedAt: input.receivedAt,
         mailboxNumber: parsed.mailboxNumber,
+        postOfficeName: parsed.postOfficeName,
+        notificationType: parsed.notificationType,
         confidence: parsed.confidence
       });
-      return { kind: "needs_review" };
+      return { kind: "needs_review", notificationType: parsed.notificationType };
     }
 
     const now = new Date().toISOString();
@@ -460,6 +464,7 @@ export class MemoryStore implements AppStore {
       providerMessageId: input.providerMessageId,
       sender: input.sender,
       subject: input.subject,
+      notificationType: parsed.notificationType,
       receivedAt,
       parserConfidence: parsed.confidence,
       parserRuleId: parsed.ruleId,
@@ -470,22 +475,25 @@ export class MemoryStore implements AppStore {
     if (!mailbox) throw new NotFoundError("PO box not found.");
     this.mailboxes.set(mailbox.id, {
       ...mailbox,
-      mailWaiting: true,
-      latestNotificationAt: receivedAt,
+      mailWaiting: parsed.notificationType === "MAIL" ? true : mailbox.mailWaiting,
+      parcelWaiting: parsed.notificationType === "PARCEL" ? true : mailbox.parcelWaiting,
+      latestNotificationAt: parsed.notificationType === "MAIL" ? receivedAt : mailbox.latestNotificationAt,
+      latestParcelNotificationAt: parsed.notificationType === "PARCEL" ? receivedAt : mailbox.latestParcelNotificationAt,
       updatedAt: now
     });
-    this.audit("system", input.workspaceId, "mail.detected", "mailbox", mailbox.id, {
+    this.audit("system", input.workspaceId, parsed.notificationType === "PARCEL" ? "parcel.detected" : "mail.detected", "mailbox", mailbox.id, {
       provider: input.provider,
-      providerMessageId: input.providerMessageId
+      providerMessageId: input.providerMessageId,
+      notificationType: parsed.notificationType
     });
-    return { kind: "processed", mailboxId: mailbox.id };
+    return { kind: "processed", mailboxId: mailbox.id, notificationType: parsed.notificationType };
   }
 
   async collectMailbox(session: Session, workspaceId: string, mailboxId: string, source: CollectionSource): Promise<CollectionEvent> {
     await this.requireMember(session, workspaceId);
     const mailbox = this.mailboxes.get(mailboxId);
     if (!mailbox || mailbox.workspaceId !== workspaceId) throw new NotFoundError("PO box not found.");
-    if (!mailbox.mailWaiting) {
+    if (!mailbox.mailWaiting && !mailbox.parcelWaiting) {
       const existing = [...this.collectionEvents.values()]
         .filter((event) => event.mailboxId === mailboxId)
         .sort((a, b) => b.collectedAt.localeCompare(a.collectedAt))[0];
@@ -507,6 +515,7 @@ export class MemoryStore implements AppStore {
     this.mailboxes.set(mailbox.id, {
       ...mailbox,
       mailWaiting: false,
+      parcelWaiting: false,
       lastCollectedAt: now,
       lastCollectedBy: session.userId,
       updatedAt: now
@@ -553,6 +562,8 @@ export class MemoryStore implements AppStore {
         subject: typeof event.metadata.subject === "string" ? event.metadata.subject : undefined,
         bodyPreview: typeof event.metadata.bodyPreview === "string" ? event.metadata.bodyPreview : undefined,
         mailboxNumber: typeof event.metadata.mailboxNumber === "string" ? event.metadata.mailboxNumber : undefined,
+        postOfficeName: typeof event.metadata.postOfficeName === "string" ? event.metadata.postOfficeName : undefined,
+        notificationType: event.metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL",
         confidence: typeof event.metadata.confidence === "number" ? event.metadata.confidence : undefined,
         receivedAt: typeof event.metadata.receivedAt === "string" ? event.metadata.receivedAt : undefined,
         createdAt: event.createdAt
@@ -579,6 +590,7 @@ export class MemoryStore implements AppStore {
         providerMessageId: review.entityId,
         sender: typeof review.metadata.sender === "string" ? review.metadata.sender : "review",
         subject: typeof review.metadata.subject === "string" ? review.metadata.subject : "Reviewed mail notification",
+        notificationType: review.metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL",
         receivedAt: typeof review.metadata.receivedAt === "string" ? review.metadata.receivedAt : review.createdAt,
         parserConfidence: typeof review.metadata.confidence === "number" ? review.metadata.confidence : 1,
         parserRuleId: "manual-review",
@@ -587,14 +599,16 @@ export class MemoryStore implements AppStore {
       this.mailEvents.set(mailEvent.id, mailEvent);
       this.mailboxes.set(mailbox.id, {
         ...mailbox,
-        mailWaiting: true,
-        latestNotificationAt: typeof review.metadata.receivedAt === "string" ? review.metadata.receivedAt : review.createdAt,
+        mailWaiting: mailEvent.notificationType === "MAIL" ? true : mailbox.mailWaiting,
+        parcelWaiting: mailEvent.notificationType === "PARCEL" ? true : mailbox.parcelWaiting,
+        latestNotificationAt: mailEvent.notificationType === "MAIL" ? mailEvent.receivedAt : mailbox.latestNotificationAt,
+        latestParcelNotificationAt: mailEvent.notificationType === "PARCEL" ? mailEvent.receivedAt : mailbox.latestParcelNotificationAt,
         updatedAt: now
       });
     }
 
     this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, { reviewItemId, mailboxId });
-    return { kind: duplicate ? "duplicate" : "processed", mailboxId };
+    return { kind: duplicate ? "duplicate" : "processed", mailboxId, notificationType: review.metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL" };
   }
 
   async dismissReviewItem(session: Session, workspaceId: string, reviewItemId: string): Promise<void> {
@@ -736,7 +750,7 @@ export class MemoryStore implements AppStore {
     if (!office || office.workspaceId !== workspaceId || !office.active) throw new NotFoundError("Post office not found.");
     this.postOffices.set(postOfficeId, { ...office, active: false });
     for (const mailbox of [...this.mailboxes.values()].filter((box) => box.workspaceId === workspaceId && box.postOfficeId === postOfficeId)) {
-      this.mailboxes.set(mailbox.id, { ...mailbox, active: false, mailWaiting: false });
+      this.mailboxes.set(mailbox.id, { ...mailbox, active: false, mailWaiting: false, parcelWaiting: false });
     }
     this.audit(session.userId, workspaceId, "post_office.deleted", "post_office", postOfficeId, { name: office.name });
   }
@@ -758,6 +772,7 @@ export class MemoryStore implements AppStore {
       boxNumber: input.boxNumber,
       active: true,
       mailWaiting: false,
+      parcelWaiting: false,
       updatedAt: now
     };
     this.mailboxes.set(mailbox.id, mailbox);
@@ -793,7 +808,7 @@ export class MemoryStore implements AppStore {
     await this.requireMember(session, workspaceId, "ADMIN");
     const mailbox = this.mailboxes.get(mailboxId);
     if (!mailbox || mailbox.workspaceId !== workspaceId || !mailbox.active) throw new NotFoundError("PO box not found.");
-    this.mailboxes.set(mailboxId, { ...mailbox, active: false, mailWaiting: false, updatedAt: new Date().toISOString() });
+    this.mailboxes.set(mailboxId, { ...mailbox, active: false, mailWaiting: false, parcelWaiting: false, updatedAt: new Date().toISOString() });
     this.audit(session.userId, workspaceId, "mailbox.deleted", "mailbox", mailboxId, { boxNumber: mailbox.boxNumber });
   }
 

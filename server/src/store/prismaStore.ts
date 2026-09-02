@@ -443,7 +443,7 @@ export class PrismaStore implements AppStore {
   }
 
   async outstandingMailboxCount(workspaceId: string): Promise<number> {
-    return this.prisma.mailbox.count({ where: { workspaceId, active: true, mailWaiting: true } });
+    return this.prisma.mailbox.count({ where: { workspaceId, active: true, OR: [{ mailWaiting: true }, { parcelWaiting: true }] } });
   }
 
   async processIncomingMail(input: IncomingProviderMessage): Promise<IncomingMailResult> {
@@ -456,10 +456,13 @@ export class PrismaStore implements AppStore {
         }
       }
     });
-    if (existing) return { kind: "duplicate", mailboxId: existing.mailboxId };
+    if (existing) return { kind: "duplicate", mailboxId: existing.mailboxId, notificationType: existing.notificationType === "PARCEL" ? "PARCEL" : "MAIL" };
 
-    const boxes = await this.prisma.mailbox.findMany({ where: { workspaceId: input.workspaceId } });
-    const parsed = parseMailNotification(input, boxes.map(this.toMailbox));
+    const [boxes, postOffices] = await Promise.all([
+      this.prisma.mailbox.findMany({ where: { workspaceId: input.workspaceId } }),
+      this.prisma.postOffice.findMany({ where: { workspaceId: input.workspaceId } })
+    ]);
+    const parsed = parseMailNotification(input, boxes.map(this.toMailbox), postOffices.map(this.toPostOffice));
     if (!parsed.mailboxId || parsed.requiresReview) {
       const existingReview = await this.prisma.auditEvent.findFirst({
         where: { workspaceId: input.workspaceId, eventType: "mail.needs_review", entityId: input.providerMessageId }
@@ -472,7 +475,7 @@ export class PrismaStore implements AppStore {
             entityId: input.providerMessageId
           }
         });
-        return resolvedReview ? { kind: "duplicate" } : { kind: "needs_review" };
+        return resolvedReview ? { kind: "duplicate", notificationType: parsed.notificationType } : { kind: "needs_review", notificationType: parsed.notificationType };
       }
       await this.audit("system", input.workspaceId, "mail.needs_review", "mail_message", input.providerMessageId, {
         provider: input.provider,
@@ -481,9 +484,11 @@ export class PrismaStore implements AppStore {
         bodyPreview: input.bodyPreview,
         receivedAt: input.receivedAt,
         mailboxNumber: parsed.mailboxNumber,
+        postOfficeName: parsed.postOfficeName,
+        notificationType: parsed.notificationType,
         confidence: parsed.confidence
       });
-      return { kind: "needs_review" };
+      return { kind: "needs_review", notificationType: parsed.notificationType };
     }
 
     const receivedAt = input.receivedAt ? new Date(input.receivedAt) : new Date();
@@ -497,6 +502,7 @@ export class PrismaStore implements AppStore {
             providerMessageId: input.providerMessageId,
             sender: input.sender,
             subject: input.subject,
+            notificationType: parsed.notificationType,
             receivedAt,
             parserConfidence: parsed.confidence,
             parserRuleId: parsed.ruleId
@@ -504,16 +510,18 @@ export class PrismaStore implements AppStore {
         }),
         this.prisma.mailbox.update({
           where: { id: parsed.mailboxId },
-          data: { mailWaiting: true, latestNotificationAt: receivedAt }
+          data: parsed.notificationType === "PARCEL"
+            ? { parcelWaiting: true, latestParcelNotificationAt: receivedAt }
+            : { mailWaiting: true, latestNotificationAt: receivedAt }
         }),
         this.prisma.auditEvent.create({
           data: {
             workspaceId: input.workspaceId,
             actorUserId: undefined,
-            eventType: "mail.detected",
+            eventType: parsed.notificationType === "PARCEL" ? "parcel.detected" : "mail.detected",
             entityType: "mailbox",
             entityId: parsed.mailboxId,
-            metadata: { provider: input.provider, providerMessageId: input.providerMessageId }
+            metadata: { provider: input.provider, providerMessageId: input.providerMessageId, notificationType: parsed.notificationType }
           }
         })
       ]);
@@ -528,19 +536,23 @@ export class PrismaStore implements AppStore {
             }
           }
         });
-        return { kind: "duplicate", mailboxId: duplicate?.mailboxId };
+        return {
+          kind: "duplicate",
+          mailboxId: duplicate?.mailboxId,
+          notificationType: duplicate?.notificationType === "PARCEL" ? "PARCEL" : "MAIL"
+        };
       }
       throw error;
     }
-    return { kind: "processed", mailboxId: parsed.mailboxId };
+    return { kind: "processed", mailboxId: parsed.mailboxId, notificationType: parsed.notificationType };
   }
 
   async collectMailbox(session: Session, workspaceId: string, mailboxId: string, source: CollectionSource): Promise<CollectionEvent> {
     await this.requireMember(session, workspaceId);
     const event = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const updated = await tx.mailbox.updateMany({
-        where: { id: mailboxId, workspaceId, mailWaiting: true, active: true },
-        data: { mailWaiting: false, lastCollectedAt: new Date(), lastCollectedBy: session.userId }
+        where: { id: mailboxId, workspaceId, active: true, OR: [{ mailWaiting: true }, { parcelWaiting: true }] },
+        data: { mailWaiting: false, parcelWaiting: false, lastCollectedAt: new Date(), lastCollectedBy: session.userId }
       });
       if (updated.count !== 1) {
         const mailbox = await tx.mailbox.findFirst({ where: { id: mailboxId, workspaceId } });
@@ -613,6 +625,8 @@ export class PrismaStore implements AppStore {
         subject: typeof metadata.subject === "string" ? metadata.subject : undefined,
         bodyPreview: typeof metadata.bodyPreview === "string" ? metadata.bodyPreview : undefined,
         mailboxNumber: typeof metadata.mailboxNumber === "string" ? metadata.mailboxNumber : undefined,
+        postOfficeName: typeof metadata.postOfficeName === "string" ? metadata.postOfficeName : undefined,
+        notificationType: metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL",
         confidence: typeof metadata.confidence === "number" ? metadata.confidence : undefined,
         receivedAt: typeof metadata.receivedAt === "string" ? metadata.receivedAt : undefined,
         createdAt: event.createdAt.toISOString()
@@ -632,6 +646,7 @@ export class PrismaStore implements AppStore {
       ? review.metadata as Record<string, unknown>
       : {};
     const provider = typeof metadata.provider === "string" ? metadata.provider : "review";
+    const notificationType = metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL";
     const receivedAt = typeof metadata.receivedAt === "string" ? new Date(metadata.receivedAt) : review.createdAt;
     const duplicate = await this.prisma.mailEvent.findUnique({
       where: {
@@ -653,6 +668,7 @@ export class PrismaStore implements AppStore {
             providerMessageId: review.entityId,
             sender: typeof metadata.sender === "string" ? metadata.sender : "review",
             subject: typeof metadata.subject === "string" ? metadata.subject : "Reviewed mail notification",
+            notificationType,
             receivedAt,
             parserConfidence: typeof metadata.confidence === "number" ? metadata.confidence : 1,
             parserRuleId: "manual-review"
@@ -660,13 +676,15 @@ export class PrismaStore implements AppStore {
         }),
         this.prisma.mailbox.update({
           where: { id: mailboxId },
-          data: { mailWaiting: true, latestNotificationAt: receivedAt }
+          data: notificationType === "PARCEL"
+            ? { parcelWaiting: true, latestParcelNotificationAt: receivedAt }
+            : { mailWaiting: true, latestNotificationAt: receivedAt }
         })
       ]);
     }
 
     await this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, { reviewItemId, mailboxId });
-    return { kind: duplicate ? "duplicate" : "processed", mailboxId };
+    return { kind: duplicate ? "duplicate" : "processed", mailboxId, notificationType };
   }
 
   async dismissReviewItem(session: Session, workspaceId: string, reviewItemId: string): Promise<void> {
@@ -832,7 +850,7 @@ export class PrismaStore implements AppStore {
     const office = await this.prisma.postOffice.findFirst({ where: { id: postOfficeId, workspaceId, active: true } });
     if (!office) throw new NotFoundError("Post office not found.");
     await this.prisma.$transaction([
-      this.prisma.mailbox.updateMany({ where: { workspaceId, postOfficeId }, data: { active: false, mailWaiting: false } }),
+      this.prisma.mailbox.updateMany({ where: { workspaceId, postOfficeId }, data: { active: false, mailWaiting: false, parcelWaiting: false } }),
       this.prisma.postOffice.update({ where: { id: postOfficeId }, data: { active: false } })
     ]);
     await this.audit(session.userId, workspaceId, "post_office.deleted", "post_office", postOfficeId, { name: office.name });
@@ -851,7 +869,8 @@ export class PrismaStore implements AppStore {
           name,
           boxNumber: input.boxNumber,
           active: true,
-          mailWaiting: false
+          mailWaiting: false,
+          parcelWaiting: false
         }
       });
       await this.audit(session.userId, workspaceId, "mailbox.created", "mailbox", mailbox.id, { boxNumber: mailbox.boxNumber });
@@ -896,7 +915,7 @@ export class PrismaStore implements AppStore {
     await this.requireMember(session, workspaceId, "ADMIN");
     const mailbox = await this.prisma.mailbox.findFirst({ where: { id: mailboxId, workspaceId, active: true } });
     if (!mailbox) throw new NotFoundError("PO box not found.");
-    await this.prisma.mailbox.update({ where: { id: mailboxId }, data: { active: false, mailWaiting: false } });
+    await this.prisma.mailbox.update({ where: { id: mailboxId }, data: { active: false, mailWaiting: false, parcelWaiting: false } });
     await this.audit(session.userId, workspaceId, "mailbox.deleted", "mailbox", mailboxId, { boxNumber: mailbox.boxNumber });
   }
 
@@ -969,7 +988,9 @@ export class PrismaStore implements AppStore {
     boxNumber: string;
     active: boolean;
     mailWaiting: boolean;
+    parcelWaiting: boolean;
     latestNotificationAt: Date | null;
+    latestParcelNotificationAt: Date | null;
     lastCollectedAt: Date | null;
     lastCollectedBy: string | null;
     updatedAt: Date;
@@ -982,7 +1003,9 @@ export class PrismaStore implements AppStore {
       boxNumber: box.boxNumber,
       active: box.active,
       mailWaiting: box.mailWaiting,
+      parcelWaiting: box.parcelWaiting,
       latestNotificationAt: box.latestNotificationAt?.toISOString(),
+      latestParcelNotificationAt: box.latestParcelNotificationAt?.toISOString(),
       lastCollectedAt: box.lastCollectedAt?.toISOString(),
       lastCollectedBy: box.lastCollectedBy ?? undefined,
       updatedAt: box.updatedAt.toISOString()
@@ -997,6 +1020,7 @@ export class PrismaStore implements AppStore {
     providerMessageId: string;
     sender: string;
     subject: string;
+    notificationType: string;
     receivedAt: Date;
     parserConfidence: number;
     parserRuleId: string | null;
@@ -1010,6 +1034,7 @@ export class PrismaStore implements AppStore {
       providerMessageId: event.providerMessageId,
       sender: event.sender,
       subject: event.subject,
+      notificationType: event.notificationType === "PARCEL" ? "PARCEL" : "MAIL",
       receivedAt: event.receivedAt.toISOString(),
       parserConfidence: event.parserConfidence,
       parserRuleId: event.parserRuleId ?? undefined,

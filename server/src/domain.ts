@@ -50,7 +50,9 @@ export interface Mailbox {
   boxNumber: string;
   active: boolean;
   mailWaiting: boolean;
+  parcelWaiting: boolean;
   latestNotificationAt?: string;
+  latestParcelNotificationAt?: string;
   lastCollectedAt?: string;
   lastCollectedBy?: string;
   updatedAt: string;
@@ -64,6 +66,7 @@ export interface MailEvent {
   providerMessageId: string;
   sender: string;
   subject: string;
+  notificationType: "MAIL" | "PARCEL";
   receivedAt: string;
   parserConfidence: number;
   parserRuleId?: string;
@@ -107,6 +110,8 @@ export interface AuthChallenge {
 export interface ParsedMailNotification {
   mailboxNumber?: string;
   mailboxId?: string;
+  postOfficeName?: string;
+  notificationType: "MAIL" | "PARCEL";
   confidence: number;
   requiresReview: boolean;
   ruleId?: string;

@@ -56,7 +56,9 @@ public struct Mailbox: Codable, Identifiable, Sendable {
     public let boxNumber: String
     public let active: Bool
     public let mailWaiting: Bool
+    public let parcelWaiting: Bool
     public let latestNotificationAt: String?
+    public let latestParcelNotificationAt: String?
     public let lastCollectedAt: String?
     public let lastCollectedBy: String?
 }
@@ -101,6 +103,7 @@ public struct MailEvent: Codable, Identifiable, Sendable {
     public let providerMessageId: String
     public let sender: String
     public let subject: String
+    public let notificationType: String
     public let receivedAt: String
     public let parserConfidence: Double
     public let parserRuleId: String?
@@ -122,7 +125,10 @@ public struct ReviewItem: Codable, Identifiable, Sendable {
     public let providerMessageId: String
     public let subject: String?
     public let mailboxNumber: String?
+    public let postOfficeName: String?
+    public let notificationType: String?
     public let confidence: Double?
+    public let receivedAt: String?
     public let createdAt: String
 }
 

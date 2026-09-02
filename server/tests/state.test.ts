@@ -67,6 +67,43 @@ describe("shared mailbox state", () => {
     expect(event.collectedBy).toBe("usr_john");
   });
 
+  it("sets a separate parcel waiting flag for parcel pickup notices", async () => {
+    const daniel = await loginSession("daniel@example.com");
+    const office = await store.createPostOffice(daniel, "ws_company", {
+      name: "FITZROY SOUTH",
+      address: "Fitzroy South VIC",
+      latitude: -37.801,
+      longitude: 144.979,
+      geofenceRadius: 200
+    });
+    const box = await store.createMailbox(daniel, "ws_company", { postOfficeId: office.id, boxNumber: "3020" });
+
+    const result = await store.processIncomingMail({
+      workspaceId: "ws_company",
+      provider: "mock",
+      providerMessageId: "parcel-1",
+      sender: "parcel@example.com",
+      subject: "Your PO Box item is ready to collect",
+      bodyPreview: "| Collect from: | **FITZROY SOUTH ** |",
+      receivedAt: "2026-09-03T02:30:00.000Z"
+    });
+
+    expect(result).toEqual({ kind: "processed", mailboxId: box.id, notificationType: "PARCEL" });
+    const snapshot = await store.dashboard(daniel, "ws_company");
+    const updated = snapshot.postOffices.flatMap((item) => item.mailboxes).find((item) => item.id === box.id);
+    expect(updated).toMatchObject({
+      mailWaiting: false,
+      parcelWaiting: true,
+      latestParcelNotificationAt: "2026-09-03T02:30:00.000Z"
+    });
+    await expect(store.outstandingMailboxCount("ws_company")).resolves.toBe(1);
+
+    await store.collectMailbox(daniel, "ws_company", box.id, "WEB");
+    const collected = await store.dashboard(daniel, "ws_company");
+    const cleared = collected.postOffices.flatMap((item) => item.mailboxes).find((item) => item.id === box.id);
+    expect(cleared?.parcelWaiting).toBe(false);
+  });
+
   it("lists parser exceptions that need review", async () => {
     const john = await loginSession("john@example.com");
     const result = await store.processIncomingMail({
@@ -109,7 +146,7 @@ describe("shared mailbox state", () => {
     expect(reviewItem.receivedAt).toBe("2026-09-03T01:23:00.000Z");
 
     const resolved = await store.resolveReviewItem(daniel, "ws_company", reviewItem.id, "box_1234");
-    expect(resolved).toEqual({ kind: "processed", mailboxId: "box_1234" });
+    expect(resolved).toEqual({ kind: "processed", mailboxId: "box_1234", notificationType: "MAIL" });
     await expect(store.outstandingMailboxCount("ws_company")).resolves.toBe(1);
     await expect(store.listReviewItems(daniel, "ws_company")).resolves.toHaveLength(0);
     await expect(
@@ -120,7 +157,7 @@ describe("shared mailbox state", () => {
         sender: "mailroom@example.com",
         subject: "Mail waiting somewhere"
       })
-    ).resolves.toEqual({ kind: "duplicate", mailboxId: "box_1234" });
+    ).resolves.toEqual({ kind: "duplicate", mailboxId: "box_1234", notificationType: "MAIL" });
 
     await store.processIncomingMail({
       workspaceId: "ws_company",

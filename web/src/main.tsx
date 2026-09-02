@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
-import { AlertTriangle, Bell, Check, Clock, Edit2, ExternalLink, KeyRound, LogIn, LogOut, Mail, MapPin, Plus, RefreshCw, Route, Save, Shield, Trash2, Users, X } from "lucide-react";
+import { AlertTriangle, Bell, Check, Clock, Edit2, ExternalLink, KeyRound, LogIn, LogOut, Mail, MapPin, Package, Plus, RefreshCw, Route, Save, Shield, Trash2, Users, X } from "lucide-react";
 import {
   authenticatePasskey,
   beginPasskeyAuthentication,
@@ -470,8 +470,8 @@ function MandatorySecuritySetup({
 }
 
 function OverviewSection({ snapshot, busyId, mutate }: { snapshot: DashboardSnapshot; busyId: string | null; mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void> }) {
-  const waitingBoxes = snapshot.postOffices.flatMap((office) => office.mailboxes.filter((box) => box.mailWaiting));
-  const nextOffice = snapshot.postOffices.find((office) => office.mailboxes.some((box) => box.mailWaiting));
+  const waitingBoxes = snapshot.postOffices.flatMap((office) => office.mailboxes.filter(hasWaitingItem));
+  const nextOffice = snapshot.postOffices.find((office) => office.mailboxes.some(hasWaitingItem));
   return (
     <div className="page-grid">
       <section className="page-main">
@@ -479,7 +479,7 @@ function OverviewSection({ snapshot, busyId, mutate }: { snapshot: DashboardSnap
           {waitingBoxes.length > 0 ? (
             <div className="queue-list">
               {snapshot.postOffices.map((office) => {
-                const waiting = office.mailboxes.filter((box) => box.mailWaiting);
+                const waiting = office.mailboxes.filter(hasWaitingItem);
                 if (waiting.length === 0) return null;
                 return (
                   <article className="queue-office" key={office.id}>
@@ -603,7 +603,7 @@ function MailboxSection({
           <div className="post-office-summary">
             <DetailRow label="Post offices" value={String(snapshot.postOffices.length)} />
             <DetailRow label="Assigned boxes" value={String(totalMailboxes(snapshot))} />
-            <DetailRow label="Locations needing collection" value={String(snapshot.postOffices.filter((office) => office.mailboxes.some((box) => box.mailWaiting)).length)} />
+            <DetailRow label="Locations needing collection" value={String(snapshot.postOffices.filter((office) => office.mailboxes.some(hasWaitingItem)).length)} />
           </div>
         </div>
       )}
@@ -663,12 +663,12 @@ function OfficeSection({
   const [longitude, setLongitude] = useState(String(office.longitude));
   const [geofenceRadius, setGeofenceRadius] = useState(String(office.geofenceRadius));
   const boxes = office.mailboxes.filter((box) => {
-    if (filter === "waiting") return box.mailWaiting;
-    if (filter === "clear") return !box.mailWaiting;
+    if (filter === "waiting") return hasWaitingItem(box);
+    if (filter === "clear") return !hasWaitingItem(box);
     return true;
   });
   if (boxes.length === 0 && filter !== "all") return null;
-  const waiting = office.mailboxes.filter((box) => box.mailWaiting).length;
+  const waiting = office.mailboxes.filter(hasWaitingItem).length;
   return (
     <article className="office">
       {editingOffice ? (
@@ -755,7 +755,7 @@ function MapSummary({ snapshot }: { snapshot: DashboardSnapshot }) {
   return (
     <Panel title="Post Office Map">
       {snapshot.postOffices.map((office) => {
-        const waiting = office.mailboxes.filter((box) => box.mailWaiting).length;
+        const waiting = office.mailboxes.filter(hasWaitingItem).length;
         return (
           <a className="map-location" href={appleMapsUrl(office)} target="_blank" rel="noreferrer" key={office.id}>
             <MapPin size={18} />
@@ -769,7 +769,7 @@ function MapSummary({ snapshot }: { snapshot: DashboardSnapshot }) {
 }
 
 function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
-  const activeOffice = snapshot.postOffices.find((office) => office.mailboxes.some((box) => box.mailWaiting)) ?? snapshot.postOffices[0];
+  const activeOffice = snapshot.postOffices.find((office) => office.mailboxes.some(hasWaitingItem)) ?? snapshot.postOffices[0];
   return (
     <div className="page-grid map-page">
       <section className="page-main">
@@ -786,7 +786,7 @@ function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
               </div>
               <div className="map-board-grid">
                 {snapshot.postOffices.map((office) => {
-                  const waiting = office.mailboxes.filter((box) => box.mailWaiting).length;
+                  const waiting = office.mailboxes.filter(hasWaitingItem).length;
                   const point = mapPoint(snapshot.postOffices, office);
                   return (
                     <a
@@ -824,10 +824,10 @@ function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
           </div>
         </Panel>
         <Panel title="Priority Stops">
-          {snapshot.postOffices.filter((office) => office.mailboxes.some((box) => box.mailWaiting)).length > 0 ? (
+          {snapshot.postOffices.filter((office) => office.mailboxes.some(hasWaitingItem)).length > 0 ? (
             <div className="priority-list">
               {snapshot.postOffices
-                .filter((office) => office.mailboxes.some((box) => box.mailWaiting))
+                .filter((office) => office.mailboxes.some(hasWaitingItem))
                 .map((office) => <a href={appleMapsUrl(office)} target="_blank" rel="noreferrer" key={office.id}>{office.name}</a>)}
             </div>
           ) : (
@@ -1098,6 +1098,7 @@ function ReviewItemRow({
   const selectedMailbox = mailboxes.find((box) => box.id === selectedMailboxId);
   const receivedAt = item.receivedAt ?? item.createdAt;
   const boxMissing = Boolean(item.mailboxNumber && !matchingMailbox);
+  const notificationLabel = item.notificationType === "PARCEL" ? "parcel" : "mail";
 
   useEffect(() => {
     if (!mailboxes.some((box) => box.id === selectedMailboxId)) {
@@ -1126,15 +1127,16 @@ function ReviewItemRow({
       <div className="review-icon"><AlertTriangle size={18} /></div>
       <div className="review-content">
         <strong>{item.subject ?? "Unmatched mail notification"}</strong>
-        <span>{item.mailboxNumber ? `Possible box ${item.mailboxNumber}` : "No box number could be matched."}</span>
+        <span>{item.mailboxNumber ? `Possible box ${item.mailboxNumber}` : item.postOfficeName ? `Collect from ${item.postOfficeName}` : "No box number could be matched."}</span>
         {item.sender && <span>From {item.sender}</span>}
         {item.bodyPreview && <small>{item.bodyPreview}</small>}
         <small>Received {new Date(receivedAt).toLocaleString()}</small>
-        <small>{item.provider ?? "mail"} - {item.providerMessageId}</small>
+        <small>{notificationLabel} - {item.provider ?? "mail"} - {item.providerMessageId}</small>
       </div>
       <StatusPill tone="warning">{confidenceLabel(item.confidence)}</StatusPill>
       <div className="review-actions">
         {boxMissing && <p className="review-warning">No saved box matches {item.mailboxNumber}. Set up that box first, then return to review this email.</p>}
+        {item.notificationType === "PARCEL" && item.postOfficeName && !item.mailboxNumber && <p className="review-warning">Parcel collection is for {item.postOfficeName}. Set up the correct PO box for this post office, then return to review this email.</p>}
         {mailboxes.length > 0 ? (
           <>
             <label>Assign to<select value={selectedMailboxId} onChange={(event) => setSelectedMailboxId(event.target.value)}>
@@ -1153,7 +1155,7 @@ function ReviewItemRow({
 }
 
 function OfficeMapCard({ office }: { office: PostOffice }) {
-  const waiting = office.mailboxes.filter((box) => box.mailWaiting).length;
+  const waiting = office.mailboxes.filter(hasWaitingItem).length;
   return (
     <article className={waiting > 0 ? "map-card waiting" : "map-card"}>
       <div>
@@ -1529,9 +1531,10 @@ function MailboxRow({
   const [editing, setEditing] = useState(false);
   const [postOfficeId, setPostOfficeId] = useState(box.postOfficeId);
   const [boxNumber, setBoxNumber] = useState(box.boxNumber);
-  const status = box.mailWaiting ? "Mail waiting" : "Clear";
-  const lastEvent = box.latestNotificationAt
-    ? `Detected ${new Date(box.latestNotificationAt).toLocaleString()}`
+  const status = mailboxStatus(box);
+  const latestWaitingAt = latestMailboxNotificationAt(box);
+  const lastEvent = latestWaitingAt
+    ? `Detected ${new Date(latestWaitingAt).toLocaleString()}`
     : box.lastCollectedAt
       ? `Collected ${new Date(box.lastCollectedAt).toLocaleString()}`
       : "No events yet";
@@ -1558,34 +1561,34 @@ function MailboxRow({
       );
     }
     return (
-      <div className={box.mailWaiting ? "mailbox-row waiting" : "mailbox-row"}>
+      <div className={hasWaitingItem(box) ? "mailbox-row waiting" : "mailbox-row"}>
         <div>
           <strong>{box.name}</strong>
           <small>Box {box.boxNumber}</small>
         </div>
-        <StatusPill tone={box.mailWaiting ? "warning" : "ok"}>{status}</StatusPill>
+        <StatusPill tone={hasWaitingItem(box) ? "warning" : "ok"}>{status}</StatusPill>
         <span>{lastEvent}</span>
         <div className="row-actions">
-          {box.mailWaiting && <button disabled={busy} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button>}
+          {hasWaitingItem(box) && <button disabled={busy} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button>}
           {canManage && (
             <>
               <button type="button" className="icon-button" title="Edit PO box" onClick={() => setEditing(true)}><Edit2 size={16} /></button>
               <button type="button" className="icon-button danger" title="Delete PO box" onClick={() => onDelete?.(box)}><Trash2 size={16} /></button>
             </>
           )}
-          {!box.mailWaiting && !canManage && <span className="small">No action</span>}
+          {!hasWaitingItem(box) && !canManage && <span className="small">No action</span>}
         </div>
       </div>
     );
   }
   return (
-    <div className={box.mailWaiting ? "mailbox waiting" : "mailbox"}>
+    <div className={hasWaitingItem(box) ? "mailbox waiting" : "mailbox"}>
       <div>
         <strong>{box.name}</strong>
-        <span>{box.mailWaiting ? "Mail waiting" : "Clear"}</span>
+        <span>{status}</span>
         <small>{lastEvent}</small>
       </div>
-      {box.mailWaiting && <button disabled={busy} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button>}
+      {hasWaitingItem(box) && <button disabled={busy} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button>}
     </div>
   );
 }
@@ -1604,10 +1607,10 @@ function History({ snapshot, limit }: { snapshot: DashboardSnapshot; limit: numb
         return (
           <article className="history-item" key={event.id}>
             <div className={isCollection ? "history-icon ok" : "history-icon warning"}>
-              {isCollection ? <Check size={16} /> : <Mail size={16} />}
+              {isCollection ? <Check size={16} /> : event.notificationType === "PARCEL" ? <Package size={16} /> : <Mail size={16} />}
             </div>
             <div>
-              <strong>{isCollection ? `${mailboxName} collected` : `${mailboxName} detected mail`}</strong>
+              <strong>{isCollection ? `${mailboxName} collected` : `${mailboxName} detected ${event.notificationType === "PARCEL" ? "parcel" : "mail"}`}</strong>
               <span>{isCollection ? `By ${userNames.get(event.collectedBy) ?? event.collectedBy} from ${event.source}` : `${event.subject} from ${event.sender}`}</span>
               <small><Clock size={13} />{new Date(when).toLocaleString()}</small>
             </div>
@@ -1624,6 +1627,22 @@ function totalMailboxes(snapshot: DashboardSnapshot) {
 
 function mailboxNameMap(snapshot: DashboardSnapshot) {
   return new Map(snapshot.postOffices.flatMap((office) => office.mailboxes.map((box) => [box.id, box.name] as const)));
+}
+
+function hasWaitingItem(box: Mailbox) {
+  return box.mailWaiting || box.parcelWaiting;
+}
+
+function mailboxStatus(box: Mailbox) {
+  if (box.mailWaiting && box.parcelWaiting) return "Mail and parcel waiting";
+  if (box.parcelWaiting) return "Parcel waiting";
+  if (box.mailWaiting) return "Mail waiting";
+  return "Clear";
+}
+
+function latestMailboxNotificationAt(box: Mailbox) {
+  const dates = [box.latestNotificationAt, box.latestParcelNotificationAt].filter(Boolean) as string[];
+  return dates.sort((a, b) => b.localeCompare(a))[0];
 }
 
 function normalizeBoxNumber(value: string) {

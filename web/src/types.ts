@@ -7,7 +7,9 @@ export interface Mailbox {
   boxNumber: string;
   active: boolean;
   mailWaiting: boolean;
+  parcelWaiting: boolean;
   latestNotificationAt?: string;
+  latestParcelNotificationAt?: string;
   lastCollectedAt?: string;
   lastCollectedBy?: string;
 }
@@ -40,6 +42,7 @@ export interface MailHistoryEvent {
   providerMessageId: string;
   sender: string;
   subject: string;
+  notificationType: "MAIL" | "PARCEL";
   receivedAt: string;
   parserConfidence: number;
   parserRuleId?: string;
@@ -73,6 +76,8 @@ export interface ReviewItem {
   subject?: string;
   bodyPreview?: string;
   mailboxNumber?: string;
+  postOfficeName?: string;
+  notificationType?: "MAIL" | "PARCEL";
   confidence?: number;
   receivedAt?: string;
   createdAt: string;
