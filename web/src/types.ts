@@ -74,6 +74,7 @@ export interface ReviewItem {
   bodyPreview?: string;
   mailboxNumber?: string;
   confidence?: number;
+  receivedAt?: string;
   createdAt: string;
 }
 

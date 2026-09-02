@@ -443,6 +443,7 @@ export class MemoryStore implements AppStore {
         sender: input.sender,
         subject: input.subject,
         bodyPreview: input.bodyPreview,
+        receivedAt: input.receivedAt,
         mailboxNumber: parsed.mailboxNumber,
         confidence: parsed.confidence
       });
@@ -553,6 +554,7 @@ export class MemoryStore implements AppStore {
         bodyPreview: typeof event.metadata.bodyPreview === "string" ? event.metadata.bodyPreview : undefined,
         mailboxNumber: typeof event.metadata.mailboxNumber === "string" ? event.metadata.mailboxNumber : undefined,
         confidence: typeof event.metadata.confidence === "number" ? event.metadata.confidence : undefined,
+        receivedAt: typeof event.metadata.receivedAt === "string" ? event.metadata.receivedAt : undefined,
         createdAt: event.createdAt
       }));
   }
@@ -577,7 +579,7 @@ export class MemoryStore implements AppStore {
         providerMessageId: review.entityId,
         sender: typeof review.metadata.sender === "string" ? review.metadata.sender : "review",
         subject: typeof review.metadata.subject === "string" ? review.metadata.subject : "Reviewed mail notification",
-        receivedAt: review.createdAt,
+        receivedAt: typeof review.metadata.receivedAt === "string" ? review.metadata.receivedAt : review.createdAt,
         parserConfidence: typeof review.metadata.confidence === "number" ? review.metadata.confidence : 1,
         parserRuleId: "manual-review",
         processedAt: now
@@ -586,7 +588,7 @@ export class MemoryStore implements AppStore {
       this.mailboxes.set(mailbox.id, {
         ...mailbox,
         mailWaiting: true,
-        latestNotificationAt: review.createdAt,
+        latestNotificationAt: typeof review.metadata.receivedAt === "string" ? review.metadata.receivedAt : review.createdAt,
         updatedAt: now
       });
     }

@@ -17,6 +17,7 @@ describe("mail parser", () => {
   it.each([
     "There is mail in PO Box 1234",
     "Mail has been received in P.O. Box 1234",
+    "Mail2Day: PO Box 1234 has mail.",
     "POBOX 1234 has mail",
     "Post Box 1234 ready",
     "Postbox 1234 waiting",

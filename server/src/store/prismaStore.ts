@@ -479,6 +479,7 @@ export class PrismaStore implements AppStore {
         sender: input.sender,
         subject: input.subject,
         bodyPreview: input.bodyPreview,
+        receivedAt: input.receivedAt,
         mailboxNumber: parsed.mailboxNumber,
         confidence: parsed.confidence
       });
@@ -613,6 +614,7 @@ export class PrismaStore implements AppStore {
         bodyPreview: typeof metadata.bodyPreview === "string" ? metadata.bodyPreview : undefined,
         mailboxNumber: typeof metadata.mailboxNumber === "string" ? metadata.mailboxNumber : undefined,
         confidence: typeof metadata.confidence === "number" ? metadata.confidence : undefined,
+        receivedAt: typeof metadata.receivedAt === "string" ? metadata.receivedAt : undefined,
         createdAt: event.createdAt.toISOString()
       };
     });
@@ -630,6 +632,7 @@ export class PrismaStore implements AppStore {
       ? review.metadata as Record<string, unknown>
       : {};
     const provider = typeof metadata.provider === "string" ? metadata.provider : "review";
+    const receivedAt = typeof metadata.receivedAt === "string" ? new Date(metadata.receivedAt) : review.createdAt;
     const duplicate = await this.prisma.mailEvent.findUnique({
       where: {
         workspaceId_provider_providerMessageId: {
@@ -650,14 +653,14 @@ export class PrismaStore implements AppStore {
             providerMessageId: review.entityId,
             sender: typeof metadata.sender === "string" ? metadata.sender : "review",
             subject: typeof metadata.subject === "string" ? metadata.subject : "Reviewed mail notification",
-            receivedAt: review.createdAt,
+            receivedAt,
             parserConfidence: typeof metadata.confidence === "number" ? metadata.confidence : 1,
             parserRuleId: "manual-review"
           }
         }),
         this.prisma.mailbox.update({
           where: { id: mailboxId },
-          data: { mailWaiting: true, latestNotificationAt: review.createdAt }
+          data: { mailWaiting: true, latestNotificationAt: receivedAt }
         })
       ]);
     }

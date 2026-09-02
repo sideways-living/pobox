@@ -1092,9 +1092,12 @@ function ReviewItemRow({
   mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>;
   refresh: () => Promise<void>;
 }) {
-  const defaultMailbox = mailboxes.find((box) => item.mailboxNumber && normalizeBoxNumber(box.boxNumber) === normalizeBoxNumber(item.mailboxNumber)) ?? mailboxes[0];
+  const matchingMailbox = mailboxes.find((box) => item.mailboxNumber && normalizeBoxNumber(box.boxNumber) === normalizeBoxNumber(item.mailboxNumber));
+  const defaultMailbox = matchingMailbox ?? (item.mailboxNumber ? undefined : mailboxes[0]);
   const [selectedMailboxId, setSelectedMailboxId] = useState(defaultMailbox?.id ?? "");
   const selectedMailbox = mailboxes.find((box) => box.id === selectedMailboxId);
+  const receivedAt = item.receivedAt ?? item.createdAt;
+  const boxMissing = Boolean(item.mailboxNumber && !matchingMailbox);
 
   useEffect(() => {
     if (!mailboxes.some((box) => box.id === selectedMailboxId)) {
@@ -1126,13 +1129,18 @@ function ReviewItemRow({
         <span>{item.mailboxNumber ? `Possible box ${item.mailboxNumber}` : "No box number could be matched."}</span>
         {item.sender && <span>From {item.sender}</span>}
         {item.bodyPreview && <small>{item.bodyPreview}</small>}
-        <small>{item.provider ?? "mail"} - {item.providerMessageId} - {new Date(item.createdAt).toLocaleString()}</small>
+        <small>Received {new Date(receivedAt).toLocaleString()}</small>
+        <small>{item.provider ?? "mail"} - {item.providerMessageId}</small>
       </div>
       <StatusPill tone="warning">{confidenceLabel(item.confidence)}</StatusPill>
       <div className="review-actions">
+        {boxMissing && <p className="review-warning">No saved box matches {item.mailboxNumber}. Set up that box first, then return to review this email.</p>}
         {mailboxes.length > 0 ? (
           <>
-            <label>Assign to<select value={selectedMailboxId} onChange={(event) => setSelectedMailboxId(event.target.value)}>{mailboxes.map((box) => <option key={box.id} value={box.id}>{box.officeName} - Box {box.boxNumber}</option>)}</select></label>
+            <label>Assign to<select value={selectedMailboxId} onChange={(event) => setSelectedMailboxId(event.target.value)}>
+              <option value="">Choose a saved box</option>
+              {mailboxes.map((box) => <option key={box.id} value={box.id}>{box.officeName} - Box {box.boxNumber}</option>)}
+            </select></label>
             <button className="primary" disabled={!selectedMailbox} onClick={resolve}><Check size={16} />Mark Box Waiting</button>
           </>
         ) : (

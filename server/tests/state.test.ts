@@ -96,7 +96,8 @@ describe("shared mailbox state", () => {
       providerMessageId: "message-review-resolve",
       sender: "mailroom@example.com",
       subject: "Mail waiting somewhere",
-      bodyPreview: "Please check the unknown box."
+      bodyPreview: "Please check the unknown box.",
+      receivedAt: "2026-09-03T01:23:00.000Z"
     });
 
     const [reviewItem] = await store.listReviewItems(daniel, "ws_company");
@@ -105,6 +106,7 @@ describe("shared mailbox state", () => {
       sender: "mailroom@example.com",
       bodyPreview: "Please check the unknown box."
     });
+    expect(reviewItem.receivedAt).toBe("2026-09-03T01:23:00.000Z");
 
     const resolved = await store.resolveReviewItem(daniel, "ws_company", reviewItem.id, "box_1234");
     expect(resolved).toEqual({ kind: "processed", mailboxId: "box_1234" });

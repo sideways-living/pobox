@@ -1,4 +1,4 @@
-export const appVersion = "0.11.1";
+export const appVersion = "0.11.2";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.11.2-mail2day-review-timestamps",
+    version: "0.11.2",
+    releasedAt: "2026-09-03T00:45:00.000Z",
+    title: "Mail2Day matching and review timestamps",
+    summary:
+      "Review items now show the email received time. Mail2Day subjects such as 'Mail2Day: PO Box 3020 has mail.' are matched by box number, and unmatched box numbers prompt setup before review.",
+    audience: "ADMIN"
+  },
   {
     id: "0.11.1-actionable-review-queue",
     version: "0.11.1",
