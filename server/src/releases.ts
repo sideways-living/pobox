@@ -1,4 +1,4 @@
-export const appVersion = "0.10.1";
+export const appVersion = "0.10.2";
 
 export interface AppChange {
   id: string;
@@ -11,12 +11,21 @@ export interface AppChange {
 
 export const appChanges: AppChange[] = [
   {
+    id: "0.10.2-multiple-po-boxes-per-location",
+    version: "0.10.2",
+    releasedAt: "2026-09-02T12:00:00.000Z",
+    title: "Multiple PO boxes per post office",
+    summary:
+      "Post Offices remains the main view for managing locations, but one post office can now hold multiple active PO boxes where needed.",
+    audience: "ALL"
+  },
+  {
     id: "0.10.1-post-office-first-management",
     version: "0.10.1",
     releasedAt: "2026-09-02T11:30:00.000Z",
     title: "Post office-first management",
     summary:
-      "The PO Boxes menu is now Post Offices. Each post office shows its assigned PO box underneath, and pobox.watch prevents adding more than one active PO box to the same post office.",
+      "The PO Boxes menu is now Post Offices. Each post office shows its assigned PO boxes underneath, so admins can manage locations and boxes together.",
     audience: "ALL"
   },
   {

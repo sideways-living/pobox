@@ -1377,15 +1377,14 @@ function directoryStatusLabel(status: PostOfficeDirectoryStatus | null) {
 }
 
 function AddMailboxForm({ snapshot, refresh, setError }: { snapshot: DashboardSnapshot; refresh: () => Promise<void>; setError: (value: string | null) => void }) {
-  const availablePostOffices = snapshot.postOffices.filter((office) => office.mailboxes.length === 0);
-  const [postOfficeId, setPostOfficeId] = useState(availablePostOffices[0]?.id ?? "");
+  const [postOfficeId, setPostOfficeId] = useState(snapshot.postOffices[0]?.id ?? "");
   const [boxNumber, setBoxNumber] = useState("");
 
   useEffect(() => {
-    if (!availablePostOffices.some((office) => office.id === postOfficeId)) {
-      setPostOfficeId(availablePostOffices[0]?.id ?? "");
+    if (!snapshot.postOffices.some((office) => office.id === postOfficeId)) {
+      setPostOfficeId(snapshot.postOffices[0]?.id ?? "");
     }
-  }, [availablePostOffices.map((office) => office.id).join(","), postOfficeId]);
+  }, [snapshot.postOffices.map((office) => office.id).join(","), postOfficeId]);
 
   if (snapshot.currentUser.role !== "ADMIN") return null;
 
@@ -1402,14 +1401,14 @@ function AddMailboxForm({ snapshot, refresh, setError }: { snapshot: DashboardSn
 
   return (
     <Panel title="Add PO Box">
-      {availablePostOffices.length > 0 ? (
+      {snapshot.postOffices.length > 0 ? (
         <form className="form-grid" onSubmit={submit}>
-          <label>Post office<select value={postOfficeId} onChange={(event) => setPostOfficeId(event.target.value)}>{availablePostOffices.map((office) => <option value={office.id} key={office.id}>{office.name}</option>)}</select></label>
+          <label>Post office<select value={postOfficeId} onChange={(event) => setPostOfficeId(event.target.value)}>{snapshot.postOffices.map((office) => <option value={office.id} key={office.id}>{office.name}</option>)}</select></label>
           <label>PO Box Number<input value={boxNumber} onChange={(event) => setBoxNumber(event.target.value)} required /></label>
           <button className="primary"><Plus size={17} />Create PO Box</button>
         </form>
       ) : (
-        <p className="small">Every active post office already has a PO box. Delete an unused post office or edit an existing PO box from Post Offices.</p>
+        <p className="small">Create or import a post office before adding a PO box.</p>
       )}
     </Panel>
   );
@@ -1449,7 +1448,6 @@ function MailboxRow({
   const [editing, setEditing] = useState(false);
   const [postOfficeId, setPostOfficeId] = useState(box.postOfficeId);
   const [boxNumber, setBoxNumber] = useState(box.boxNumber);
-  const editablePostOffices = postOffices.filter((office) => office.id === box.postOfficeId || office.mailboxes.length === 0);
   const status = box.mailWaiting ? "Mail waiting" : "Clear";
   const lastEvent = box.latestNotificationAt
     ? `Detected ${new Date(box.latestNotificationAt).toLocaleString()}`
@@ -1466,7 +1464,7 @@ function MailboxRow({
           setEditing(false);
         }}>
           <div className="edit-fields">
-            <label>Post office<select value={postOfficeId} onChange={(event) => setPostOfficeId(event.target.value)}>{editablePostOffices.map((office) => <option value={office.id} key={office.id}>{office.name}</option>)}</select></label>
+            <label>Post office<select value={postOfficeId} onChange={(event) => setPostOfficeId(event.target.value)}>{postOffices.map((office) => <option value={office.id} key={office.id}>{office.name}</option>)}</select></label>
             <label>PO Box Number<input value={boxNumber} onChange={(event) => setBoxNumber(event.target.value)} required /></label>
           </div>
           <span>{status}</span>

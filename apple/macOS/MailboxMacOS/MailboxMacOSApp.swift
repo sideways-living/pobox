@@ -495,7 +495,7 @@ struct MacMailboxListView: View {
     let deleteMailbox: (Mailbox) async -> Void
 
     var body: some View {
-        MacPage(title: "Post Offices", subtitle: "Each post office has one assigned PO box.") {
+        MacPage(title: "Post Offices", subtitle: "Post offices with their assigned PO boxes.") {
             ForEach(snapshot?.postOffices ?? []) { office in
                 MacPanel(title: office.name, aside: office.address) {
                     if office.mailboxes.isEmpty {
@@ -529,10 +529,6 @@ struct MacMailboxManageRow: View {
     @State private var confirmDelete = false
     @State private var postOfficeId = ""
     @State private var boxNumber = ""
-
-    private var editablePostOffices: [PostOffice] {
-        postOffices.filter { $0.id == mailbox.postOfficeId || $0.mailboxes.isEmpty }
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -572,7 +568,7 @@ struct MacMailboxManageRow: View {
             if editing {
                 HStack {
                     Picker("Post office", selection: $postOfficeId) {
-                        ForEach(editablePostOffices) { office in
+                        ForEach(postOffices) { office in
                             Text(office.name).tag(office.id)
                         }
                     }
@@ -1003,25 +999,21 @@ struct MacCreateMailboxForm: View {
     @State private var postOfficeId = ""
     @State private var boxNumber = ""
 
-    private var availablePostOffices: [PostOffice] {
-        postOffices.filter { $0.mailboxes.isEmpty }
-    }
-
     var body: some View {
         MacPanel(title: "Add PO Box", aside: "Admin") {
             VStack(alignment: .leading, spacing: 10) {
-                if availablePostOffices.isEmpty {
-                    Text("Every active post office already has a PO box. Delete an unused post office or edit an existing PO box from Post Offices.")
+                if postOffices.isEmpty {
+                    Text("Create or import a post office before adding a PO box.")
                         .foregroundStyle(.secondary)
                 } else {
                     Picker("Post office", selection: $postOfficeId) {
-                        ForEach(availablePostOffices) { office in
+                        ForEach(postOffices) { office in
                             Text(office.name).tag(office.id)
                         }
                     }
                     .onAppear {
-                        if postOfficeId.isEmpty || !availablePostOffices.contains(where: { $0.id == postOfficeId }) {
-                            postOfficeId = availablePostOffices.first?.id ?? ""
+                        if postOfficeId.isEmpty || !postOffices.contains(where: { $0.id == postOfficeId }) {
+                            postOfficeId = postOffices.first?.id ?? ""
                         }
                     }
                     TextField("PO Box Number", text: $boxNumber)

@@ -180,16 +180,16 @@ describe("shared mailbox state", () => {
       boxNumber: "9001"
     });
     expect(mailbox.name).toBe("PO Box 9001");
-    await expect(
-      store.createMailbox(daniel, "ws_company", {
-        postOfficeId: office.id,
-        boxNumber: "9002"
-      })
-    ).rejects.toThrow("This post office already has a PO box.");
+    const secondMailbox = await store.createMailbox(daniel, "ws_company", {
+      postOfficeId: office.id,
+      boxNumber: "9002"
+    });
+    expect(secondMailbox.postOfficeId).toBe(office.id);
 
     const snapshot = await store.dashboard(daniel, "ws_company");
     expect(snapshot.postOffices.some((candidate) => candidate.id === office.id)).toBe(true);
     expect(snapshot.postOffices.flatMap((candidate) => candidate.mailboxes).some((candidate) => candidate.id === mailbox.id)).toBe(true);
+    expect(snapshot.postOffices.flatMap((candidate) => candidate.mailboxes).some((candidate) => candidate.id === secondMailbox.id)).toBe(true);
   });
 
   it("allows admins to edit and delete managed records", async () => {
