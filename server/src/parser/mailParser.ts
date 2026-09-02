@@ -2,6 +2,7 @@ import type { Mailbox, PostOffice, ParsedMailNotification } from "../domain.js";
 
 const mailboxPattern =
   /\b(?:p\.?\s*o\.?\s*box|pobox|post\s*box|postbox|box)\s*([a-z0-9-]{2,12})\b/i;
+const mail2DaySubjectPattern = /^mail2day:\s*p\.?\s*o\.?\s*box\s*([a-z0-9-]{2,12})\s+has\s+mail\.?$/i;
 const parcelSubjectPattern = /^your po box item is ready to collect$/i;
 const collectFromPattern = /collect\s+from:\s*\|?\s*\*{0,2}\s*([A-Z][A-Z\s'.-]{2,80}?)(?:\s*\*{0,2}\s*(?:\n|\r|$|\|))/i;
 
@@ -17,7 +18,8 @@ export function parseMailNotification(input: IncomingMailInput, mailboxes: Mailb
     return parseParcelNotification(input, mailboxes, postOffices);
   }
 
-  const match = haystack.match(mailboxPattern);
+  const mail2DayMatch = input.subject.trim().match(mail2DaySubjectPattern);
+  const match = mail2DayMatch ?? haystack.match(mailboxPattern);
   if (!match) {
     return { notificationType: "MAIL", confidence: 0, requiresReview: true };
   }
@@ -32,9 +34,9 @@ export function parseMailNotification(input: IncomingMailInput, mailboxes: Mailb
     mailboxNumber,
     mailboxId: mailbox.id,
     notificationType: "MAIL",
-    confidence: 0.96,
+    confidence: mail2DayMatch ? 1 : 0.96,
     requiresReview: false,
-    ruleId: "deterministic-box-number-v1"
+    ruleId: mail2DayMatch ? "mail2day-subject-box-number-v1" : "deterministic-box-number-v1"
   };
 }
 

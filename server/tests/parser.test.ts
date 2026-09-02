@@ -46,6 +46,19 @@ describe("mail parser", () => {
     expect(parsed.mailboxNumber).toBe("AB142");
   });
 
+  it("treats exact Mail2Day subjects for saved boxes as fully confident", () => {
+    const box229 = { ...mailbox, id: "box_229", name: "PO Box 229", boxNumber: "229" };
+    const parsed = parseMailNotification({ sender: "mailroom@example.com", subject: "Mail2Day: PO Box 229 has mail" }, [box229]);
+    expect(parsed).toMatchObject({
+      requiresReview: false,
+      mailboxId: "box_229",
+      mailboxNumber: "229",
+      notificationType: "MAIL",
+      confidence: 1,
+      ruleId: "mail2day-subject-box-number-v1"
+    });
+  });
+
   it("matches parcel pickup notices by collect-from post office", () => {
     const parsed = parseMailNotification(
       {

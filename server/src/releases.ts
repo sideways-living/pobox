@@ -1,4 +1,4 @@
-export const appVersion = "0.11.3";
+export const appVersion = "0.11.4";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.11.4-mail2day-full-confidence",
+    version: "0.11.4",
+    releasedAt: "2026-09-03T01:35:00.000Z",
+    title: "Mail2Day saved box matching",
+    summary:
+      "Mail2Day subjects like 'Mail2Day: PO Box 229 has mail' are now treated as fully confident when that PO box exists, so they update the box without entering the review queue.",
+    audience: "ADMIN"
+  },
   {
     id: "0.11.3-parcel-pickup-notifications",
     version: "0.11.3",
