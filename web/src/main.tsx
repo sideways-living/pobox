@@ -148,7 +148,7 @@ function App() {
         <div className="brand"><Mail size={22} />pobox.watch</div>
         <nav>
           <NavItem icon={<Bell size={17} />} label="Overview" active={section === "Overview"} onClick={() => setSection("Overview")} />
-          <NavItem icon={<Mail size={17} />} label="PO Boxes" active={section === "Mailboxes"} onClick={() => setSection("Mailboxes")} />
+          <NavItem icon={<Mail size={17} />} label="Post Offices" active={section === "Mailboxes"} onClick={() => setSection("Mailboxes")} />
           <NavItem icon={<MapPin size={17} />} label="Map" active={section === "Map"} onClick={() => setSection("Map")} />
           <NavItem icon={<RefreshCw size={17} />} label="History" active={section === "History"} onClick={() => setSection("History")} />
           <NavItem icon={<AlertTriangle size={17} />} label="Needs Review" active={section === "Needs Review"} onClick={() => setSection("Needs Review")} />
@@ -587,10 +587,10 @@ function MailboxSection({
   }
 
   return (
-    <Panel title={compact ? "PO Box Snapshot" : "PO Boxes"} aside={`Updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}>
+    <Panel title={compact ? "PO Box Snapshot" : "Post Offices"} aside={`Updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}>
       {!compact && (
         <div className="filter-bar" role="group" aria-label="PO box filter">
-          <button className={filter === "all" ? "filter active" : "filter"} onClick={() => setFilter("all")}>All {totalMailboxes(snapshot)}</button>
+          <button className={filter === "all" ? "filter active" : "filter"} onClick={() => setFilter("all")}>All offices {snapshot.postOffices.length}</button>
           <button className={filter === "waiting" ? "filter active" : "filter"} onClick={() => setFilter("waiting")}>Waiting {waitingCount}</button>
           <button className={filter === "clear" ? "filter active" : "filter"} onClick={() => setFilter("clear")}>Clear {clearCount}</button>
         </div>
@@ -651,7 +651,7 @@ function OfficeSection({
     if (filter === "clear") return !box.mailWaiting;
     return true;
   });
-  if (boxes.length === 0) return null;
+  if (boxes.length === 0 && filter !== "all") return null;
   const waiting = office.mailboxes.filter((box) => box.mailWaiting).length;
   return (
     <article className="office">
@@ -719,6 +719,17 @@ function OfficeSection({
             table
           />
         ))}
+        {boxes.length === 0 && (
+          <div className="mailbox-row empty-row">
+            <div>
+              <strong>No PO box assigned</strong>
+              <small>This post office can be deleted or given a PO box.</small>
+            </div>
+            <span className="small">No status</span>
+            <span className="small">No events yet</span>
+            <span className="small">No PO box action</span>
+          </div>
+        )}
       </div>
     </article>
   );
@@ -1366,8 +1377,15 @@ function directoryStatusLabel(status: PostOfficeDirectoryStatus | null) {
 }
 
 function AddMailboxForm({ snapshot, refresh, setError }: { snapshot: DashboardSnapshot; refresh: () => Promise<void>; setError: (value: string | null) => void }) {
-  const [postOfficeId, setPostOfficeId] = useState(snapshot.postOffices[0]?.id ?? "");
+  const availablePostOffices = snapshot.postOffices.filter((office) => office.mailboxes.length === 0);
+  const [postOfficeId, setPostOfficeId] = useState(availablePostOffices[0]?.id ?? "");
   const [boxNumber, setBoxNumber] = useState("");
+
+  useEffect(() => {
+    if (!availablePostOffices.some((office) => office.id === postOfficeId)) {
+      setPostOfficeId(availablePostOffices[0]?.id ?? "");
+    }
+  }, [availablePostOffices.map((office) => office.id).join(","), postOfficeId]);
 
   if (snapshot.currentUser.role !== "ADMIN") return null;
 
@@ -1384,11 +1402,15 @@ function AddMailboxForm({ snapshot, refresh, setError }: { snapshot: DashboardSn
 
   return (
     <Panel title="Add PO Box">
-      <form className="form-grid" onSubmit={submit}>
-        <label>Post office<select value={postOfficeId} onChange={(event) => setPostOfficeId(event.target.value)}>{snapshot.postOffices.map((office) => <option value={office.id} key={office.id}>{office.name}</option>)}</select></label>
-        <label>PO Box Number<input value={boxNumber} onChange={(event) => setBoxNumber(event.target.value)} required /></label>
-        <button className="primary"><Plus size={17} />Create PO Box</button>
-      </form>
+      {availablePostOffices.length > 0 ? (
+        <form className="form-grid" onSubmit={submit}>
+          <label>Post office<select value={postOfficeId} onChange={(event) => setPostOfficeId(event.target.value)}>{availablePostOffices.map((office) => <option value={office.id} key={office.id}>{office.name}</option>)}</select></label>
+          <label>PO Box Number<input value={boxNumber} onChange={(event) => setBoxNumber(event.target.value)} required /></label>
+          <button className="primary"><Plus size={17} />Create PO Box</button>
+        </form>
+      ) : (
+        <p className="small">Every active post office already has a PO box. Delete an unused post office or edit an existing PO box from Post Offices.</p>
+      )}
     </Panel>
   );
 }
@@ -1427,6 +1449,7 @@ function MailboxRow({
   const [editing, setEditing] = useState(false);
   const [postOfficeId, setPostOfficeId] = useState(box.postOfficeId);
   const [boxNumber, setBoxNumber] = useState(box.boxNumber);
+  const editablePostOffices = postOffices.filter((office) => office.id === box.postOfficeId || office.mailboxes.length === 0);
   const status = box.mailWaiting ? "Mail waiting" : "Clear";
   const lastEvent = box.latestNotificationAt
     ? `Detected ${new Date(box.latestNotificationAt).toLocaleString()}`
@@ -1443,7 +1466,7 @@ function MailboxRow({
           setEditing(false);
         }}>
           <div className="edit-fields">
-            <label>Post office<select value={postOfficeId} onChange={(event) => setPostOfficeId(event.target.value)}>{postOffices.map((office) => <option value={office.id} key={office.id}>{office.name}</option>)}</select></label>
+            <label>Post office<select value={postOfficeId} onChange={(event) => setPostOfficeId(event.target.value)}>{editablePostOffices.map((office) => <option value={office.id} key={office.id}>{office.name}</option>)}</select></label>
             <label>PO Box Number<input value={boxNumber} onChange={(event) => setBoxNumber(event.target.value)} required /></label>
           </div>
           <span>{status}</span>

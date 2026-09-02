@@ -1,4 +1,4 @@
-export const appVersion = "0.10.0";
+export const appVersion = "0.10.1";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.10.1-post-office-first-management",
+    version: "0.10.1",
+    releasedAt: "2026-09-02T11:30:00.000Z",
+    title: "Post office-first management",
+    summary:
+      "The PO Boxes menu is now Post Offices. Each post office shows its assigned PO box underneath, and pobox.watch prevents adding more than one active PO box to the same post office.",
+    audience: "ALL"
+  },
   {
     id: "0.10.0-edit-delete-and-icons",
     version: "0.10.0",

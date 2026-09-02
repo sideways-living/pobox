@@ -334,7 +334,7 @@ struct MacLoginView: View {
 struct MacOverviewView: View {
     @ObservedObject var model: MacMailboxViewModel
     @State private var selection = "Overview"
-    private let items = ["Overview", "PO Boxes", "Map", "History", "Activity", "Needs Review", "Team", "Settings"]
+    private let items = ["Overview", "Post Offices", "Map", "History", "Activity", "Needs Review", "Team", "Settings"]
 
     var body: some View {
         NavigationSplitView {
@@ -367,7 +367,7 @@ struct MacOverviewView: View {
         switch item {
         case "Overview":
             MacOverviewDashboardView(snapshot: model.snapshot, reviewItems: model.reviewItems)
-        case "PO Boxes":
+        case "Post Offices":
             MacMailboxListView(snapshot: model.snapshot, busyMailboxId: model.busyMailboxId, collect: { mailbox in
                 await model.collect(mailbox)
             }, updateMailbox: { mailbox, postOfficeId, boxNumber in
@@ -495,18 +495,22 @@ struct MacMailboxListView: View {
     let deleteMailbox: (Mailbox) async -> Void
 
     var body: some View {
-        MacPage(title: "PO Boxes", subtitle: "Live shared state from pobox.watch.") {
+        MacPage(title: "Post Offices", subtitle: "Each post office has one assigned PO box.") {
             ForEach(snapshot?.postOffices ?? []) { office in
                 MacPanel(title: office.name, aside: office.address) {
-                    ForEach(office.mailboxes) { mailbox in
-                        MacMailboxManageRow(
-                            mailbox: mailbox,
-                            postOffices: snapshot?.postOffices ?? [],
-                            busy: busyMailboxId == mailbox.id,
-                            collect: collect,
-                            updateMailbox: updateMailbox,
-                            deleteMailbox: deleteMailbox
-                        )
+                    if office.mailboxes.isEmpty {
+                        MacEmptyStateView(title: "No PO box assigned", subtitle: "This post office can be deleted or given a PO box.")
+                    } else {
+                        ForEach(office.mailboxes) { mailbox in
+                            MacMailboxManageRow(
+                                mailbox: mailbox,
+                                postOffices: snapshot?.postOffices ?? [],
+                                busy: busyMailboxId == mailbox.id,
+                                collect: collect,
+                                updateMailbox: updateMailbox,
+                                deleteMailbox: deleteMailbox
+                            )
+                        }
                     }
                 }
             }
@@ -525,6 +529,10 @@ struct MacMailboxManageRow: View {
     @State private var confirmDelete = false
     @State private var postOfficeId = ""
     @State private var boxNumber = ""
+
+    private var editablePostOffices: [PostOffice] {
+        postOffices.filter { $0.id == mailbox.postOfficeId || $0.mailboxes.isEmpty }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -564,7 +572,7 @@ struct MacMailboxManageRow: View {
             if editing {
                 HStack {
                     Picker("Post office", selection: $postOfficeId) {
-                        ForEach(postOffices) { office in
+                        ForEach(editablePostOffices) { office in
                             Text(office.name).tag(office.id)
                         }
                     }
@@ -995,31 +1003,40 @@ struct MacCreateMailboxForm: View {
     @State private var postOfficeId = ""
     @State private var boxNumber = ""
 
+    private var availablePostOffices: [PostOffice] {
+        postOffices.filter { $0.mailboxes.isEmpty }
+    }
+
     var body: some View {
         MacPanel(title: "Add PO Box", aside: "Admin") {
             VStack(alignment: .leading, spacing: 10) {
-                Picker("Post office", selection: $postOfficeId) {
-                    ForEach(postOffices) { office in
-                        Text(office.name).tag(office.id)
+                if availablePostOffices.isEmpty {
+                    Text("Every active post office already has a PO box. Delete an unused post office or edit an existing PO box from Post Offices.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("Post office", selection: $postOfficeId) {
+                        ForEach(availablePostOffices) { office in
+                            Text(office.name).tag(office.id)
+                        }
                     }
-                }
-                .onAppear {
-                    if postOfficeId.isEmpty {
-                        postOfficeId = postOffices.first?.id ?? ""
+                    .onAppear {
+                        if postOfficeId.isEmpty || !availablePostOffices.contains(where: { $0.id == postOfficeId }) {
+                            postOfficeId = availablePostOffices.first?.id ?? ""
+                        }
                     }
-                }
-                TextField("PO Box Number", text: $boxNumber)
-                    .textFieldStyle(.roundedBorder)
-                Button {
-                    Task {
-                        await createMailbox(postOfficeId, boxNumber)
-                        boxNumber = ""
+                    TextField("PO Box Number", text: $boxNumber)
+                        .textFieldStyle(.roundedBorder)
+                    Button {
+                        Task {
+                            await createMailbox(postOfficeId, boxNumber)
+                            boxNumber = ""
+                        }
+                    } label: {
+                        Label("Create PO Box", systemImage: "plus")
                     }
-                } label: {
-                    Label("Create PO Box", systemImage: "plus")
+                    .buttonStyle(.borderedProminent)
+                    .disabled(postOfficeId.isEmpty || boxNumber.isEmpty)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(postOfficeId.isEmpty || boxNumber.isEmpty)
             }
             .frame(maxWidth: 560, alignment: .leading)
         }

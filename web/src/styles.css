@@ -339,6 +339,10 @@ h3 {
   background: #fff8f5;
 }
 
+.mailbox-row.empty-row {
+  background: #f8faf8;
+}
+
 .mailbox-row small, .mailbox-row > span {
   color: #65736c;
   font-size: 0.86rem;

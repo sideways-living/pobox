@@ -180,6 +180,12 @@ describe("shared mailbox state", () => {
       boxNumber: "9001"
     });
     expect(mailbox.name).toBe("PO Box 9001");
+    await expect(
+      store.createMailbox(daniel, "ws_company", {
+        postOfficeId: office.id,
+        boxNumber: "9002"
+      })
+    ).rejects.toThrow("This post office already has a PO box.");
 
     const snapshot = await store.dashboard(daniel, "ws_company");
     expect(snapshot.postOffices.some((candidate) => candidate.id === office.id)).toBe(true);

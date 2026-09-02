@@ -316,7 +316,7 @@ struct iPhoneDashboardView: View {
                 iPhoneOverviewList(model: model)
             }
 
-            iPhoneTab(title: "PO Boxes", systemImage: "mail.stack") {
+            iPhoneTab(title: "Post Offices", systemImage: "mail.stack") {
                 iPhoneMailboxList(model: model)
             }
 
@@ -457,6 +457,9 @@ struct iPhoneMailboxList: View {
                             await model.deleteMailbox(box)
                         })
                     }
+                    if office.mailboxes.isEmpty {
+                        ContentUnavailableView("No PO box assigned", systemImage: "mail.stack", description: Text("This post office can be deleted or given a PO box."))
+                    }
                 } header: {
                     Text(office.name)
                 } footer: {
@@ -481,6 +484,10 @@ struct iPhoneMailboxRow: View {
     @State private var confirmDelete = false
     @State private var postOfficeId = ""
     @State private var boxNumber = ""
+
+    private var editablePostOffices: [PostOffice] {
+        postOffices.filter { $0.id == mailbox.postOfficeId || $0.mailboxes.isEmpty }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -529,7 +536,7 @@ struct iPhoneMailboxRow: View {
 
             if editing {
                 Picker("Post office", selection: $postOfficeId) {
-                    ForEach(postOffices) { office in
+                    ForEach(editablePostOffices) { office in
                         Text(office.name).tag(office.id)
                     }
                 }
@@ -984,28 +991,37 @@ struct iPhoneCreateMailboxForm: View {
     @State private var postOfficeId = ""
     @State private var boxNumber = ""
 
+    private var availablePostOffices: [PostOffice] {
+        postOffices.filter { $0.mailboxes.isEmpty }
+    }
+
     var body: some View {
         Section("Add PO Box") {
-            Picker("Post office", selection: $postOfficeId) {
-                ForEach(postOffices) { office in
-                    Text(office.name).tag(office.id)
+            if availablePostOffices.isEmpty {
+                Text("Every active post office already has a PO box. Delete an unused post office or edit an existing PO box from Post Offices.")
+                    .foregroundStyle(.secondary)
+            } else {
+                Picker("Post office", selection: $postOfficeId) {
+                    ForEach(availablePostOffices) { office in
+                        Text(office.name).tag(office.id)
+                    }
                 }
-            }
-            .onAppear {
-                if postOfficeId.isEmpty {
-                    postOfficeId = postOffices.first?.id ?? ""
+                .onAppear {
+                    if postOfficeId.isEmpty || !availablePostOffices.contains(where: { $0.id == postOfficeId }) {
+                        postOfficeId = availablePostOffices.first?.id ?? ""
+                    }
                 }
-            }
-            TextField("PO Box Number", text: $boxNumber)
-            Button {
-                Task {
-                    await createMailbox(postOfficeId, boxNumber)
-                    boxNumber = ""
+                TextField("PO Box Number", text: $boxNumber)
+                Button {
+                    Task {
+                        await createMailbox(postOfficeId, boxNumber)
+                        boxNumber = ""
+                    }
+                } label: {
+                    Label("Create PO Box", systemImage: "plus")
                 }
-            } label: {
-                Label("Create PO Box", systemImage: "plus")
+                .disabled(postOfficeId.isEmpty || boxNumber.isEmpty)
             }
-            .disabled(postOfficeId.isEmpty || boxNumber.isEmpty)
         }
     }
 }

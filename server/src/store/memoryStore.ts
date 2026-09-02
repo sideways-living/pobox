@@ -676,6 +676,9 @@ export class MemoryStore implements AppStore {
     await this.requireMember(session, workspaceId, "ADMIN");
     const office = this.postOffices.get(input.postOfficeId);
     if (!office || office.workspaceId !== workspaceId) throw new NotFoundError("Post office not found.");
+    if ([...this.mailboxes.values()].some((mailbox) => mailbox.workspaceId === workspaceId && mailbox.postOfficeId === input.postOfficeId && mailbox.active)) {
+      throw new ConflictError("This post office already has a PO box.");
+    }
     if ([...this.mailboxes.values()].some((mailbox) => mailbox.workspaceId === workspaceId && mailbox.boxNumber === input.boxNumber)) {
       throw new ConflictError("PO box number already exists.");
     }
@@ -703,6 +706,9 @@ export class MemoryStore implements AppStore {
     if (input.postOfficeId) {
       const office = this.postOffices.get(input.postOfficeId);
       if (!office || office.workspaceId !== workspaceId || !office.active) throw new NotFoundError("Post office not found.");
+      if ([...this.mailboxes.values()].some((box) => box.id !== mailboxId && box.workspaceId === workspaceId && box.postOfficeId === input.postOfficeId && box.active)) {
+        throw new ConflictError("This post office already has a PO box.");
+      }
     }
     const boxNumber = input.boxNumber?.trim();
     if (boxNumber && [...this.mailboxes.values()].some((box) => box.id !== mailboxId && box.workspaceId === workspaceId && box.boxNumber === boxNumber)) {

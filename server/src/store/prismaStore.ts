@@ -758,6 +758,8 @@ export class PrismaStore implements AppStore {
     await this.requireMember(session, workspaceId, "ADMIN");
     const office = await this.prisma.postOffice.findFirst({ where: { id: input.postOfficeId, workspaceId } });
     if (!office) throw new NotFoundError("Post office not found.");
+    const existingForOffice = await this.prisma.mailbox.findFirst({ where: { workspaceId, postOfficeId: input.postOfficeId, active: true } });
+    if (existingForOffice) throw new ConflictError("This post office already has a PO box.");
     const name = input.name?.trim() || `PO Box ${input.boxNumber.trim()}`;
     try {
       const mailbox = await this.prisma.mailbox.create({
@@ -787,6 +789,10 @@ export class PrismaStore implements AppStore {
     if (input.postOfficeId) {
       const office = await this.prisma.postOffice.findFirst({ where: { id: input.postOfficeId, workspaceId, active: true } });
       if (!office) throw new NotFoundError("Post office not found.");
+      const existingForOffice = await this.prisma.mailbox.findFirst({
+        where: { workspaceId, postOfficeId: input.postOfficeId, active: true, NOT: { id: mailboxId } }
+      });
+      if (existingForOffice) throw new ConflictError("This post office already has a PO box.");
     }
     const boxNumber = input.boxNumber?.trim();
     try {
