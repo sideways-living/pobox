@@ -41,13 +41,34 @@ The checked-in initial migration lives at `server/prisma/migrations/000001_init/
 - Shared workspace state for post offices and PO boxes.
 - Deterministic parser for PO Box wording variants.
 - Provider message dedupe by `workspace + provider + providerMessageId`.
+- Optional Gmail polling every 30 minutes, marking processed or duplicate notification emails as read.
 - Explicit collection mutation with authenticated actor attribution.
 - WebSocket dashboard updates.
 - Responsive React/Vite web app.
 - Swift shared models/API client plus iPhone/macOS UI entry-point scaffolds.
 - Starlight VPS deployment examples for Nginx, systemd, PostgreSQL backup, and CI.
 
-Passkeys, APNs, provider OAuth, SMTP delivery, and full Prisma-backed repository wiring are represented in schema/config/docs and are not falsely marked complete.
+APNs, provider OAuth setup screens, SMTP delivery, and full Prisma-backed repository wiring are represented in schema/config/docs and are not falsely marked complete.
+
+## Gmail Mail Polling
+
+The backend can poll a Gmail inbox for unread notification emails, parse messages such as `mail is present in box 1234`, update the matching box, and mark processed messages as read. Duplicate provider message IDs are marked read without adding another history event. New emails for a box that is already waiting still add a history event, but the outstanding count stays at one for that box.
+
+Set these in `.env` on the VPS:
+
+```bash
+MAIL_PROVIDER=gmail
+MAIL_POLL_ENABLED=true
+MAIL_POLL_WORKSPACE_ID=ws_company
+MAIL_POLL_INTERVAL_MS=1800000
+GMAIL_CLIENT_ID=...
+GMAIL_CLIENT_SECRET=...
+GMAIL_REFRESH_TOKEN=...
+GMAIL_USER_ID=me
+GMAIL_SEARCH_QUERY=is:unread
+```
+
+`MAIL_POLL_INTERVAL_MS=1800000` is 30 minutes. The mail provider boundary is intentionally small so an IMAP provider can replace Gmail later without changing the parser or app state flow.
 
 ## Test
 

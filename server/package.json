@@ -1,6 +1,6 @@
 {
   "name": "@pobox-watch/server",
-  "version": "0.10.3",
+  "version": "0.11.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -25,6 +25,7 @@
     "@simplewebauthn/server": "^13.1.2",
     "argon2": "^0.43.1",
     "fastify": "^5.5.0",
+    "googleapis": "^178.0.0",
     "nanoid": "^5.1.5",
     "zod": "^4.0.17"
   },

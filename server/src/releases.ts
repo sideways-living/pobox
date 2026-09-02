@@ -1,4 +1,4 @@
-export const appVersion = "0.10.3";
+export const appVersion = "0.11.0";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.11.0-gmail-mail-polling",
+    version: "0.11.0",
+    releasedAt: "2026-09-02T13:00:00.000Z",
+    title: "Gmail notification polling",
+    summary:
+      "The backend can now poll a Gmail inbox, match unread mail-present notifications to box numbers, update the shared box state, add history for each new provider message, and mark handled Gmail messages as read.",
+    audience: "ADMIN"
+  },
   {
     id: "0.10.3-post-office-page-cleanup",
     version: "0.10.3",
