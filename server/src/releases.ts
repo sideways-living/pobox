@@ -1,4 +1,4 @@
-export const appVersion = "0.11.6";
+export const appVersion = "0.11.7";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.11.7-edit-form-layout-fix",
+    version: "0.11.7",
+    releasedAt: "2026-09-03T02:45:00.000Z",
+    title: "Edit form layout fix",
+    summary:
+      "Post office and PO box edit forms now keep fields in clean responsive rows so long names, addresses, and coordinates do not overlap.",
+    audience: "ALL"
+  },
   {
     id: "0.11.6-clearer-post-office-row-events",
     version: "0.11.6",

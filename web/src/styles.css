@@ -511,11 +511,14 @@ label {
   display: grid;
   gap: 6px;
   font-weight: 700;
+  min-width: 0;
 }
 
 input, select {
   border: 1px solid #b9c5bd;
   border-radius: 6px;
+  width: 100%;
+  min-width: 0;
   min-height: 42px;
   padding: 8px 10px;
   background: #ffffff;
@@ -665,9 +668,10 @@ input, select {
 
 .edit-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
   width: 100%;
+  min-width: 0;
 }
 
 .office-edit {
@@ -676,6 +680,25 @@ input, select {
   padding: 12px;
   border: 1px solid #d8ded8;
   border-radius: 8px;
+}
+
+.office-edit .edit-fields {
+  grid-template-columns:
+    minmax(220px, 1.15fr)
+    minmax(320px, 1.7fr)
+    minmax(150px, 0.8fr)
+    minmax(150px, 0.9fr)
+    minmax(150px, 0.9fr)
+    minmax(110px, 0.55fr);
+}
+
+.mailbox-row.editable-row {
+  grid-template-columns: minmax(0, 1fr) minmax(190px, auto);
+  align-items: end;
+}
+
+.mailbox-row.editable-row .edit-fields {
+  grid-template-columns: minmax(260px, 1fr) minmax(180px, 0.45fr);
 }
 
 .security-list span {
@@ -1091,7 +1114,7 @@ input, select {
     display: none;
   }
 
-  .mailbox-row {
+  .mailbox-row, .mailbox-row.editable-row, .office-edit .edit-fields, .mailbox-row.editable-row .edit-fields {
     grid-template-columns: 1fr;
   }
 
