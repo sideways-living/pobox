@@ -1,4 +1,4 @@
-export const appVersion = "0.11.7";
+export const appVersion = "0.11.8";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.11.8-embedded-apple-maps",
+    version: "0.11.8",
+    releasedAt: "2026-09-03T03:05:00.000Z",
+    title: "Embedded Apple Maps",
+    summary:
+      "The web Map page now supports embedded Apple Maps through MapKit JS when a MapKit token is configured, with Apple Maps links kept as the fallback.",
+    audience: "ALL"
+  },
   {
     id: "0.11.7-edit-form-layout-fix",
     version: "0.11.7",

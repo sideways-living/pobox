@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
+import { load as loadMapKit } from "@apple/mapkit-loader";
+import type { Annotation, Map as AppleMap } from "@apple/mapkit-loader";
 import { AlertTriangle, Bell, Check, Clock, Edit2, ExternalLink, KeyRound, LogIn, LogOut, Mail, MapPin, Package, Plus, RefreshCw, Route, Save, Shield, Trash2, Users, X } from "lucide-react";
 import {
   authenticatePasskey,
@@ -778,25 +780,7 @@ function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
                 </div>
                 <a className="primary map-button" href={appleMapsUrl(activeOffice)} target="_blank" rel="noreferrer"><ExternalLink size={17} />Open in Apple Maps</a>
               </div>
-              <div className="map-board-grid">
-                {snapshot.postOffices.map((office) => {
-                  const waiting = office.mailboxes.filter(hasWaitingItem).length;
-                  const point = mapPoint(snapshot.postOffices, office);
-                  return (
-                    <a
-                      className={waiting > 0 ? "map-point waiting" : "map-point"}
-                      href={appleMapsUrl(office)}
-                      key={office.id}
-                      style={{ left: `${point.x}%`, top: `${point.y}%` }}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label={`${office.name}, ${waiting > 0 ? `${waiting} waiting` : "clear"}`}
-                    >
-                      <span>{waiting}</span>
-                    </a>
-                  );
-                })}
-              </div>
+              <AppleMapPanel offices={snapshot.postOffices} activeOffice={activeOffice} />
             </div>
           ) : (
             <p className="small">Add a post office to show the operational map.</p>
@@ -829,6 +813,94 @@ function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
           )}
         </Panel>
       </aside>
+    </div>
+  );
+}
+
+function AppleMapPanel({ offices, activeOffice }: { offices: PostOffice[]; activeOffice: PostOffice }) {
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const [mapStatus, setMapStatus] = useState<"loading" | "ready" | "unconfigured" | "failed">("loading");
+  const token = (import.meta.env.VITE_MAPKIT_TOKEN as string | undefined)?.trim();
+
+  useEffect(() => {
+    let cancelled = false;
+    let map: AppleMap | undefined;
+    if (!token) {
+      setMapStatus("unconfigured");
+      return undefined;
+    }
+    if (!mapRef.current) return undefined;
+
+    setMapStatus("loading");
+    void loadMapKit({
+      token,
+      language: "en-AU",
+      libraries: ["map", "annotations"]
+    }).then((mapkit) => {
+      if (cancelled || !mapRef.current) return;
+      const center = new mapkit.Coordinate(activeOffice.latitude, activeOffice.longitude);
+      const span = new mapkit.CoordinateSpan(0.08, 0.08);
+      const nextMap = new mapkit.Map(mapRef.current);
+      nextMap.region = new mapkit.CoordinateRegion(center, span);
+      const annotations: Annotation[] = offices.map((office) => {
+        const waiting = office.mailboxes.filter(hasWaitingItem).length;
+        return new mapkit.MarkerAnnotation(new mapkit.Coordinate(office.latitude, office.longitude), {
+          title: office.name,
+          subtitle: waiting > 0 ? `${waiting} waiting` : "Clear",
+          color: waiting > 0 ? "#c74337" : "#34855f",
+          glyphText: waiting > 0 ? String(waiting) : ""
+        });
+      });
+      nextMap.addAnnotations(annotations);
+      map = nextMap;
+      setMapStatus("ready");
+    }).catch(() => {
+      if (!cancelled) setMapStatus("failed");
+    });
+
+    return () => {
+      cancelled = true;
+      map?.destroy?.();
+    };
+  }, [activeOffice.id, activeOffice.latitude, activeOffice.longitude, offices, token]);
+
+  if (!token) {
+    return <MapFallback offices={offices} message="Apple Maps needs a MapKit token before interactive maps can load." />;
+  }
+
+  return (
+    <div className="mapkit-panel">
+      <div ref={mapRef} className="mapkit-canvas" aria-label="Interactive Apple map" />
+      {mapStatus !== "ready" && (
+        <div className="mapkit-status">
+          {mapStatus === "failed" ? "Apple Maps could not load. Open the selected location in Apple Maps instead." : "Loading Apple Maps..."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MapFallback({ offices, message }: { offices: PostOffice[]; message: string }) {
+  return (
+    <div className="map-board-grid map-fallback">
+      <p>{message}</p>
+      {offices.map((office) => {
+        const waiting = office.mailboxes.filter(hasWaitingItem).length;
+        const point = mapPoint(offices, office);
+        return (
+          <a
+            className={waiting > 0 ? "map-point waiting" : "map-point"}
+            href={appleMapsUrl(office)}
+            key={office.id}
+            style={{ left: `${point.x}%`, top: `${point.y}%` }}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`${office.name}, ${waiting > 0 ? `${waiting} waiting` : "clear"}`}
+          >
+            <span>{waiting}</span>
+          </a>
+        );
+      })}
     </div>
   );
 }

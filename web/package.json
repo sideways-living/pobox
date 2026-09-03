@@ -1,6 +1,6 @@
 {
   "name": "@pobox-watch/web",
-  "version": "0.11.7",
+  "version": "0.11.8",
   "type": "module",
   "private": true,
   "scripts": {
@@ -10,6 +10,7 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
+    "@apple/mapkit-loader": "^1.0.0",
     "@simplewebauthn/browser": "^13.3.0",
     "@vitejs/plugin-react": "^5.0.0",
     "lucide-react": "^0.539.0",

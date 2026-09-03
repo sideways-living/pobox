@@ -70,6 +70,16 @@ GMAIL_SEARCH_QUERY=is:unread
 
 `MAIL_POLL_INTERVAL_MS=1800000` is 30 minutes. The mail provider boundary is intentionally small so an IMAP provider can replace Gmail later without changing the parser or app state flow.
 
+## Apple Maps On The Web
+
+The web app uses Apple MapKit JS for embedded maps. Apple Maps pages cannot be embedded directly in an iframe, so the production build needs a MapKit JS token:
+
+```bash
+VITE_MAPKIT_TOKEN=your-apple-mapkit-token
+```
+
+Set this in `.env` before running `npm run build`. Without it, pobox.watch still shows Apple Maps links, but the embedded interactive map will show a setup message instead of loading map tiles.
+
 ## Test
 
 ```bash

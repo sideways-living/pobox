@@ -888,6 +888,51 @@ input, select {
   overflow: hidden;
 }
 
+.mapkit-panel {
+  position: relative;
+  min-height: 260px;
+  border: 1px solid rgba(20, 51, 41, 0.12);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #dfe7df;
+}
+
+.mapkit-canvas {
+  width: 100%;
+  min-height: 260px;
+  height: 100%;
+}
+
+.mapkit-status {
+  position: absolute;
+  inset: 12px;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  color: #52635d;
+  font-weight: 800;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid #d8ded8;
+  border-radius: 8px;
+}
+
+.map-fallback p {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 14px;
+  z-index: 1;
+  margin: 0;
+  padding: 12px;
+  color: #52635d;
+  font-weight: 800;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #d8ded8;
+  border-radius: 8px;
+}
+
 .map-point {
   position: absolute;
   width: 34px;

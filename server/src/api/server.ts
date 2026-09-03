@@ -70,7 +70,24 @@ function sessionCookie(cookies: Record<string, string | undefined>) {
 export async function buildServer(store: AppStore = new MemoryStore()) {
   await store.seedDemo();
   const app = Fastify({ logger: true });
-  await app.register(helmet);
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        fontSrc: ["'self'", "https:", "data:"],
+        formAction: ["'self'"],
+        frameAncestors: ["'self'"],
+        imgSrc: ["'self'", "data:", "https:", "https://*.apple-mapkit.com"],
+        objectSrc: ["'none'"],
+        scriptSrc: ["'self'", "https://cdn.apple-mapkit.com"],
+        scriptSrcAttr: ["'none'"],
+        styleSrc: ["'self'", "https:", "'unsafe-inline'"],
+        connectSrc: ["'self'", "https://*.apple-mapkit.com"],
+        workerSrc: ["'self'", "blob:", "https://*.apple-mapkit.com"]
+      }
+    }
+  });
   await app.register(cookie, { secret: process.env.SESSION_SECRET || "dev-session-secret-change-me" });
   await app.register(cors, {
     origin: process.env.CORS_ORIGIN || "http://localhost:5173",
