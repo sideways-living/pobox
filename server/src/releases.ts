@@ -1,4 +1,4 @@
-export const appVersion = "0.11.5";
+export const appVersion = "0.11.6";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.11.6-clearer-post-office-row-events",
+    version: "0.11.6",
+    releasedAt: "2026-09-03T02:40:00.000Z",
+    title: "Clearer post office row events",
+    summary:
+      "Post office rows no longer repeat the box number under the PO box name, and waiting rows now label detected dates as mail or parcel events.",
+    audience: "ALL"
+  },
   {
     id: "0.11.5-remove-testing-controls",
     version: "0.11.5",

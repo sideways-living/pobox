@@ -1517,7 +1517,7 @@ function MailboxRow({
   const status = mailboxStatus(box);
   const latestWaitingAt = latestMailboxNotificationAt(box);
   const lastEvent = latestWaitingAt
-    ? `Detected ${new Date(latestWaitingAt).toLocaleString()}`
+    ? `${box.parcelWaiting && !box.mailWaiting ? "Parcel" : "Mail"} Detected ${new Date(latestWaitingAt).toLocaleString()}`
     : box.lastCollectedAt
       ? `Collected ${new Date(box.lastCollectedAt).toLocaleString()}`
       : "No events yet";
@@ -1547,7 +1547,6 @@ function MailboxRow({
       <div className={hasWaitingItem(box) ? "mailbox-row waiting" : "mailbox-row"}>
         <div>
           <strong>{box.name}</strong>
-          <small>Box {box.boxNumber}</small>
         </div>
         <StatusPill tone={hasWaitingItem(box) ? "warning" : "ok"}>{status}</StatusPill>
         <span>{lastEvent}</span>
