@@ -197,13 +197,6 @@ h3 {
   font-size: 0.88rem;
 }
 
-.dev-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
 .layout-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
@@ -1111,11 +1104,7 @@ input, select {
     flex-direction: column;
   }
 
-  .dev-controls {
-    justify-content: stretch;
-  }
-
-  .dev-controls button, .mailbox button, .logout-button {
+  .mailbox button, .logout-button {
     width: 100%;
   }
 }

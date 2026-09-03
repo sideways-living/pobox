@@ -22,10 +22,6 @@ const passkeyAuthenticationOptionsSchema = z.object({ email: z.string().email().
 const passkeyAuthenticationSchema = z.object({ response: z.any() });
 const postOfficeLookupSchema = z.object({ query: z.string().min(2).max(80), state: z.string().length(3).optional() });
 const collectSchema = z.object({ source: z.enum(["IPHONE", "MACOS", "WEB", "ADMIN", "NOTIFICATION"]).default("WEB") });
-const simulateSchema = z.object({
-  mailboxNumber: z.string().min(2),
-  providerMessageId: z.string().optional()
-});
 const inviteSchema = z.object({ email: z.string().email(), role: z.enum(["ADMIN", "MEMBER"]) });
 const createUserSchema = z.object({
   email: z.string().email(),
@@ -359,23 +355,6 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     await store.deleteMailbox(session, workspaceId, mailboxId);
     realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
     return reply.code(204).send();
-  });
-
-  app.post("/api/v1/workspaces/:workspaceId/dev/simulate-mail", async (request) => {
-    if (process.env.NODE_ENV === "production") throw new ForbiddenError("Development simulation is disabled in production.");
-    const { workspaceId } = request.params as { workspaceId: string };
-    const session = await securedSession(request, workspaceId);
-    const body = simulateSchema.parse(request.body);
-    const result = await store.processIncomingMail({
-      workspaceId,
-      provider: "mock",
-      providerMessageId: body.providerMessageId ?? `dev-${body.mailboxNumber}-${Date.now()}`,
-      sender: "mailroom@example.com",
-      subject: `There is mail in PO Box ${body.mailboxNumber}`,
-      receivedAt: new Date().toISOString()
-    });
-    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId), result });
-    return result;
   });
 
   app.get("/api/v1/workspaces/:workspaceId/realtime", { websocket: true }, async (socket, request) => {

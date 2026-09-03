@@ -296,19 +296,6 @@ export async function deleteMailbox(mailboxId: string): Promise<void> {
   if (!response.ok) throw new Error(await errorMessage(response));
 }
 
-export async function simulateMail(mailboxNumber: string, duplicate = false) {
-  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/dev/simulate-mail`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      mailboxNumber,
-      providerMessageId: duplicate ? `fixed-duplicate-${mailboxNumber}` : undefined
-    })
-  });
-  if (!response.ok) throw new Error(await errorMessage(response));
-}
-
 export function realtimeUrl() {
   const url = new URL(apiBase);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";

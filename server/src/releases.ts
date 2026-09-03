@@ -1,4 +1,4 @@
-export const appVersion = "0.11.4";
+export const appVersion = "0.11.5";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.11.5-remove-testing-controls",
+    version: "0.11.5",
+    releasedAt: "2026-09-03T02:00:00.000Z",
+    title: "Testing controls removed",
+    summary:
+      "The visible simulate mail, duplicate, and review item controls have been removed from the app so production screens only show real mailbox workflows.",
+    audience: "ALL"
+  },
   {
     id: "0.11.4-mail2day-full-confidence",
     version: "0.11.4",

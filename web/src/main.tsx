@@ -28,7 +28,6 @@ import {
   realtimeUrl,
   resolveReviewItem,
   searchPostOfficeLocations,
-  simulateMail,
   syncPostOfficeDirectory,
   updateMailbox,
   updatePostOffice,
@@ -186,11 +185,6 @@ function App() {
           <MetricCard value={snapshot.postOffices.length} label="Post offices" />
           <MetricCard value={reviewItems.length} label="Needs review" />
           <MetricCard value={snapshot.currentUser.role} label="Access level" />
-          <div className="dev-controls">
-            <button onClick={() => mutate(() => simulateMail("1234"))}>Simulate New Mail 1234</button>
-            <button onClick={() => mutate(() => simulateMail("5678"))}>Simulate New Mail 5678</button>
-            <button onClick={() => mutate(() => simulateMail("1234", true))}>Simulate Duplicate</button>
-          </div>
         </section>
 
         <SectionView
@@ -1042,13 +1036,6 @@ function HistorySection({ snapshot }: { snapshot: DashboardSnapshot }) {
 function NeedsReviewSection({ snapshot, reviewItems, mutate, refresh }: { snapshot: DashboardSnapshot; reviewItems: ReviewItem[]; mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>; refresh: () => Promise<void> }) {
   const mailboxes = snapshot.postOffices.flatMap((office) => office.mailboxes.map((box) => ({ ...box, officeName: office.name })));
 
-  async function simulateUnclearMail() {
-    await mutate(async () => {
-      await simulateMail("unknown-box");
-      await refresh();
-    });
-  }
-
   return (
     <div className="page-grid">
       <section className="page-main">
@@ -1071,10 +1058,6 @@ function NeedsReviewSection({ snapshot, reviewItems, mutate, refresh }: { snapsh
             <DetailRow label="Low confidence" value={String(reviewItems.filter((item) => (item.confidence ?? 1) < 0.7).length)} />
             <DetailRow label="Unmatched box" value={String(reviewItems.filter((item) => !item.mailboxNumber).length)} />
           </div>
-        </Panel>
-        <Panel title="Review Test">
-          <p className="small">Create an unmatched notification to confirm the review queue is receiving parser exceptions.</p>
-          <button className="primary security-action" onClick={simulateUnclearMail}><AlertTriangle size={17} />Simulate Review Item</button>
         </Panel>
       </aside>
     </div>
