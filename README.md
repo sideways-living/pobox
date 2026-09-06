@@ -87,7 +87,7 @@ The web app uses Apple MapKit JS for embedded maps. Apple Maps pages cannot be e
 VITE_MAPKIT_TOKEN=your-apple-mapkit-token
 ```
 
-Set this in `.env` before running `npm run build`. Without it, pobox.watch still shows Apple Maps links, but the embedded interactive map will show a setup message instead of loading map tiles.
+Set this in `.env` before running `npm run build`. Without it, pobox.watch still shows Apple Maps links and the fallback route board. Admins see a small setup notice; members only see the operational fallback. Production CSP must allow MapKit JS resources from `https://cdn.apple-mapkit.com` and Apple map service requests under `https://*.apple-mapkit.com`.
 
 ## Test
 

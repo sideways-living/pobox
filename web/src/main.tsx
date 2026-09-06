@@ -808,6 +808,7 @@ function MapSummary({ snapshot }: { snapshot: DashboardSnapshot }) {
 
 function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
   const activeOffice = snapshot.postOffices.find((office) => office.mailboxes.some(hasWaitingItem)) ?? snapshot.postOffices[0];
+  const isAdmin = snapshot.currentUser.role === "ADMIN";
   return (
     <div className="page-grid map-page">
       <section className="page-main">
@@ -822,7 +823,7 @@ function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
                 </div>
                 <a className="primary map-button" href={appleMapsUrl(activeOffice)} target="_blank" rel="noreferrer"><ExternalLink size={17} />Open in Apple Maps</a>
               </div>
-              <AppleMapPanel offices={snapshot.postOffices} activeOffice={activeOffice} />
+              <AppleMapPanel offices={snapshot.postOffices} activeOffice={activeOffice} isAdmin={isAdmin} />
             </div>
           ) : (
             <p className="small">Add a post office to show the operational map.</p>
@@ -859,7 +860,7 @@ function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
   );
 }
 
-function AppleMapPanel({ offices, activeOffice }: { offices: PostOffice[]; activeOffice: PostOffice }) {
+function AppleMapPanel({ offices, activeOffice, isAdmin }: { offices: PostOffice[]; activeOffice: PostOffice; isAdmin: boolean }) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const [mapStatus, setMapStatus] = useState<"loading" | "ready" | "unconfigured" | "failed">("loading");
   const token = (import.meta.env.VITE_MAPKIT_TOKEN as string | undefined)?.trim();
@@ -907,25 +908,39 @@ function AppleMapPanel({ offices, activeOffice }: { offices: PostOffice[]; activ
   }, [activeOffice.id, activeOffice.latitude, activeOffice.longitude, offices, token]);
 
   if (!token) {
-    return <MapFallback offices={offices} message="Apple Maps needs a MapKit token before interactive maps can load." />;
+    return (
+      <MapFallback
+        offices={offices}
+        message={isAdmin ? "Interactive Apple Maps need VITE_MAPKIT_TOKEN set before the production build. Apple Maps links remain available." : undefined}
+      />
+    );
+  }
+  if (mapStatus === "failed" && !isAdmin) {
+    return <MapFallback offices={offices} />;
   }
 
   return (
     <div className="mapkit-panel">
       <div ref={mapRef} className="mapkit-canvas" aria-label="Interactive Apple map" />
       {mapStatus !== "ready" && (
-        <div className="mapkit-status">
-          {mapStatus === "failed" ? "Apple Maps could not load. Open the selected location in Apple Maps instead." : "Loading Apple Maps..."}
-        </div>
+        isAdmin || mapStatus === "loading" ? (
+          <div className={mapStatus === "failed" ? "mapkit-status mapkit-status-error" : "mapkit-status"}>
+            {mapStatus === "failed"
+              ? "Apple Maps could not load. Check VITE_MAPKIT_TOKEN and the Apple MapKit CSP allowances; Apple Maps links still work."
+              : "Loading Apple Maps..."}
+          </div>
+        ) : (
+          <MapFallback offices={offices} />
+        )
       )}
     </div>
   );
 }
 
-function MapFallback({ offices, message }: { offices: PostOffice[]; message: string }) {
+function MapFallback({ offices, message }: { offices: PostOffice[]; message?: string }) {
   return (
     <div className="map-board-grid map-fallback">
-      <p>{message}</p>
+      {message && <p>{message}</p>}
       {offices.map((office) => {
         const waiting = office.mailboxes.filter(hasWaitingItem).length;
         const point = mapPoint(offices, office);

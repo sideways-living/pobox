@@ -78,13 +78,13 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
         fontSrc: ["'self'", "https:", "data:"],
         formAction: ["'self'"],
         frameAncestors: ["'self'"],
-        imgSrc: ["'self'", "data:", "https:", "https://*.apple-mapkit.com"],
+        imgSrc: ["'self'", "data:", "blob:", "https:", "https://*.apple-mapkit.com", "https://cdn.apple-mapkit.com"],
         objectSrc: ["'none'"],
         scriptSrc: ["'self'", "https://cdn.apple-mapkit.com"],
         scriptSrcAttr: ["'none'"],
-        styleSrc: ["'self'", "https:", "'unsafe-inline'"],
-        connectSrc: ["'self'", "https://*.apple-mapkit.com"],
-        workerSrc: ["'self'", "blob:", "https://*.apple-mapkit.com"]
+        styleSrc: ["'self'", "https:", "'unsafe-inline'", "https://cdn.apple-mapkit.com"],
+        connectSrc: ["'self'", "https://*.apple-mapkit.com", "https://cdn.apple-mapkit.com"],
+        workerSrc: ["'self'", "blob:", "https://*.apple-mapkit.com", "https://cdn.apple-mapkit.com"]
       }
     }
   });

@@ -58,6 +58,8 @@ sudo systemctl enable --now pobox-watch-api
 
 For a plain Nginx/systemd deployment, build and copy static assets with `deploy/scripts/deploy-web.sh`. For CloudPanel Node.js sites, the Node server can serve `web/dist` directly after `npm run build`; set the app port to `4175` and startup command to `bash -lc 'set -a; source .env; set +a; npm run start --workspace server'`.
 
+Embedded Apple Maps require `VITE_MAPKIT_TOKEN` in `.env` before `npm run build`. Keep the application CSP from `server/src/api/server.ts` active when proxying through Nginx/CloudPanel so `https://cdn.apple-mapkit.com` and `https://*.apple-mapkit.com` are not blocked.
+
 ## Nginx And TLS
 
 Point DNS for `pobox.watch` at the VPS. Install `deploy/nginx/pobox-watch.conf`, adjust the domain if needed, then request a certificate:

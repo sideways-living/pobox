@@ -950,6 +950,12 @@ input, select {
   border-radius: 8px;
 }
 
+.mapkit-status-error {
+  color: #843328;
+  background: rgba(255, 248, 245, 0.94);
+  border-color: #efc1b6;
+}
+
 .map-fallback p {
   position: absolute;
   left: 14px;

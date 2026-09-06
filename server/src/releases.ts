@@ -1,4 +1,4 @@
-export const appVersion = "0.12.4";
+export const appVersion = "0.12.5";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.12.5-mapkit-production-check",
+    version: "0.12.5",
+    releasedAt: "2026-09-06T15:25:00.000Z",
+    title: "Apple Maps production hardening",
+    summary:
+      "The web Map page now keeps Apple Maps links available when MapKit is not configured, limits setup and token error messages to admins, and allows Apple MapKit resources through the production content security policy.",
+    audience: "ADMIN"
+  },
   {
     id: "0.12.4-gmail-polling-reliability",
     version: "0.12.4",
