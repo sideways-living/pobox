@@ -59,6 +59,33 @@ describe("mail parser", () => {
     });
   });
 
+  it("matches saved boxes that include a PO Box prefix", () => {
+    const prefixedBox = { ...mailbox, id: "box_229", name: "PO Box 229", boxNumber: "PO Box 229" };
+    const parsed = parseMailNotification({ sender: "mailroom@example.com", subject: "Mail2Day: PO Box 229 has mail" }, [prefixedBox]);
+
+    expect(parsed).toMatchObject({
+      requiresReview: false,
+      mailboxId: "box_229",
+      mailboxNumber: "229",
+      notificationType: "MAIL",
+      confidence: 1
+    });
+  });
+
+  it("requires review when the same box number exists at multiple active post offices", () => {
+    const firstBox = { ...mailbox, id: "box_229_a", postOfficeId: "po_a", name: "PO Box 229", boxNumber: "229" };
+    const secondBox = { ...mailbox, id: "box_229_b", postOfficeId: "po_b", name: "PO Box 229", boxNumber: "229" };
+    const parsed = parseMailNotification({ sender: "mailroom@example.com", subject: "Mail2Day: PO Box 229 has mail" }, [firstBox, secondBox]);
+
+    expect(parsed).toMatchObject({
+      requiresReview: true,
+      mailboxNumber: "229",
+      notificationType: "MAIL",
+      confidence: 0.7
+    });
+    expect(parsed.mailboxId).toBeUndefined();
+  });
+
   it("matches parcel pickup notices by collect-from post office", () => {
     const parsed = parseMailNotification(
       {

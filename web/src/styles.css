@@ -690,10 +690,21 @@ input, select {
 
 .edit-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 10px;
   width: 100%;
   min-width: 0;
+}
+
+.field-note {
+  margin: 0;
+  align-self: end;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.field-note.warning {
+  color: #a73524;
 }
 
 .office-edit {
@@ -720,7 +731,7 @@ input, select {
 }
 
 .mailbox-row.editable-row .edit-fields {
-  grid-template-columns: minmax(260px, 1fr) minmax(180px, 0.45fr);
+  grid-template-columns: minmax(190px, 0.9fr) minmax(240px, 1.25fr) minmax(150px, 0.55fr);
 }
 
 .security-list span {

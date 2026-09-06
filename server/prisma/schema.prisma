@@ -222,7 +222,7 @@ model Mailbox {
   mailEvents           MailEvent[]
   collectionEvents     CollectionEvent[]
 
-  @@unique([workspaceId, boxNumber])
+  @@unique([workspaceId, postOfficeId, boxNumber])
   @@index([workspaceId, postOfficeId])
 }
 

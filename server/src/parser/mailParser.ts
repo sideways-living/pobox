@@ -25,14 +25,17 @@ export function parseMailNotification(input: IncomingMailInput, mailboxes: Mailb
   }
 
   const mailboxNumber = normalizeBoxNumber(match[1]);
-  const mailbox = mailboxes.find((box) => normalizeBoxNumber(box.boxNumber) === mailboxNumber && box.active);
-  if (!mailbox) {
+  const matchingMailboxes = mailboxes.filter((box) => normalizeBoxNumber(box.boxNumber) === mailboxNumber && box.active);
+  if (matchingMailboxes.length === 0) {
     return { mailboxNumber, notificationType: "MAIL", confidence: 0.55, requiresReview: true };
+  }
+  if (matchingMailboxes.length > 1) {
+    return { mailboxNumber, notificationType: "MAIL", confidence: 0.7, requiresReview: true };
   }
 
   return {
     mailboxNumber,
-    mailboxId: mailbox.id,
+    mailboxId: matchingMailboxes[0].id,
     notificationType: "MAIL",
     confidence: mail2DayMatch ? 1 : 0.96,
     requiresReview: false,
@@ -41,7 +44,7 @@ export function parseMailNotification(input: IncomingMailInput, mailboxes: Mailb
 }
 
 export function normalizeBoxNumber(value: string): string {
-  return value.replace(/[^a-z0-9]/gi, "").toUpperCase();
+  return value.replace(/^\s*(?:p\.?\s*o\.?\s*box|pobox|post\s*box|postbox|box)\s*/i, "").replace(/[^a-z0-9]/gi, "").toUpperCase();
 }
 
 function parseParcelNotification(input: IncomingMailInput, mailboxes: Mailbox[], postOffices: PostOffice[]): ParsedMailNotification {

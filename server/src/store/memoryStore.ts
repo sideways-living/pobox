@@ -759,17 +759,23 @@ export class MemoryStore implements AppStore {
     await this.requireMember(session, workspaceId, "ADMIN");
     const office = this.postOffices.get(input.postOfficeId);
     if (!office || office.workspaceId !== workspaceId) throw new NotFoundError("Post office not found.");
-    if ([...this.mailboxes.values()].some((mailbox) => mailbox.workspaceId === workspaceId && mailbox.boxNumber === input.boxNumber)) {
-      throw new ConflictError("PO box number already exists.");
+    const boxNumber = input.boxNumber.trim();
+    if ([...this.mailboxes.values()].some((mailbox) =>
+      mailbox.workspaceId === workspaceId &&
+      mailbox.postOfficeId === input.postOfficeId &&
+      mailbox.active &&
+      normalizeMailboxNumber(mailbox.boxNumber) === normalizeMailboxNumber(boxNumber)
+    )) {
+      throw new ConflictError("This post office already has that PO box number.");
     }
     const now = new Date().toISOString();
-    const name = input.name?.trim() || `PO Box ${input.boxNumber.trim()}`;
+    const name = input.name?.trim() || `PO Box ${boxNumber}`;
     const mailbox: Mailbox = {
       id: nanoid(),
       workspaceId,
       postOfficeId: input.postOfficeId,
       name,
-      boxNumber: input.boxNumber,
+      boxNumber,
       active: true,
       mailWaiting: false,
       parcelWaiting: false,
@@ -788,13 +794,20 @@ export class MemoryStore implements AppStore {
       const office = this.postOffices.get(input.postOfficeId);
       if (!office || office.workspaceId !== workspaceId || !office.active) throw new NotFoundError("Post office not found.");
     }
+    const nextPostOfficeId = input.postOfficeId ?? mailbox.postOfficeId;
     const boxNumber = input.boxNumber?.trim();
-    if (boxNumber && [...this.mailboxes.values()].some((box) => box.id !== mailboxId && box.workspaceId === workspaceId && box.boxNumber === boxNumber)) {
-      throw new ConflictError("PO box number already exists.");
+    if (boxNumber && [...this.mailboxes.values()].some((box) =>
+      box.id !== mailboxId &&
+      box.workspaceId === workspaceId &&
+      box.postOfficeId === nextPostOfficeId &&
+      box.active &&
+      normalizeMailboxNumber(box.boxNumber) === normalizeMailboxNumber(boxNumber)
+    )) {
+      throw new ConflictError("This post office already has that PO box number.");
     }
     const updated = {
       ...mailbox,
-      postOfficeId: input.postOfficeId ?? mailbox.postOfficeId,
+      postOfficeId: nextPostOfficeId,
       boxNumber: boxNumber ?? mailbox.boxNumber,
       name: boxNumber ? `PO Box ${boxNumber}` : mailbox.name,
       updatedAt: new Date().toISOString()
@@ -832,4 +845,8 @@ export class MemoryStore implements AppStore {
     this.auditEvents.set(event.id, event);
     return event;
   }
+}
+
+function normalizeMailboxNumber(value: string) {
+  return value.replace(/^\s*(?:p\.?\s*o\.?\s*box|pobox|post\s*box|postbox|box)\s*/i, "").replace(/[^a-z0-9]/gi, "").toUpperCase();
 }

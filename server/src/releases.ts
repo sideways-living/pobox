@@ -1,4 +1,4 @@
-export const appVersion = "0.11.9";
+export const appVersion = "0.12.0";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.12.0-po-box-add-edit-flow",
+    version: "0.12.0",
+    releasedAt: "2026-09-06T13:45:00.000Z",
+    title: "PO Box setup flow",
+    summary:
+      "Adding and editing a PO box now starts with choosing a saved post office, then entering only the box number. Duplicate box numbers are checked per post office, and matching stays safe when the same number exists at different locations.",
+    audience: "ALL"
+  },
   {
     id: "0.11.9-production-post-offices-page",
     version: "0.11.9",

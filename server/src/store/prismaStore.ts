@@ -890,16 +890,28 @@ export class PrismaStore implements AppStore {
 
   async createMailbox(session: Session, workspaceId: string, input: CreateMailboxInput): Promise<Mailbox> {
     await this.requireMember(session, workspaceId, "ADMIN");
-    const office = await this.prisma.postOffice.findFirst({ where: { id: input.postOfficeId, workspaceId } });
+    const office = await this.prisma.postOffice.findFirst({ where: { id: input.postOfficeId, workspaceId, active: true } });
     if (!office) throw new NotFoundError("Post office not found.");
-    const name = input.name?.trim() || `PO Box ${input.boxNumber.trim()}`;
+    const boxNumber = input.boxNumber.trim();
+    const existingMailboxes = await this.prisma.mailbox.findMany({
+      where: {
+        workspaceId,
+        postOfficeId: input.postOfficeId,
+        active: true
+      },
+      select: { boxNumber: true }
+    });
+    if (existingMailboxes.some((mailbox: { boxNumber: string }) => normalizeMailboxNumber(mailbox.boxNumber) === normalizeMailboxNumber(boxNumber))) {
+      throw new ConflictError("This post office already has that PO box number.");
+    }
+    const name = input.name?.trim() || `PO Box ${boxNumber}`;
     try {
       const mailbox = await this.prisma.mailbox.create({
         data: {
           workspaceId,
           postOfficeId: input.postOfficeId,
           name,
-          boxNumber: input.boxNumber,
+          boxNumber,
           active: true,
           mailWaiting: false,
           parcelWaiting: false
@@ -909,7 +921,7 @@ export class PrismaStore implements AppStore {
       return this.toMailbox(mailbox);
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new ConflictError("PO box number already exists.");
+        throw new ConflictError("This post office already has that PO box number.");
       }
       throw error;
     }
@@ -923,7 +935,22 @@ export class PrismaStore implements AppStore {
       const office = await this.prisma.postOffice.findFirst({ where: { id: input.postOfficeId, workspaceId, active: true } });
       if (!office) throw new NotFoundError("Post office not found.");
     }
+    const nextPostOfficeId = input.postOfficeId ?? mailbox.postOfficeId;
     const boxNumber = input.boxNumber?.trim();
+    if (boxNumber) {
+      const existingMailboxes = await this.prisma.mailbox.findMany({
+        where: {
+          id: { not: mailboxId },
+          workspaceId,
+          postOfficeId: nextPostOfficeId,
+          active: true
+        },
+        select: { boxNumber: true }
+      });
+      if (existingMailboxes.some((box: { boxNumber: string }) => normalizeMailboxNumber(box.boxNumber) === normalizeMailboxNumber(boxNumber))) {
+        throw new ConflictError("This post office already has that PO box number.");
+      }
+    }
     try {
       const updated = await this.prisma.mailbox.update({
         where: { id: mailboxId },
@@ -937,7 +964,7 @@ export class PrismaStore implements AppStore {
       return this.toMailbox(updated);
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new ConflictError("PO box number already exists.");
+        throw new ConflictError("This post office already has that PO box number.");
       }
       throw error;
     }
@@ -1093,4 +1120,8 @@ export class PrismaStore implements AppStore {
       method: event.method
     };
   }
+}
+
+function normalizeMailboxNumber(value: string) {
+  return value.replace(/^\s*(?:p\.?\s*o\.?\s*box|pobox|post\s*box|postbox|box)\s*/i, "").replace(/[^a-z0-9]/gi, "").toUpperCase();
 }

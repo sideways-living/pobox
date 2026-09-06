@@ -1553,7 +1553,11 @@ function directoryStatusLabel(status: PostOfficeDirectoryStatus | null) {
 
 function AddMailboxForm({ snapshot, refresh, setError }: { snapshot: DashboardSnapshot; refresh: () => Promise<void>; setError: (value: string | null) => void }) {
   const [postOfficeId, setPostOfficeId] = useState(snapshot.postOffices[0]?.id ?? "");
+  const [officeQuery, setOfficeQuery] = useState("");
   const [boxNumber, setBoxNumber] = useState("");
+  const visiblePostOffices = filteredPostOffices(snapshot.postOffices, officeQuery);
+  const visiblePostOfficeIds = visiblePostOffices.map((office) => office.id).join(",");
+  const duplicate = Boolean(postOfficeId && boxNumber.trim() && duplicateMailboxAtOffice(snapshot.postOffices, postOfficeId, boxNumber));
 
   useEffect(() => {
     if (!snapshot.postOffices.some((office) => office.id === postOfficeId)) {
@@ -1561,13 +1565,27 @@ function AddMailboxForm({ snapshot, refresh, setError }: { snapshot: DashboardSn
     }
   }, [snapshot.postOffices.map((office) => office.id).join(","), postOfficeId]);
 
+  useEffect(() => {
+    if (visiblePostOffices.length > 0 && !visiblePostOffices.some((office) => office.id === postOfficeId)) {
+      setPostOfficeId(visiblePostOffices[0].id);
+    }
+    if (visiblePostOffices.length === 0 && officeQuery.trim()) {
+      setPostOfficeId("");
+    }
+  }, [officeQuery, postOfficeId, visiblePostOfficeIds]);
+
   if (snapshot.currentUser.role !== "ADMIN") return null;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (duplicate) {
+      setError("This post office already has that PO box number.");
+      return;
+    }
     try {
-      await createMailbox({ postOfficeId, boxNumber });
+      await createMailbox({ postOfficeId, boxNumber: boxNumber.trim() });
       setBoxNumber("");
+      setOfficeQuery("");
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create PO box.");
@@ -1578,9 +1596,14 @@ function AddMailboxForm({ snapshot, refresh, setError }: { snapshot: DashboardSn
     <Panel title="Add PO Box">
       {snapshot.postOffices.length > 0 ? (
         <form className="form-grid" onSubmit={submit}>
-          <label>Post office<select value={postOfficeId} onChange={(event) => setPostOfficeId(event.target.value)}>{snapshot.postOffices.map((office) => <option value={office.id} key={office.id}>{office.name}</option>)}</select></label>
+          <label>Find post office<input value={officeQuery} onChange={(event) => setOfficeQuery(event.target.value)} placeholder="Start typing a post office name" autoComplete="off" /></label>
+          <label>Post office<select value={postOfficeId} onChange={(event) => setPostOfficeId(event.target.value)}>
+            {visiblePostOffices.map((office) => <option value={office.id} key={office.id}>{office.name}</option>)}
+          </select></label>
+          {visiblePostOffices.length === 0 && <p className="field-note warning">No saved post offices match that search.</p>}
           <label>PO Box Number<input value={boxNumber} onChange={(event) => setBoxNumber(event.target.value)} required /></label>
-          <button className="primary"><Plus size={17} />Create PO Box</button>
+          {duplicate && <p className="field-note warning">This post office already has PO Box {boxNumber.trim()}.</p>}
+          <button className="primary" disabled={!postOfficeId || !boxNumber.trim() || duplicate}><Plus size={17} />Create PO Box</button>
         </form>
       ) : (
         <p className="small">Create or import a post office before adding a PO box.</p>
@@ -1622,31 +1645,46 @@ function MailboxRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [postOfficeId, setPostOfficeId] = useState(box.postOfficeId);
+  const [officeQuery, setOfficeQuery] = useState("");
   const [boxNumber, setBoxNumber] = useState(box.boxNumber);
   const status = mailboxStatus(box);
   const latestWaitingAt = latestMailboxNotificationAt(box);
+  const visiblePostOffices = filteredPostOffices(postOffices, officeQuery);
+  const visiblePostOfficeIds = visiblePostOffices.map((office) => office.id).join(",");
+  const duplicate = Boolean(postOfficeId && boxNumber.trim() && duplicateMailboxAtOffice(postOffices, postOfficeId, boxNumber, box.id));
   const lastEvent = latestWaitingAt
     ? `${box.parcelWaiting && !box.mailWaiting ? "Parcel" : "Mail"} Detected ${new Date(latestWaitingAt).toLocaleString()}`
     : box.lastCollectedAt
       ? `Collected ${new Date(box.lastCollectedAt).toLocaleString()}`
       : "No events yet";
+
+  useEffect(() => {
+    if (visiblePostOffices.length > 0 && !visiblePostOffices.some((office) => office.id === postOfficeId)) {
+      setPostOfficeId(visiblePostOffices[0].id);
+    }
+    if (visiblePostOffices.length === 0 && officeQuery.trim()) {
+      setPostOfficeId("");
+    }
+  }, [officeQuery, postOfficeId, visiblePostOfficeIds]);
   if (table) {
     if (editing) {
       return (
         <form className="mailbox-row editable-row" onSubmit={async (event) => {
           event.preventDefault();
-          if (!onSave) return;
-          await onSave(box.id, { postOfficeId, boxNumber });
+          if (!onSave || duplicate) return;
+          await onSave(box.id, { postOfficeId, boxNumber: boxNumber.trim() });
           setEditing(false);
         }}>
           <div className="edit-fields">
-            <label>Post office<select value={postOfficeId} onChange={(event) => setPostOfficeId(event.target.value)}>{postOffices.map((office) => <option value={office.id} key={office.id}>{office.name}</option>)}</select></label>
+            <label>Find post office<input value={officeQuery} onChange={(event) => setOfficeQuery(event.target.value)} placeholder="Search saved post offices" autoComplete="off" /></label>
+            <label>Post office<select value={postOfficeId} onChange={(event) => setPostOfficeId(event.target.value)}>{visiblePostOffices.map((office) => <option value={office.id} key={office.id}>{office.name}</option>)}</select></label>
             <label>PO Box Number<input value={boxNumber} onChange={(event) => setBoxNumber(event.target.value)} required /></label>
+            {duplicate && <p className="field-note warning">This post office already has PO Box {boxNumber.trim()}.</p>}
           </div>
           <span>{status}</span>
           <span>{lastEvent}</span>
           <div className="row-actions">
-            <button className="primary" type="submit"><Save size={16} />Save</button>
+            <button className="primary" type="submit" disabled={!postOfficeId || !boxNumber.trim() || duplicate}><Save size={16} />Save</button>
             <button className="secondary" type="button" onClick={() => setEditing(false)}><X size={16} />Cancel</button>
           </div>
         </form>
@@ -1744,8 +1782,23 @@ function latestOfficeEvent(office: PostOffice) {
   return `Last event ${new Date(dates.sort((a, b) => b.localeCompare(a))[0]).toLocaleString()}`;
 }
 
+function filteredPostOffices(postOffices: PostOffice[], query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return postOffices;
+  return postOffices.filter((office) =>
+    [office.name, office.address, office.phone ?? ""].some((value) => value.toLowerCase().includes(normalized))
+  );
+}
+
+function duplicateMailboxAtOffice(postOffices: PostOffice[], postOfficeId: string, boxNumber: string, excludeMailboxId?: string) {
+  const normalized = normalizeBoxNumber(boxNumber);
+  return postOffices
+    .find((office) => office.id === postOfficeId)
+    ?.mailboxes.some((box) => box.id !== excludeMailboxId && box.active && normalizeBoxNumber(box.boxNumber) === normalized) ?? false;
+}
+
 function normalizeBoxNumber(value: string) {
-  return value.replace(/[^a-z0-9]/gi, "").toUpperCase();
+  return value.replace(/^\s*(?:p\.?\s*o\.?\s*box|pobox|post\s*box|postbox|box)\s*/i, "").replace(/[^a-z0-9]/gi, "").toUpperCase();
 }
 
 function isMailEvent(event: MailHistoryEvent | CollectionHistoryEvent): event is MailHistoryEvent {

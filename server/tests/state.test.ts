@@ -276,6 +276,36 @@ describe("shared mailbox state", () => {
     expect(snapshot.postOffices.flatMap((candidate) => candidate.mailboxes).some((candidate) => candidate.id === secondMailbox.id)).toBe(true);
   });
 
+  it("allows the same PO box number at different post offices but not the same post office", async () => {
+    const daniel = await loginSession("daniel@example.com");
+    const firstOffice = await store.createPostOffice(daniel, "ws_company", {
+      name: "Carlton Post Office",
+      address: "123 Lygon Street, Carlton VIC",
+      latitude: -37.8001,
+      longitude: 144.9671,
+      geofenceRadius: 180
+    });
+    const secondOffice = await store.createPostOffice(daniel, "ws_company", {
+      name: "Richmond Post Office",
+      address: "456 Swan Street, Richmond VIC",
+      latitude: -37.825,
+      longitude: 144.997,
+      geofenceRadius: 200
+    });
+
+    const firstBox = await store.createMailbox(daniel, "ws_company", { postOfficeId: firstOffice.id, boxNumber: "229" });
+    const secondBox = await store.createMailbox(daniel, "ws_company", { postOfficeId: secondOffice.id, boxNumber: "229" });
+
+    expect(firstBox.postOfficeId).toBe(firstOffice.id);
+    expect(secondBox.postOfficeId).toBe(secondOffice.id);
+    await expect(store.createMailbox(daniel, "ws_company", { postOfficeId: firstOffice.id, boxNumber: "PO Box 229" })).rejects.toThrow(
+      "This post office already has that PO box number."
+    );
+    await expect(store.updateMailbox(daniel, "ws_company", secondBox.id, { postOfficeId: firstOffice.id, boxNumber: "229" })).rejects.toThrow(
+      "This post office already has that PO box number."
+    );
+  });
+
   it("allows admins to edit and delete managed records", async () => {
     const daniel = await loginSession("daniel@example.com");
     const office = await store.createPostOffice(daniel, "ws_company", {
