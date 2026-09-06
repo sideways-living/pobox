@@ -48,6 +48,38 @@ import type {
 } from "./types.js";
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "./types.js";
 
+interface RecoveryCodeRow {
+  id: string;
+  codeHash: string;
+}
+
+interface PasskeyCredentialRow {
+  credentialId: string;
+  transports: string[];
+}
+
+interface MemberWithUserRow {
+  user: {
+    id: string;
+    email: string;
+    active: boolean;
+    profile: { displayName: string } | null;
+  };
+  role: TeamMemberSummary["role"];
+  status: string;
+}
+
+interface AuditEntityRow {
+  entityId: string;
+}
+
+interface ReviewAuditRow {
+  id: string;
+  entityId: string;
+  metadata: unknown;
+  createdAt: Date;
+}
+
 export class PrismaStore implements AppStore {
   constructor(private readonly prisma = new PrismaClient()) {}
 
@@ -162,7 +194,7 @@ export class PrismaStore implements AppStore {
     const availableRecoveryCodes = await this.prisma.recoveryCode.findMany({
       where: { userId: challenge.userId, usedAt: null }
     });
-    const recovery = availableRecoveryCodes.find((candidate) => recoveryCodeMatches(code, candidate.codeHash));
+    const recovery = (availableRecoveryCodes as RecoveryCodeRow[]).find((candidate) => recoveryCodeMatches(code, candidate.codeHash));
     if (!validTotp && !recovery) throw new UnauthorizedError("Invalid two-factor code.");
     await this.prisma.$transaction([
       ...(recovery ? [this.prisma.recoveryCode.update({ where: { id: recovery.id }, data: { usedAt: new Date() } })] : []),
@@ -241,7 +273,7 @@ export class PrismaStore implements AppStore {
       userID: Uint8Array.from(Buffer.from(user.id)),
       userDisplayName: user.profile?.displayName ?? user.email,
       attestationType: "none",
-      excludeCredentials: user.passkeyCredentials.map((credential) => ({
+      excludeCredentials: (user.passkeyCredentials as PasskeyCredentialRow[]).map((credential) => ({
         id: credential.credentialId,
         transports: credential.transports as Array<"ble" | "cable" | "hybrid" | "internal" | "nfc" | "smart-card" | "usb">
       })),
@@ -293,7 +325,7 @@ export class PrismaStore implements AppStore {
 
   async beginPasskeyAuthentication(email?: string): Promise<PasskeyAuthenticationOptions> {
     const user = email ? await this.prisma.user.findUnique({ where: { email: email.toLowerCase() }, include: { passkeyCredentials: true } }) : null;
-    const allowedCredentials = user?.passkeyCredentials.map((credential) => ({
+    const allowedCredentials = (user?.passkeyCredentials as PasskeyCredentialRow[] | undefined)?.map((credential) => ({
       id: credential.credentialId,
       transports: credential.transports as Array<"ble" | "cable" | "hybrid" | "internal" | "nfc" | "smart-card" | "usb">
     }));
@@ -587,8 +619,8 @@ export class PrismaStore implements AppStore {
       orderBy: { createdAt: "asc" },
       include: { user: { include: { profile: true } } }
     });
-    return members
-      .map((member) => ({
+    return (members as MemberWithUserRow[])
+      .map((member): TeamMemberSummary => ({
         id: member.user.id,
         email: member.user.email,
         displayName: member.user.profile?.displayName ?? member.user.email,
@@ -596,7 +628,7 @@ export class PrismaStore implements AppStore {
         status: member.status,
         active: member.user.active
       }))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+      .sort((a: TeamMemberSummary, b: TeamMemberSummary) => a.displayName.localeCompare(b.displayName));
   }
 
   async listReviewItems(session: Session, workspaceId: string): Promise<ReviewItem[]> {
@@ -612,8 +644,8 @@ export class PrismaStore implements AppStore {
         select: { entityId: true }
       })
     ]);
-    const resolvedProviderMessages = new Set(resolutions.map((event) => event.entityId));
-    return events.filter((event) => !resolvedProviderMessages.has(event.entityId)).slice(0, 50).map((event) => {
+    const resolvedProviderMessages = new Set((resolutions as AuditEntityRow[]).map((event) => event.entityId));
+    return (events as ReviewAuditRow[]).filter((event) => !resolvedProviderMessages.has(event.entityId)).slice(0, 50).map((event) => {
       const metadata = event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
         ? event.metadata as Record<string, unknown>
         : {};

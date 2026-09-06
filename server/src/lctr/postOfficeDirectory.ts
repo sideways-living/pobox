@@ -12,6 +12,19 @@ export interface PostOfficeDirectoryStatus {
   message?: string;
 }
 
+interface LocalDirectoryRow {
+  sourceId: string;
+  name: string;
+  address: string;
+  phone: string | null;
+  suburb: string | null;
+  postcode: string | null;
+  state: string | null;
+  latitude: unknown;
+  longitude: unknown;
+  hours: string | null;
+}
+
 export async function searchPostOfficeDirectory(prisma: PrismaClient, query: string): Promise<LctrPostOfficeLocation[]> {
   const localResults = await searchLocalDirectory(prisma, query);
   const status = await postOfficeDirectoryStatus(prisma);
@@ -132,7 +145,7 @@ async function searchLocalDirectory(prisma: PrismaClient, query: string): Promis
     take: 500
   });
 
-  return rows.map((row) => ({
+  return (rows as LocalDirectoryRow[]).map((row) => ({
     sourceId: row.sourceId,
     name: row.name,
     address: row.address,
