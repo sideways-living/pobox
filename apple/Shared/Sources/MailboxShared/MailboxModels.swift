@@ -123,11 +123,15 @@ public struct CollectionEvent: Codable, Identifiable, Sendable {
 public struct ReviewItem: Codable, Identifiable, Sendable {
     public let id: String
     public let providerMessageId: String
+    public let provider: String?
+    public let sender: String?
     public let subject: String?
+    public let bodyPreview: String?
     public let mailboxNumber: String?
     public let postOfficeName: String?
     public let notificationType: String?
     public let confidence: Double?
+    public let reason: String?
     public let receivedAt: String?
     public let createdAt: String
 }

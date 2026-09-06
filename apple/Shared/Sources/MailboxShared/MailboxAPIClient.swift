@@ -57,6 +57,32 @@ public actor MailboxAPIClient {
         return try decoder.decode([ReviewItem].self, from: data)
     }
 
+    public func resolveReviewItem(workspaceId: String, reviewItemId: String, mailboxId: String) async throws {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/review-items/\(reviewItemId)/resolve")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(["mailboxId": mailboxId])
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+    }
+
+    public func markReviewItemResolved(workspaceId: String, reviewItemId: String) async throws {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/review-items/\(reviewItemId)/mark-resolved")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+    }
+
+    public func dismissReviewItem(workspaceId: String, reviewItemId: String) async throws {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/review-items/\(reviewItemId)/dismiss")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+    }
+
     public func teamMembers(workspaceId: String) async throws -> [TeamMember] {
         let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/team/members")
         let (data, response) = try await session.data(from: url)

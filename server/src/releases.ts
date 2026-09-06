@@ -1,4 +1,4 @@
-export const appVersion = "0.12.7";
+export const appVersion = "0.12.8";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.12.8-native-macos-review-parity",
+    version: "0.12.8",
+    releasedAt: "2026-09-06T16:25:00.000Z",
+    title: "Better Mac review tools",
+    summary:
+      "The Mac app can now review unmatched mail emails, match them to an existing PO box, create a missing PO box, ignore an item, or mark it resolved.",
+    audience: "ALL"
+  },
   {
     id: "0.12.7-passkey-first-login-polish",
     version: "0.12.7",
