@@ -1,4 +1,4 @@
-export const appVersion = "0.13.1";
+export const appVersion = "0.13.2";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.2-production-readiness-polish",
+    version: "0.13.2",
+    releasedAt: "2026-09-07T01:30:00.000Z",
+    title: "Production readiness polish",
+    summary:
+      "Older setup wording has been cleaned up and the History page now points clearly to the live Needs Review workflow.",
+    audience: "ALL"
+  },
   {
     id: "0.13.1-production-deployment-hardening",
     version: "0.13.1",

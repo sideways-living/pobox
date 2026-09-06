@@ -16,7 +16,7 @@ Demo accounts use `Password123!`:
 - `sarah@example.com` Member
 - `john@example.com` Member
 
-The development MVP runs with `POBOX_WATCH_STORAGE=memory` by default and includes simulation controls in the web app.
+Local development can run with `POBOX_WATCH_STORAGE=memory` for quick testing, or Prisma/PostgreSQL when you need durable state.
 
 ## PostgreSQL Mode
 
@@ -45,7 +45,7 @@ The checked-in initial migration lives at `server/prisma/migrations/000001_init/
 - Explicit collection mutation with authenticated actor attribution.
 - WebSocket dashboard updates.
 - Responsive React/Vite web app.
-- Swift shared models/API client plus iPhone/macOS UI entry-point scaffolds.
+- Swift shared models/API client plus practical iPhone and macOS screens for overview, post offices, maps, history, activity, review, team, and settings workflows.
 - CloudPanel/PM2 VPS deployment scripts with verification for env, Prisma, PM2, version, and stale frontend assets.
 
 APNs, provider OAuth setup screens, SMTP delivery, and full Prisma-backed repository wiring are represented in schema/config/docs and are not falsely marked complete.

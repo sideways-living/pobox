@@ -1213,7 +1213,7 @@ function HistorySection({ snapshot }: { snapshot: DashboardSnapshot }) {
         <Panel title="Needs Review">
           <div className="review-note">
             <AlertTriangle size={18} />
-            <p>Parser review events are tracked by the backend audit log. A dedicated review queue is the next backend-backed workflow.</p>
+            <p>Open the Needs Review page to match unclear emails to a PO box, create a missing PO box, ignore noise, or mark an item resolved.</p>
           </div>
         </Panel>
       </aside>
