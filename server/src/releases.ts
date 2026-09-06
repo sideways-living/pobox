@@ -1,4 +1,4 @@
-export const appVersion = "0.13.0";
+export const appVersion = "0.13.1";
 
 export interface AppChange {
   id: string;
@@ -11,6 +11,15 @@ export interface AppChange {
 
 export const appChanges: AppChange[] = [
   {
+    id: "0.13.1-production-deployment-hardening",
+    version: "0.13.1",
+    releasedAt: "2026-09-07T01:00:00.000Z",
+    title: "Safer production deployments",
+    summary:
+      "Deployment docs and scripts now check VPS drift, environment settings, Prisma steps, PM2 health, public app version, and stale frontend assets before a deployment is treated as complete.",
+    audience: "ADMIN"
+  },
+  {
     id: "0.13.0-admin-user-management",
     version: "0.13.0",
     releasedAt: "2026-09-07T00:30:00.000Z",
@@ -20,8 +29,8 @@ export const appChanges: AppChange[] = [
     audience: "ADMIN"
   },
   {
-    id: "0.13.0-native-ios-parity",
-    version: "0.13.0",
+    id: "0.12.9-native-ios-parity",
+    version: "0.12.9",
     releasedAt: "2026-09-06T16:45:00.000Z",
     title: "Better iPhone app",
     summary:

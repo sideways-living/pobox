@@ -46,7 +46,7 @@ The checked-in initial migration lives at `server/prisma/migrations/000001_init/
 - WebSocket dashboard updates.
 - Responsive React/Vite web app.
 - Swift shared models/API client plus iPhone/macOS UI entry-point scaffolds.
-- Starlight VPS deployment examples for Nginx, systemd, PostgreSQL backup, and CI.
+- CloudPanel/PM2 VPS deployment scripts with verification for env, Prisma, PM2, version, and stale frontend assets.
 
 APNs, provider OAuth setup screens, SMTP delivery, and full Prisma-backed repository wiring are represented in schema/config/docs and are not falsely marked complete.
 
@@ -98,13 +98,11 @@ npm run build
 
 ## CloudPanel Runtime
 
-After `npm run build`, start one Node.js app:
+Production deploys should use the hardened CloudPanel/PM2 path in `DEPLOYMENT.md`:
 
 ```bash
-set -a
-source .env
-set +a
-npm run start --workspace server
+cd /home/pobox/htdocs/pobox.watch
+bash deploy/scripts/deploy-cloudpanel-pm2.sh
 ```
 
-Use app port `4175`. In production, `/api/...` routes go to Fastify and all other browser routes fall back to `web/dist/index.html`.
+Use app port `4175`. In production, `/api/...` routes go to Fastify and all other browser routes fall back to `web/dist/index.html`. To verify an already deployed VPS without redeploying, run `bash deploy/scripts/verify-cloudpanel-pm2.sh`.

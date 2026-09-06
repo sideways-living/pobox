@@ -97,4 +97,11 @@ describe("release notices", () => {
     expect(allowed.statusCode).toBe(200);
     expect(allowed.json().currentUser.email).toBe("daniel@example.com");
   });
+
+  it("reports the app version in health checks for deployment verification", async () => {
+    const response = await app.inject({ method: "GET", url: "/api/health" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().version).toBe(appVersion);
+  });
 });

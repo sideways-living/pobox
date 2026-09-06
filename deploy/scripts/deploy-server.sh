@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-npm ci
-npm run build --workspace server
-npm run prisma:migrate --workspace server
-sudo systemctl restart pobox-watch-api
-sudo systemctl status pobox-watch-api --no-pager
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$script_dir/deploy-cloudpanel-pm2.sh"
