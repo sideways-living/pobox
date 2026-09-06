@@ -11,6 +11,8 @@ export interface User {
   emailVerified: boolean;
   active: boolean;
   lastLoginAt?: string;
+  lastSeenReleaseVersion?: string;
+  lastSeenReleaseAt?: string;
   totpEnabled?: boolean;
   totpSecretEncrypted?: string;
   totpPendingSecretEncrypted?: string;

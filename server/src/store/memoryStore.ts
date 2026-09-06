@@ -27,8 +27,10 @@ import type {
 import { parseMailNotification } from "../parser/mailParser.js";
 import type { PostOfficeDirectoryStatus } from "../lctr/postOfficeDirectory.js";
 import { searchLctrPostOffices, type LctrPostOfficeLocation } from "../lctr/postOfficeLookup.js";
+import { appVersion, changesAfterVersion } from "../releases.js";
 import type {
   AppStore,
+  AppChangesResult,
   ConfirmTotpResult,
   CreateMailboxInput,
   CreatePostOfficeInput,
@@ -655,6 +657,29 @@ export class MemoryStore implements AppStore {
   async syncPostOfficeDirectory(session: Session, workspaceId: string): Promise<PostOfficeDirectoryStatus> {
     await this.requireMember(session, workspaceId, "ADMIN");
     return this.postOfficeDirectoryStatus(session, workspaceId);
+  }
+
+  async appChanges(session: Session, workspaceId: string): Promise<AppChangesResult> {
+    const member = await this.requireMember(session, workspaceId);
+    const user = this.users.get(session.userId);
+    if (!user) throw new UnauthorizedError("Missing user.");
+    return {
+      version: appVersion,
+      lastSeenVersion: user.lastSeenReleaseVersion,
+      changes: changesAfterVersion(user.lastSeenReleaseVersion, member.role)
+    };
+  }
+
+  async markAppChangesSeen(session: Session, workspaceId: string, version: string): Promise<AppChangesResult> {
+    await this.requireMember(session, workspaceId);
+    const user = this.users.get(session.userId);
+    if (!user) throw new UnauthorizedError("Missing user.");
+    this.users.set(user.id, {
+      ...user,
+      lastSeenReleaseVersion: version,
+      lastSeenReleaseAt: new Date().toISOString()
+    });
+    return this.appChanges(session, workspaceId);
   }
 
   async createUser(session: Session, workspaceId: string, input: CreateUserInput): Promise<TeamMemberSummary> {

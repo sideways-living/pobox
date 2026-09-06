@@ -1,4 +1,4 @@
-export const appVersion = "0.12.5";
+export const appVersion = "0.12.6";
 
 export interface AppChange {
   id: string;
@@ -11,12 +11,21 @@ export interface AppChange {
 
 export const appChanges: AppChange[] = [
   {
+    id: "0.12.6-release-notices-seen-on-dismiss",
+    version: "0.12.6",
+    releasedAt: "2026-09-06T15:45:00.000Z",
+    title: "Clearer update messages",
+    summary:
+      "pobox.watch now remembers app updates only after you close the update message, so you will not miss changes if you sign in and leave before reading them.",
+    audience: "ALL"
+  },
+  {
     id: "0.12.5-mapkit-production-check",
     version: "0.12.5",
     releasedAt: "2026-09-06T15:25:00.000Z",
     title: "Apple Maps production hardening",
     summary:
-      "The web Map page now keeps Apple Maps links available when MapKit is not configured, limits setup and token error messages to admins, and allows Apple MapKit resources through the production content security policy.",
+      "The Map page now keeps Apple Maps links available if the embedded map is not ready, and admins get a clear setup message when the map token needs attention.",
     audience: "ADMIN"
   },
   {
@@ -360,4 +369,10 @@ export function changesSince(since?: string, role: "ADMIN" | "MEMBER" = "MEMBER"
     .filter((change) => change.audience === "ALL" || role === "ADMIN")
     .filter((change) => Number.isNaN(sinceTime) || new Date(change.releasedAt).getTime() > sinceTime)
     .sort((a, b) => b.releasedAt.localeCompare(a.releasedAt));
+}
+
+export function changesAfterVersion(lastSeenVersion?: string, role: "ADMIN" | "MEMBER" = "MEMBER") {
+  const lastSeenIndex = lastSeenVersion ? appChanges.findIndex((change) => change.version === lastSeenVersion) : -1;
+  const unseenChanges = lastSeenIndex >= 0 ? appChanges.slice(0, lastSeenIndex) : appChanges;
+  return unseenChanges.filter((change) => change.audience === "ALL" || role === "ADMIN");
 }

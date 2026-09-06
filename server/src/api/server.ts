@@ -8,7 +8,7 @@ import Fastify from "fastify";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import { appVersion, changesSince } from "../releases.js";
+import { appVersion } from "../releases.js";
 import { realtimeHub } from "../realtime/hub.js";
 import { MemoryStore } from "../store/memoryStore.js";
 import type { AppStore } from "../store/types.js";
@@ -60,6 +60,9 @@ const updateMailboxSchema = z.object({
   boxNumber: z.string().min(1).max(40).optional()
 }).refine((input) => Object.keys(input).length > 0, { message: "At least one field is required." });
 const resolveReviewSchema = z.object({ mailboxId: z.string().min(1) });
+const releaseSeenSchema = z.object({
+  version: z.string().min(1).max(40).default(appVersion)
+}).refine((input) => input.version === appVersion, { message: "Release version does not match the current app version." });
 const sessionCookieName = "pobox_watch_session";
 const legacySessionCookieName = "mailbox_session";
 
@@ -216,14 +219,15 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
 
   app.get("/api/v1/workspaces/:workspaceId/app/changes", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };
-    const query = request.query as { since?: string };
     const session = await securedSession(request, workspaceId);
-    const member = await store.requireMember(session, workspaceId);
-    return {
-      version: appVersion,
-      since: query.since,
-      changes: changesSince(query.since, member.role)
-    };
+    return store.appChanges(session, workspaceId);
+  });
+
+  app.post("/api/v1/workspaces/:workspaceId/app/changes/seen", async (request) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const body = releaseSeenSchema.parse(request.body ?? {});
+    const session = await securedSession(request, workspaceId);
+    return store.markAppChangesSeen(session, workspaceId, body.version);
   });
 
   app.get("/api/v1/workspaces/:workspaceId/dashboard", async (request) => {

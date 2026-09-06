@@ -7,6 +7,7 @@ import type {
 import type { LctrPostOfficeLocation } from "../lctr/postOfficeLookup.js";
 import type { PostOfficeDirectoryStatus } from "../lctr/postOfficeDirectory.js";
 import type { CollectionEvent, CollectionSource, DashboardSnapshot, Mailbox, PostOffice, Session, WorkspaceMember } from "../domain.js";
+import type { AppChange } from "../releases.js";
 
 export class ForbiddenError extends Error {}
 export class UnauthorizedError extends Error {}
@@ -125,6 +126,12 @@ export interface PasskeyAuthenticationOptions {
   options: PublicKeyCredentialRequestOptionsJSON;
 }
 
+export interface AppChangesResult {
+  version: string;
+  lastSeenVersion?: string;
+  changes: AppChange[];
+}
+
 export interface AppStore {
   seedDemo(): Promise<void>;
   login(email: string, password: string): Promise<LoginResult>;
@@ -139,6 +146,8 @@ export interface AppStore {
   beginPasskeyAuthentication(email?: string): Promise<PasskeyAuthenticationOptions>;
   verifyPasskeyAuthentication(response: AuthenticationResponseJSON): Promise<LoginResult>;
   requireMember(session: Session, workspaceId: string, role?: "ADMIN"): Promise<WorkspaceMember>;
+  appChanges(session: Session, workspaceId: string): Promise<AppChangesResult>;
+  markAppChangesSeen(session: Session, workspaceId: string, version: string): Promise<AppChangesResult>;
   dashboard(session: Session, workspaceId: string): Promise<DashboardSnapshot>;
   outstandingMailboxCount(workspaceId: string): Promise<number>;
   processIncomingMail(input: IncomingProviderMessage): Promise<IncomingMailResult>;

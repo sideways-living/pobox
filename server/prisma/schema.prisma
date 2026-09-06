@@ -35,6 +35,8 @@ model User {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   lastLoginAt       DateTime?
+  lastSeenReleaseVersion String?
+  lastSeenReleaseAt DateTime?
   totpSecretEncrypted        String?
   totpPendingSecretEncrypted String?
   totpEnabled                Boolean             @default(false)

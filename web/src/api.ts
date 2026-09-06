@@ -135,10 +135,19 @@ export async function loadDashboard(): Promise<DashboardSnapshot> {
   return response.json();
 }
 
-export async function loadAppChanges(since?: string): Promise<AppChangesResponse> {
-  const url = new URL(`${apiBase}/api/v1/workspaces/${workspaceId}/app/changes`);
-  if (since) url.searchParams.set("since", since);
-  const response = await fetch(url, { credentials: "include" });
+export async function loadAppChanges(): Promise<AppChangesResponse> {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/app/changes`, { credentials: "include" });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function markAppChangesSeen(version: string): Promise<AppChangesResponse> {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/app/changes/seen`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ version })
+  });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
 }

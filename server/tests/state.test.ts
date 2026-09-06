@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { currentTotpCode } from "../src/auth/totp.js";
 import type { Session } from "../src/domain.js";
+import { appVersion } from "../src/releases.js";
 import { MemoryStore } from "../src/store/memoryStore.js";
 import { ConflictError } from "../src/store/types.js";
 
@@ -317,6 +318,44 @@ describe("shared mailbox state", () => {
     const status = await store.securityStatus(john);
     expect(status.passkeysAvailable).toBe(true);
     expect(status.passkeyCount).toBe(0);
+  });
+
+  it("returns relevant release notes on first login", async () => {
+    const daniel = await loginSession("daniel@example.com");
+
+    const notice = await store.appChanges(daniel, "ws_company");
+
+    expect(notice.version).toBe(appVersion);
+    expect(notice.lastSeenVersion).toBeUndefined();
+    expect(notice.changes.length).toBeGreaterThan(1);
+    expect(notice.changes[0].version).toBe(appVersion);
+  });
+
+  it("does not return release notes again after the user dismisses them", async () => {
+    const daniel = await loginSession("daniel@example.com");
+    const notice = await store.appChanges(daniel, "ws_company");
+
+    const afterDismissal = await store.markAppChangesSeen(daniel, "ws_company", notice.version);
+    const repeatLogin = await loginSession("daniel@example.com");
+    const repeatNotice = await store.appChanges(repeatLogin, "ws_company");
+
+    expect(afterDismissal.lastSeenVersion).toBe(appVersion);
+    expect(afterDismissal.changes).toHaveLength(0);
+    expect(repeatNotice.lastSeenVersion).toBe(appVersion);
+    expect(repeatNotice.changes).toHaveLength(0);
+  });
+
+  it("returns multiple release notes after the last seen version", async () => {
+    const daniel = await loginSession("daniel@example.com");
+
+    const notice = await store.markAppChangesSeen(daniel, "ws_company", "0.12.3");
+    const versions = notice.changes.map((change) => change.version);
+
+    expect(notice.lastSeenVersion).toBe("0.12.3");
+    expect(versions).toContain("0.12.4");
+    expect(versions).toContain("0.12.5");
+    expect(versions).toContain("0.12.6");
+    expect(versions).not.toContain("0.12.3");
   });
 
   it("rejects member-only admin operations", async () => {

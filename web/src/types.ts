@@ -182,6 +182,6 @@ export interface AppChange {
 
 export interface AppChangesResponse {
   version: string;
-  since?: string;
+  lastSeenVersion?: string;
   changes: AppChange[];
 }

@@ -26,6 +26,7 @@ import {
   loadSecurityStatus,
   login,
   logout,
+  markAppChangesSeen,
   markReviewItemResolved,
   registerPasskey,
   realtimeUrl,
@@ -77,10 +78,10 @@ function App() {
     return () => socket.close();
   }, [snapshot?.workspace.id]);
 
-  async function finishLogin(previousLoginAt?: string) {
+  async function finishLogin() {
     await refresh();
     try {
-      const changes = await loadAppChanges(previousLoginAt);
+      const changes = await loadAppChanges();
       if (changes.changes.length > 0) setChangeNotice(changes);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load app changes.");
@@ -94,7 +95,18 @@ function App() {
       setError(null);
       return;
     }
-    await finishLogin(previousLoginAt);
+    await finishLogin();
+  }
+
+  async function dismissChangeNotice() {
+    if (!changeNotice) return;
+    try {
+      await markAppChangesSeen(changeNotice.version);
+      setChangeNotice(null);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save that you have seen these updates.");
+    }
   }
 
   async function handleLogout() {
@@ -121,7 +133,7 @@ function App() {
         previousLoginAt={securityGate.previousLoginAt}
         onComplete={async () => {
           setSecurityGate(null);
-          await finishLogin(securityGate.previousLoginAt);
+          await finishLogin();
         }}
         onLogout={handleLogout}
         error={error}
@@ -200,7 +212,7 @@ function App() {
           refresh={refresh}
           setError={setError}
         />
-        {changeNotice && <ChangeNoticeModal notice={changeNotice} onClose={() => setChangeNotice(null)} />}
+        {changeNotice && <ChangeNoticeModal notice={changeNotice} onClose={dismissChangeNotice} />}
       </section>
     </main>
   );
@@ -1435,17 +1447,15 @@ function SecurityPanel({ setError }: { setError: (value: string | null) => void 
   );
 }
 
-function ChangeNoticeModal({ notice, onClose }: { notice: AppChangesResponse; onClose: () => void }) {
+function ChangeNoticeModal({ notice, onClose }: { notice: AppChangesResponse; onClose: () => void | Promise<void> }) {
   return (
     <div className="modal-backdrop" role="presentation">
       <section className="change-modal" role="dialog" aria-modal="true" aria-labelledby="change-title">
         <div>
-          <p className="workspace">pobox.watch {notice.version}</p>
-          <h2 id="change-title">{notice.since ? "Changes Since Your Last Login" : "Latest Changes"}</h2>
+          <p className="workspace">pobox.watch updates</p>
+          <h2 id="change-title">What Changed Since You Last Checked</h2>
           <p className="small">
-            {notice.since
-              ? `These updates were made after ${new Date(notice.since).toLocaleString()}.`
-              : "Here are the latest updates to the app."}
+            These updates will not appear again after you close this message.
           </p>
         </div>
         <div className="change-list">

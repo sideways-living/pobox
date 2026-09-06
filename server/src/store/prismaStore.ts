@@ -14,6 +14,7 @@ import { decryptSecret, encryptSecret, generateRecoveryCodes, generateTotpSecret
 import { challengeFromClientData, webAuthnConfig } from "../auth/webauthn.js";
 import { postOfficeDirectoryStatus, searchPostOfficeDirectory, syncPostOfficeDirectory, type PostOfficeDirectoryStatus } from "../lctr/postOfficeDirectory.js";
 import type { LctrPostOfficeLocation } from "../lctr/postOfficeLookup.js";
+import { appVersion, changesAfterVersion } from "../releases.js";
 import type {
   AuditEvent,
   CollectionEvent,
@@ -30,6 +31,7 @@ import type {
 import { parseMailNotification } from "../parser/mailParser.js";
 import type {
   AppStore,
+  AppChangesResult,
   ConfirmTotpResult,
   CreateMailboxInput,
   CreatePostOfficeInput,
@@ -218,6 +220,34 @@ export class PrismaStore implements AppStore {
     ]);
     if (!user) throw new UnauthorizedError("Missing user.");
     return { passkeysAvailable: this.passkeysAvailable(), passkeyCount, totpEnabled: user.totpEnabled, recoveryCodesRemaining };
+  }
+
+  async appChanges(session: Session, workspaceId: string): Promise<AppChangesResult> {
+    const [member, user] = await Promise.all([
+      this.requireMember(session, workspaceId),
+      this.prisma.user.findUnique({
+        where: { id: session.userId },
+        select: { lastSeenReleaseVersion: true }
+      })
+    ]);
+    if (!user) throw new UnauthorizedError("Missing user.");
+    return {
+      version: appVersion,
+      lastSeenVersion: user.lastSeenReleaseVersion ?? undefined,
+      changes: changesAfterVersion(user.lastSeenReleaseVersion ?? undefined, member.role)
+    };
+  }
+
+  async markAppChangesSeen(session: Session, workspaceId: string, version: string): Promise<AppChangesResult> {
+    await this.requireMember(session, workspaceId);
+    await this.prisma.user.update({
+      where: { id: session.userId },
+      data: {
+        lastSeenReleaseVersion: version,
+        lastSeenReleaseAt: new Date()
+      }
+    });
+    return this.appChanges(session, workspaceId);
   }
 
   async beginTotpSetup(session: Session) {
