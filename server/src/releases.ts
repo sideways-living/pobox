@@ -1,4 +1,4 @@
-export const appVersion = "0.12.1";
+export const appVersion = "0.12.2";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.12.2-review-queue-workflow",
+    version: "0.12.2",
+    releasedAt: "2026-09-06T14:25:00.000Z",
+    title: "Review queue workflow",
+    summary:
+      "Needs Review items now show the email context, parsed guess, and reason they need review, with actions to match a box, create a missing box, ignore the email, or mark it resolved so the source email can be handled on the next poll.",
+    audience: "ALL"
+  },
   {
     id: "0.12.1-post-office-search-autocomplete",
     version: "0.12.1",

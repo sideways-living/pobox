@@ -1072,6 +1072,16 @@ input, select {
   gap: 8px;
 }
 
+.review-create-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid #d7e0db;
+  border-radius: 8px;
+}
+
 .review-actions label {
   display: grid;
   gap: 5px;

@@ -79,6 +79,7 @@ export interface ReviewItem {
   postOfficeName?: string;
   notificationType?: "MAIL" | "PARCEL";
   confidence?: number;
+  reason: string;
   receivedAt?: string;
   createdAt: string;
 }

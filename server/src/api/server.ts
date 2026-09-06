@@ -269,6 +269,14 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     return result;
   });
 
+  app.post("/api/v1/workspaces/:workspaceId/review-items/:reviewItemId/mark-resolved", async (request, reply) => {
+    const { workspaceId, reviewItemId } = request.params as { workspaceId: string; reviewItemId: string };
+    const session = await securedSession(request, workspaceId);
+    await store.markReviewItemResolved(session, workspaceId, reviewItemId);
+    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    return reply.code(204).send();
+  });
+
   app.post("/api/v1/workspaces/:workspaceId/review-items/:reviewItemId/dismiss", async (request, reply) => {
     const { workspaceId, reviewItemId } = request.params as { workspaceId: string; reviewItemId: string };
     const session = await securedSession(request, workspaceId);

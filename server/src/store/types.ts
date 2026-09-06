@@ -49,6 +49,7 @@ export interface ReviewItem {
   postOfficeName?: string;
   notificationType?: "MAIL" | "PARCEL";
   confidence?: number;
+  reason: string;
   receivedAt?: string;
   createdAt: string;
 }
@@ -144,6 +145,7 @@ export interface AppStore {
   listMembers(session: Session, workspaceId: string): Promise<TeamMemberSummary[]>;
   listReviewItems(session: Session, workspaceId: string): Promise<ReviewItem[]>;
   resolveReviewItem(session: Session, workspaceId: string, reviewItemId: string, mailboxId: string): Promise<IncomingMailResult>;
+  markReviewItemResolved(session: Session, workspaceId: string, reviewItemId: string): Promise<void>;
   dismissReviewItem(session: Session, workspaceId: string, reviewItemId: string): Promise<void>;
   searchPostOfficeLocations(session: Session, workspaceId: string, query: string): Promise<LctrPostOfficeLocation[]>;
   postOfficeDirectoryStatus(session: Session, workspaceId: string): Promise<PostOfficeDirectoryStatus>;

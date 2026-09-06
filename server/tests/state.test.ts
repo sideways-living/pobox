@@ -121,7 +121,8 @@ describe("shared mailbox state", () => {
       providerMessageId: "message-review-1",
       subject: "There is mail in PO Box UNKNOWN",
       mailboxNumber: "UNKNOWN",
-      confidence: 0.55
+      confidence: 0.55,
+      reason: "PO Box UNKNOWN is not saved yet."
     });
   });
 
@@ -170,6 +171,41 @@ describe("shared mailbox state", () => {
     expect(dismissItems).toHaveLength(1);
     await store.dismissReviewItem(daniel, "ws_company", dismissItems[0].id);
     await expect(store.listReviewItems(daniel, "ws_company")).resolves.toHaveLength(0);
+    await expect(
+      store.processIncomingMail({
+        workspaceId: "ws_company",
+        provider: "mock",
+        providerMessageId: "message-review-dismiss",
+        sender: "mailroom@example.com",
+        subject: "No useful box number"
+      })
+    ).resolves.toEqual({ kind: "duplicate", notificationType: "MAIL" });
+  });
+
+  it("lets admins mark review items resolved without changing a box", async () => {
+    const daniel = await loginSession("daniel@example.com");
+    await store.processIncomingMail({
+      workspaceId: "ws_company",
+      provider: "mock",
+      providerMessageId: "message-review-noop",
+      sender: "mailroom@example.com",
+      subject: "Ignore this operational notice"
+    });
+
+    const [reviewItem] = await store.listReviewItems(daniel, "ws_company");
+    expect(reviewItem.reason).toBe("No PO box number could be read from the email.");
+    await store.markReviewItemResolved(daniel, "ws_company", reviewItem.id);
+    await expect(store.listReviewItems(daniel, "ws_company")).resolves.toHaveLength(0);
+    await expect(store.outstandingMailboxCount("ws_company")).resolves.toBe(0);
+    await expect(
+      store.processIncomingMail({
+        workspaceId: "ws_company",
+        provider: "mock",
+        providerMessageId: "message-review-noop",
+        sender: "mailroom@example.com",
+        subject: "Ignore this operational notice"
+      })
+    ).resolves.toEqual({ kind: "duplicate", notificationType: "MAIL" });
   });
 
   it("returns the previous login time on later logins", async () => {

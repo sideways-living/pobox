@@ -26,6 +26,7 @@ import {
   loadSecurityStatus,
   login,
   logout,
+  markReviewItemResolved,
   registerPasskey,
   realtimeUrl,
   resolveReviewItem,
@@ -1152,7 +1153,7 @@ function NeedsReviewSection({ snapshot, reviewItems, mutate, refresh }: { snapsh
           {reviewItems.length > 0 ? (
             <div className="review-list">
               {reviewItems.map((item) => (
-                <ReviewItemRow key={item.id} item={item} mailboxes={mailboxes} mutate={mutate} refresh={refresh} />
+                <ReviewItemRow key={item.id} item={item} postOffices={snapshot.postOffices} mailboxes={mailboxes} mutate={mutate} refresh={refresh} />
               ))}
             </div>
           ) : (
@@ -1175,21 +1176,30 @@ function NeedsReviewSection({ snapshot, reviewItems, mutate, refresh }: { snapsh
 
 function ReviewItemRow({
   item,
+  postOffices,
   mailboxes,
   mutate,
   refresh
 }: {
   item: ReviewItem;
+  postOffices: PostOffice[];
   mailboxes: Array<Mailbox & { officeName: string }>;
   mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>;
   refresh: () => Promise<void>;
 }) {
-  const matchingMailbox = mailboxes.find((box) => item.mailboxNumber && normalizeBoxNumber(box.boxNumber) === normalizeBoxNumber(item.mailboxNumber));
-  const defaultMailbox = matchingMailbox ?? (item.mailboxNumber ? undefined : mailboxes[0]);
+  const matchingMailboxes = mailboxes.filter((box) => item.mailboxNumber && normalizeBoxNumber(box.boxNumber) === normalizeBoxNumber(item.mailboxNumber));
+  const defaultMailbox = matchingMailboxes.length === 1 ? matchingMailboxes[0] : item.mailboxNumber ? undefined : mailboxes[0];
+  const parsedPostOfficeName = item.postOfficeName;
+  const guessedOffice = item.postOfficeName
+    ? postOffices.find((office) => normalizeLocationName(office.name) === normalizeLocationName(parsedPostOfficeName ?? ""))
+    : undefined;
   const [selectedMailboxId, setSelectedMailboxId] = useState(defaultMailbox?.id ?? "");
+  const [createOfficeId, setCreateOfficeId] = useState(guessedOffice?.id ?? postOffices[0]?.id ?? "");
+  const [newBoxNumber, setNewBoxNumber] = useState(item.mailboxNumber ?? "");
   const selectedMailbox = mailboxes.find((box) => box.id === selectedMailboxId);
   const receivedAt = item.receivedAt ?? item.createdAt;
-  const boxMissing = Boolean(item.mailboxNumber && !matchingMailbox);
+  const boxMissing = Boolean(item.mailboxNumber && matchingMailboxes.length === 0);
+  const duplicateCandidates = matchingMailboxes.length > 1;
   const notificationLabel = item.notificationType === "PARCEL" ? "parcel" : "mail";
 
   useEffect(() => {
@@ -1197,6 +1207,12 @@ function ReviewItemRow({
       setSelectedMailboxId(defaultMailbox?.id ?? "");
     }
   }, [defaultMailbox?.id, mailboxes.map((box) => box.id).join(","), selectedMailboxId]);
+
+  useEffect(() => {
+    if (!postOffices.some((office) => office.id === createOfficeId)) {
+      setCreateOfficeId(guessedOffice?.id ?? postOffices[0]?.id ?? "");
+    }
+  }, [createOfficeId, guessedOffice?.id, postOffices.map((office) => office.id).join(",")]);
 
   async function resolve() {
     if (!selectedMailboxId) return;
@@ -1206,10 +1222,27 @@ function ReviewItemRow({
     }, selectedMailboxId);
   }
 
-  async function dismiss() {
-    if (!window.confirm("Dismiss this review item without marking a box as having mail?")) return;
+  async function createAndResolve() {
+    if (!createOfficeId || !newBoxNumber.trim()) return;
+    await mutate(async () => {
+      const mailbox = await createMailbox({ postOfficeId: createOfficeId, boxNumber: newBoxNumber.trim() });
+      await resolveReviewItem(item.id, mailbox.id);
+      await refresh();
+    });
+  }
+
+  async function ignore() {
+    if (!window.confirm("Mark this review item ignored and mark the source email handled on the next poll?")) return;
     await mutate(async () => {
       await dismissReviewItem(item.id);
+      await refresh();
+    });
+  }
+
+  async function markResolved() {
+    if (!window.confirm("Mark this review item resolved without changing a PO box? The source email will be marked handled on the next poll.")) return;
+    await mutate(async () => {
+      await markReviewItemResolved(item.id);
       await refresh();
     });
   }
@@ -1219,7 +1252,8 @@ function ReviewItemRow({
       <div className="review-icon"><AlertTriangle size={18} /></div>
       <div className="review-content">
         <strong>{item.subject ?? "Unmatched mail notification"}</strong>
-        <span>{item.mailboxNumber ? `Possible box ${item.mailboxNumber}` : item.postOfficeName ? `Collect from ${item.postOfficeName}` : "No box number could be matched."}</span>
+        <span>{item.mailboxNumber ? `Parsed guess: PO Box ${item.mailboxNumber}` : item.postOfficeName ? `Parsed guess: ${item.postOfficeName}` : "Parsed guess: none"}</span>
+        <span>Needs review: {item.reason}</span>
         {item.sender && <span>From {item.sender}</span>}
         {item.bodyPreview && <small>{item.bodyPreview}</small>}
         <small>Received {new Date(receivedAt).toLocaleString()}</small>
@@ -1227,20 +1261,31 @@ function ReviewItemRow({
       </div>
       <StatusPill tone="warning">{confidenceLabel(item.confidence)}</StatusPill>
       <div className="review-actions">
-        {boxMissing && <p className="review-warning">No saved box matches {item.mailboxNumber}. Set up that box first, then return to review this email.</p>}
-        {item.notificationType === "PARCEL" && item.postOfficeName && !item.mailboxNumber && <p className="review-warning">Parcel collection is for {item.postOfficeName}. Set up the correct PO box for this post office, then return to review this email.</p>}
+        {boxMissing && <p className="review-warning">No saved box matches PO Box {item.mailboxNumber}. Create it below or choose another saved box.</p>}
+        {duplicateCandidates && <p className="review-warning">PO Box {item.mailboxNumber} exists at multiple post offices. Choose the correct location before marking waiting.</p>}
+        {item.notificationType === "PARCEL" && item.postOfficeName && !item.mailboxNumber && <p className="review-warning">Parcel collection is for {item.postOfficeName}. Choose the correct saved PO box for this post office.</p>}
         {mailboxes.length > 0 ? (
           <>
-            <label>Assign to<select value={selectedMailboxId} onChange={(event) => setSelectedMailboxId(event.target.value)}>
+            <label>Match existing PO box<select value={selectedMailboxId} onChange={(event) => setSelectedMailboxId(event.target.value)}>
               <option value="">Choose a saved box</option>
               {mailboxes.map((box) => <option key={box.id} value={box.id}>{box.officeName} - Box {box.boxNumber}</option>)}
             </select></label>
-            <button className="primary" disabled={!selectedMailbox} onClick={resolve}><Check size={16} />Mark Box Waiting</button>
+            <button className="primary" disabled={!selectedMailbox} onClick={resolve}><Check size={16} />Match and Mark Waiting</button>
           </>
         ) : (
           <p className="small">Add a post office and box before resolving review items.</p>
         )}
-        <button className="secondary" onClick={dismiss}><X size={16} />Dismiss</button>
+        {boxMissing && postOffices.length > 0 && (
+          <div className="review-create-box">
+            <label>Create missing PO box<select value={createOfficeId} onChange={(event) => setCreateOfficeId(event.target.value)}>
+              {postOffices.map((office) => <option key={office.id} value={office.id}>{office.name}</option>)}
+            </select></label>
+            <label>PO Box Number<input value={newBoxNumber} onChange={(event) => setNewBoxNumber(event.target.value)} /></label>
+            <button className="secondary" disabled={!createOfficeId || !newBoxNumber.trim()} onClick={createAndResolve}><Plus size={16} />Create and Mark Waiting</button>
+          </div>
+        )}
+        <button className="secondary" onClick={markResolved}><Check size={16} />Mark Resolved</button>
+        <button className="secondary" onClick={ignore}><X size={16} />Mark Ignored</button>
       </div>
     </article>
   );
@@ -1824,6 +1869,10 @@ function normalizeSearchText(value: string) {
 
 function startsWithSearchWord(value: string, query: string) {
   return value.split(/\s+/).some((word) => word.startsWith(query));
+}
+
+function normalizeLocationName(value: string) {
+  return value.replace(/\b(?:post\s+office|po)\b/gi, "").replace(/[^a-z0-9]/gi, "").toUpperCase();
 }
 
 function isMailEvent(event: MailHistoryEvent | CollectionHistoryEvent): event is MailHistoryEvent {

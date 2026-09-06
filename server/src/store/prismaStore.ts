@@ -503,7 +503,7 @@ export class PrismaStore implements AppStore {
         const resolvedReview = await this.prisma.auditEvent.findFirst({
           where: {
             workspaceId: input.workspaceId,
-            eventType: { in: ["mail.review_resolved", "mail.review_dismissed"] },
+            eventType: { in: ["mail.review_resolved", "mail.review_ignored", "mail.review_dismissed"] },
             entityId: input.providerMessageId
           }
         });
@@ -518,7 +518,8 @@ export class PrismaStore implements AppStore {
         mailboxNumber: parsed.mailboxNumber,
         postOfficeName: parsed.postOfficeName,
         notificationType: parsed.notificationType,
-        confidence: parsed.confidence
+        confidence: parsed.confidence,
+        reason: reviewReason(parsed)
       });
       return { kind: "needs_review", notificationType: parsed.notificationType };
     }
@@ -640,7 +641,7 @@ export class PrismaStore implements AppStore {
         take: 100
       }),
       this.prisma.auditEvent.findMany({
-        where: { workspaceId, eventType: { in: ["mail.review_resolved", "mail.review_dismissed"] } },
+        where: { workspaceId, eventType: { in: ["mail.review_resolved", "mail.review_ignored", "mail.review_dismissed"] } },
         select: { entityId: true }
       })
     ]);
@@ -660,6 +661,7 @@ export class PrismaStore implements AppStore {
         postOfficeName: typeof metadata.postOfficeName === "string" ? metadata.postOfficeName : undefined,
         notificationType: metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL",
         confidence: typeof metadata.confidence === "number" ? metadata.confidence : undefined,
+        reason: typeof metadata.reason === "string" ? metadata.reason : reviewReasonFromMetadata(metadata),
         receivedAt: typeof metadata.receivedAt === "string" ? metadata.receivedAt : undefined,
         createdAt: event.createdAt.toISOString()
       };
@@ -719,11 +721,18 @@ export class PrismaStore implements AppStore {
     return { kind: duplicate ? "duplicate" : "processed", mailboxId, notificationType };
   }
 
+  async markReviewItemResolved(session: Session, workspaceId: string, reviewItemId: string): Promise<void> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const review = await this.prisma.auditEvent.findFirst({ where: { id: reviewItemId, workspaceId, eventType: "mail.needs_review" } });
+    if (!review) throw new NotFoundError("Review item not found.");
+    await this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, { reviewItemId, action: "resolved_without_box_change" });
+  }
+
   async dismissReviewItem(session: Session, workspaceId: string, reviewItemId: string): Promise<void> {
     await this.requireMember(session, workspaceId, "ADMIN");
     const review = await this.prisma.auditEvent.findFirst({ where: { id: reviewItemId, workspaceId, eventType: "mail.needs_review" } });
     if (!review) throw new NotFoundError("Review item not found.");
-    await this.audit(session.userId, workspaceId, "mail.review_dismissed", "mail_message", review.entityId, { reviewItemId });
+    await this.audit(session.userId, workspaceId, "mail.review_ignored", "mail_message", review.entityId, { reviewItemId, action: "ignored" });
   }
 
   async searchPostOfficeLocations(session: Session, workspaceId: string, query: string): Promise<LctrPostOfficeLocation[]> {
@@ -1124,4 +1133,31 @@ export class PrismaStore implements AppStore {
 
 function normalizeMailboxNumber(value: string) {
   return value.replace(/^\s*(?:p\.?\s*o\.?\s*box|pobox|post\s*box|postbox|box)\s*/i, "").replace(/[^a-z0-9]/gi, "").toUpperCase();
+}
+
+function reviewReason(parsed: {
+  mailboxNumber?: string;
+  postOfficeName?: string;
+  notificationType: "MAIL" | "PARCEL";
+  confidence: number;
+}) {
+  if (parsed.notificationType === "PARCEL" && parsed.postOfficeName && !parsed.mailboxNumber) {
+    return `Parcel notice matched ${parsed.postOfficeName}, but a single PO box could not be chosen automatically.`;
+  }
+  if (!parsed.mailboxNumber) {
+    return "No PO box number could be read from the email.";
+  }
+  if (parsed.confidence >= 0.7) {
+    return `PO Box ${parsed.mailboxNumber} matched more than one saved post office, so it needs a human choice.`;
+  }
+  return `PO Box ${parsed.mailboxNumber} is not saved yet.`;
+}
+
+function reviewReasonFromMetadata(metadata: Record<string, unknown>) {
+  return reviewReason({
+    mailboxNumber: typeof metadata.mailboxNumber === "string" ? metadata.mailboxNumber : undefined,
+    postOfficeName: typeof metadata.postOfficeName === "string" ? metadata.postOfficeName : undefined,
+    notificationType: metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL",
+    confidence: typeof metadata.confidence === "number" ? metadata.confidence : 0
+  });
 }

@@ -435,7 +435,7 @@ export class MemoryStore implements AppStore {
       if (existingReview) {
         const resolvedReview = [...this.auditEvents.values()].find(
           (event) => event.workspaceId === input.workspaceId
-            && (event.eventType === "mail.review_resolved" || event.eventType === "mail.review_dismissed")
+            && (event.eventType === "mail.review_resolved" || event.eventType === "mail.review_ignored" || event.eventType === "mail.review_dismissed")
             && event.entityId === input.providerMessageId
         );
         return resolvedReview ? { kind: "duplicate", notificationType: parsed.notificationType } : { kind: "needs_review", notificationType: parsed.notificationType };
@@ -449,7 +449,8 @@ export class MemoryStore implements AppStore {
         mailboxNumber: parsed.mailboxNumber,
         postOfficeName: parsed.postOfficeName,
         notificationType: parsed.notificationType,
-        confidence: parsed.confidence
+        confidence: parsed.confidence,
+        reason: reviewReason(parsed)
       });
       return { kind: "needs_review", notificationType: parsed.notificationType };
     }
@@ -547,7 +548,7 @@ export class MemoryStore implements AppStore {
     await this.requireMember(session, workspaceId);
     const resolvedProviderMessages = new Set(
       [...this.auditEvents.values()]
-        .filter((event) => event.workspaceId === workspaceId && (event.eventType === "mail.review_resolved" || event.eventType === "mail.review_dismissed"))
+        .filter((event) => event.workspaceId === workspaceId && (event.eventType === "mail.review_resolved" || event.eventType === "mail.review_ignored" || event.eventType === "mail.review_dismissed"))
         .map((event) => event.entityId)
     );
     return [...this.auditEvents.values()]
@@ -565,6 +566,7 @@ export class MemoryStore implements AppStore {
         postOfficeName: typeof event.metadata.postOfficeName === "string" ? event.metadata.postOfficeName : undefined,
         notificationType: event.metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL",
         confidence: typeof event.metadata.confidence === "number" ? event.metadata.confidence : undefined,
+        reason: typeof event.metadata.reason === "string" ? event.metadata.reason : reviewReasonFromMetadata(event.metadata),
         receivedAt: typeof event.metadata.receivedAt === "string" ? event.metadata.receivedAt : undefined,
         createdAt: event.createdAt
       }));
@@ -611,11 +613,18 @@ export class MemoryStore implements AppStore {
     return { kind: duplicate ? "duplicate" : "processed", mailboxId, notificationType: review.metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL" };
   }
 
+  async markReviewItemResolved(session: Session, workspaceId: string, reviewItemId: string): Promise<void> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const review = this.auditEvents.get(reviewItemId);
+    if (!review || review.workspaceId !== workspaceId || review.eventType !== "mail.needs_review") throw new NotFoundError("Review item not found.");
+    this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, { reviewItemId, action: "resolved_without_box_change" });
+  }
+
   async dismissReviewItem(session: Session, workspaceId: string, reviewItemId: string): Promise<void> {
     await this.requireMember(session, workspaceId, "ADMIN");
     const review = this.auditEvents.get(reviewItemId);
     if (!review || review.workspaceId !== workspaceId || review.eventType !== "mail.needs_review") throw new NotFoundError("Review item not found.");
-    this.audit(session.userId, workspaceId, "mail.review_dismissed", "mail_message", review.entityId, { reviewItemId });
+    this.audit(session.userId, workspaceId, "mail.review_ignored", "mail_message", review.entityId, { reviewItemId, action: "ignored" });
   }
 
   async searchPostOfficeLocations(session: Session, workspaceId: string, query: string): Promise<LctrPostOfficeLocation[]> {
@@ -849,4 +858,31 @@ export class MemoryStore implements AppStore {
 
 function normalizeMailboxNumber(value: string) {
   return value.replace(/^\s*(?:p\.?\s*o\.?\s*box|pobox|post\s*box|postbox|box)\s*/i, "").replace(/[^a-z0-9]/gi, "").toUpperCase();
+}
+
+function reviewReason(parsed: {
+  mailboxNumber?: string;
+  postOfficeName?: string;
+  notificationType: "MAIL" | "PARCEL";
+  confidence: number;
+}) {
+  if (parsed.notificationType === "PARCEL" && parsed.postOfficeName && !parsed.mailboxNumber) {
+    return `Parcel notice matched ${parsed.postOfficeName}, but a single PO box could not be chosen automatically.`;
+  }
+  if (!parsed.mailboxNumber) {
+    return "No PO box number could be read from the email.";
+  }
+  if (parsed.confidence >= 0.7) {
+    return `PO Box ${parsed.mailboxNumber} matched more than one saved post office, so it needs a human choice.`;
+  }
+  return `PO Box ${parsed.mailboxNumber} is not saved yet.`;
+}
+
+function reviewReasonFromMetadata(metadata: Record<string, unknown>) {
+  return reviewReason({
+    mailboxNumber: typeof metadata.mailboxNumber === "string" ? metadata.mailboxNumber : undefined,
+    postOfficeName: typeof metadata.postOfficeName === "string" ? metadata.postOfficeName : undefined,
+    notificationType: metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL",
+    confidence: typeof metadata.confidence === "number" ? metadata.confidence : 0
+  });
 }

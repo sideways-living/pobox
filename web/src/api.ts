@@ -175,6 +175,14 @@ export async function resolveReviewItem(reviewItemId: string, mailboxId: string)
   if (!response.ok) throw new Error(await errorMessage(response));
 }
 
+export async function markReviewItemResolved(reviewItemId: string): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/review-items/${reviewItemId}/mark-resolved`, {
+    method: "POST",
+    credentials: "include"
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+}
+
 export async function dismissReviewItem(reviewItemId: string): Promise<void> {
   const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/review-items/${reviewItemId}/dismiss`, {
     method: "POST",
