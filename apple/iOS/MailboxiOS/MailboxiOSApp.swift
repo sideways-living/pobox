@@ -13,7 +13,7 @@ struct MailboxiOSApp: App {
 
 @MainActor
 final class iPhoneMailboxViewModel: ObservableObject {
-    @Published var email = "daniel@example.com"
+    @Published var email = ""
     @Published var password = ""
     @Published var twoFactorCode = ""
     @Published var twoFactorChallengeId: String?
@@ -185,6 +185,38 @@ final class iPhoneMailboxViewModel: ObservableObject {
         }
     }
 
+    func resolveReviewItem(_ item: ReviewItem, mailboxId: String) async {
+        await run {
+            try await client.resolveReviewItem(workspaceId: workspaceId, reviewItemId: item.id, mailboxId: mailboxId)
+            try await loadWorkspace()
+        }
+    }
+
+    func createMailboxFromReview(_ item: ReviewItem, postOfficeId: String, boxNumber: String) async {
+        await run {
+            let mailbox = try await client.createMailbox(
+                workspaceId: workspaceId,
+                input: CreateMailboxInput(postOfficeId: postOfficeId, boxNumber: boxNumber)
+            )
+            try await client.resolveReviewItem(workspaceId: workspaceId, reviewItemId: item.id, mailboxId: mailbox.id)
+            try await loadWorkspace()
+        }
+    }
+
+    func markReviewItemResolved(_ item: ReviewItem) async {
+        await run {
+            try await client.markReviewItemResolved(workspaceId: workspaceId, reviewItemId: item.id)
+            try await loadWorkspace()
+        }
+    }
+
+    func dismissReviewItem(_ item: ReviewItem) async {
+        await run {
+            try await client.dismissReviewItem(workspaceId: workspaceId, reviewItemId: item.id)
+            try await loadWorkspace()
+        }
+    }
+
     private func run(_ operation: () async throws -> Void) async {
         isLoading = true
         errorMessage = nil
@@ -328,8 +360,31 @@ struct iPhoneDashboardView: View {
                 })
             }
 
+            iPhoneTab(title: "History", systemImage: "clock") {
+                iPhoneHistoryList(snapshot: model.snapshot, mode: .history)
+            }
+
+            iPhoneTab(title: "Activity", systemImage: "list.bullet.rectangle") {
+                iPhoneHistoryList(snapshot: model.snapshot, mode: .activity)
+            }
+
             iPhoneTab(title: "Needs Review", systemImage: "exclamationmark.triangle") {
-                iPhoneReviewList(reviewItems: model.reviewItems)
+                iPhoneReviewList(
+                    snapshot: model.snapshot,
+                    reviewItems: model.reviewItems,
+                    resolveReviewItem: { item, mailboxId in
+                        await model.resolveReviewItem(item, mailboxId: mailboxId)
+                    },
+                    createMailboxFromReview: { item, postOfficeId, boxNumber in
+                        await model.createMailboxFromReview(item, postOfficeId: postOfficeId, boxNumber: boxNumber)
+                    },
+                    markReviewItemResolved: { item in
+                        await model.markReviewItemResolved(item)
+                    },
+                    dismissReviewItem: { item in
+                        await model.dismissReviewItem(item)
+                    }
+                )
             }
 
             iPhoneTab(title: "Team", systemImage: "person.2") {
@@ -658,8 +713,81 @@ struct iPhonePostOfficeSection: View {
     }
 }
 
+struct iPhoneHistoryList: View {
+    enum Mode {
+        case history
+        case activity
+    }
+
+    let snapshot: MailboxDashboardSnapshot?
+    let mode: Mode
+
+    var body: some View {
+        List {
+            Section {
+                Text(mode == .history ? "Recent mail detections and collection records." : "Operational feed for the shared workspace.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section(mode == .history ? "History" : "Activity") {
+                let events = Array(snapshot?.history.prefix(50) ?? [])
+                if events.isEmpty {
+                    Label("No activity yet", systemImage: "clock")
+                } else {
+                    ForEach(events) { event in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(title(for: event), systemImage: icon(for: event))
+                                .foregroundStyle(tint(for: event))
+                            Text(detail(for: event))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+        }
+    }
+
+    private func title(for event: MailboxHistoryEvent) -> String {
+        switch event {
+        case .mail(let mail): mail.subject
+        case .collection(let collection): "Collected by \(collection.collectedBy)"
+        }
+    }
+
+    private func detail(for event: MailboxHistoryEvent) -> String {
+        switch event {
+        case .mail(let mail):
+            return "\(mail.sender) - confidence \(Int(mail.parserConfidence * 100))% - \(iPhoneDisplayDate(mail.processedAt))"
+        case .collection(let collection):
+            return "\(collection.source.rawValue) - \(iPhoneDisplayDate(collection.collectedAt))"
+        }
+    }
+
+    private func icon(for event: MailboxHistoryEvent) -> String {
+        switch event {
+        case .mail: "envelope.badge"
+        case .collection: "checkmark.circle"
+        }
+    }
+
+    private func tint(for event: MailboxHistoryEvent) -> Color {
+        switch event {
+        case .mail(let mail): mail.parserConfidence < 0.8 ? .red : .blue
+        case .collection: .green
+        }
+    }
+}
+
 struct iPhoneReviewList: View {
+    let snapshot: MailboxDashboardSnapshot?
     let reviewItems: [ReviewItem]
+    let resolveReviewItem: (ReviewItem, String) async -> Void
+    let createMailboxFromReview: (ReviewItem, String, String) async -> Void
+    let markReviewItemResolved: (ReviewItem) async -> Void
+    let dismissReviewItem: (ReviewItem) async -> Void
 
     var body: some View {
         List {
@@ -674,24 +802,196 @@ struct iPhoneReviewList: View {
                     Label("No review items waiting", systemImage: "checkmark.circle")
                 } else {
                     ForEach(reviewItems) { item in
-                        VStack(alignment: .leading, spacing: 5) {
-                            Label(item.subject ?? "Unmatched mail notice", systemImage: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.red)
-                            Text(reviewDetail(item))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        iPhoneReviewItemRow(
+                            item: item,
+                            postOffices: snapshot?.postOffices ?? [],
+                            mailboxChoices: mailboxChoices(from: snapshot),
+                            resolveReviewItem: resolveReviewItem,
+                            createMailboxFromReview: createMailboxFromReview,
+                            markReviewItemResolved: markReviewItemResolved,
+                            dismissReviewItem: dismissReviewItem
+                        )
                     }
                 }
             }
         }
     }
 
-    private func reviewDetail(_ item: ReviewItem) -> String {
-        let type = item.notificationType == "PARCEL" ? "Parcel" : "Mail"
-        let box = item.mailboxNumber.map { "PO Box \($0)" } ?? item.postOfficeName.map { "Collect from \($0)" } ?? "No PO box match"
-        let confidence = item.confidence.map { "confidence \(Int($0 * 100))%" } ?? "confidence unknown"
-        return "\(type) - \(box) - \(confidence) - \(item.receivedAt ?? item.createdAt)"
+    private func mailboxChoices(from snapshot: MailboxDashboardSnapshot?) -> [iPhoneMailboxChoice] {
+        snapshot?.postOffices.flatMap { office in
+            office.mailboxes.map { mailbox in
+                iPhoneMailboxChoice(id: mailbox.id, officeName: office.name, mailbox: mailbox)
+            }
+        } ?? []
+    }
+}
+
+private struct iPhoneMailboxChoice: Identifiable {
+    let id: String
+    let officeName: String
+    let mailbox: Mailbox
+
+    var label: String {
+        "\(officeName) - PO Box \(mailbox.boxNumber)"
+    }
+}
+
+private struct iPhoneReviewItemRow: View {
+    let item: ReviewItem
+    let postOffices: [PostOffice]
+    let mailboxChoices: [iPhoneMailboxChoice]
+    let resolveReviewItem: (ReviewItem, String) async -> Void
+    let createMailboxFromReview: (ReviewItem, String, String) async -> Void
+    let markReviewItemResolved: (ReviewItem) async -> Void
+    let dismissReviewItem: (ReviewItem) async -> Void
+
+    @State private var selectedMailboxId = ""
+    @State private var createPostOfficeId = ""
+    @State private var createBoxNumber = ""
+    @State private var confirmIgnore = false
+    @State private var confirmResolved = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(item.subject ?? "Unmatched mail notification", systemImage: item.notificationType == "PARCEL" ? "shippingbox.fill" : "envelope.badge.fill")
+                .font(.headline)
+                .foregroundStyle(.orange)
+
+            Text(reviewSummary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let preview = item.bodyPreview, !preview.isEmpty {
+                Text(preview)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(4)
+            }
+
+            if mailboxChoices.isEmpty {
+                Label("No saved PO boxes available", systemImage: "mail.stack")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Picker("Existing PO box", selection: $selectedMailboxId) {
+                    ForEach(mailboxChoices) { choice in
+                        Text(choice.label).tag(choice.id)
+                    }
+                }
+
+                Button {
+                    Task { await resolveReviewItem(item, selectedMailboxId) }
+                } label: {
+                    Label("Match Existing Box", systemImage: "link")
+                }
+                .disabled(selectedMailboxId.isEmpty)
+            }
+
+            if item.mailboxNumber != nil || item.postOfficeName != nil {
+                if postOffices.isEmpty {
+                    Text("Add a post office before creating a missing PO box.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("Post office", selection: $createPostOfficeId) {
+                        ForEach(postOffices) { office in
+                            Text(office.name).tag(office.id)
+                        }
+                    }
+
+                    TextField("PO Box Number", text: $createBoxNumber)
+                        .keyboardType(.numberPad)
+
+                    Button {
+                        Task { await createMailboxFromReview(item, createPostOfficeId, createBoxNumber.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                    } label: {
+                        Label("Create and Resolve", systemImage: "plus.circle")
+                    }
+                    .disabled(createPostOfficeId.isEmpty || createBoxNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+
+            HStack {
+                Button {
+                    confirmResolved = true
+                } label: {
+                    Label("Mark Resolved", systemImage: "checkmark.circle")
+                }
+
+                Button(role: .destructive) {
+                    confirmIgnore = true
+                } label: {
+                    Label("Ignore", systemImage: "xmark.circle")
+                }
+            }
+            .font(.callout)
+        }
+        .padding(.vertical, 6)
+        .onAppear(perform: prepareDefaults)
+        .confirmationDialog("Ignore this review item?", isPresented: $confirmIgnore, titleVisibility: .visible) {
+            Button("Ignore Item", role: .destructive) {
+                Task { await dismissReviewItem(item) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The review item will be removed and its source email can be handled on the next poll.")
+        }
+        .confirmationDialog("Mark this review item resolved?", isPresented: $confirmResolved, titleVisibility: .visible) {
+            Button("Mark Resolved") {
+                Task { await markReviewItemResolved(item) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Use this only when no PO box status change is needed.")
+        }
+    }
+
+    private var reviewSummary: String {
+        [
+            "Received \(iPhoneDisplayDate(item.receivedAt ?? item.createdAt))",
+            item.sender.map { "from \($0)" },
+            "reason: \(item.reason ?? "Needs manual review")",
+            parsedGuess,
+            confidenceText
+        ]
+            .compactMap(\.self)
+            .joined(separator: " - ")
+    }
+
+    private var parsedGuess: String {
+        if let number = item.mailboxNumber, !number.isEmpty {
+            return "guess: PO Box \(number)"
+        }
+        if let office = item.postOfficeName, !office.isEmpty {
+            return "guess: \(office)"
+        }
+        return "guess: none"
+    }
+
+    private var confidenceText: String? {
+        item.confidence.map { "confidence \(Int($0 * 100))%" }
+    }
+
+    private func prepareDefaults() {
+        if selectedMailboxId.isEmpty {
+            selectedMailboxId = preferredMailboxChoice()?.id ?? mailboxChoices.first?.id ?? ""
+        }
+        if createPostOfficeId.isEmpty {
+            createPostOfficeId = preferredPostOffice()?.id ?? postOffices.first?.id ?? ""
+        }
+        if createBoxNumber.isEmpty {
+            createBoxNumber = item.mailboxNumber ?? ""
+        }
+    }
+
+    private func preferredMailboxChoice() -> iPhoneMailboxChoice? {
+        guard let mailboxNumber = item.mailboxNumber else { return nil }
+        return mailboxChoices.first { iPhoneNormalizeBoxNumber($0.mailbox.boxNumber) == iPhoneNormalizeBoxNumber(mailboxNumber) }
+    }
+
+    private func preferredPostOffice() -> PostOffice? {
+        guard let postOfficeName = item.postOfficeName else { return nil }
+        return postOffices.first { iPhoneNormalizeLocationName($0.name) == iPhoneNormalizeLocationName(postOfficeName) }
     }
 }
 
@@ -1061,4 +1361,37 @@ private func appleMapsURL(for office: PostOffice) -> URL {
         URLQueryItem(name: "q", value: office.name)
     ]
     return components.url!
+}
+
+private func iPhoneNormalizeBoxNumber(_ value: String) -> String {
+    value.filter(\.isNumber)
+}
+
+private func iPhoneNormalizeLocationName(_ value: String) -> String {
+    value
+        .lowercased()
+        .replacingOccurrences(of: "local post office", with: "")
+        .replacingOccurrences(of: "post office", with: "")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func iPhoneDisplayDate(_ value: String?) -> String {
+    guard let value, !value.isEmpty else { return "unknown time" }
+    let formatters: [ISO8601DateFormatter] = {
+        let withFractionalSeconds = ISO8601DateFormatter()
+        withFractionalSeconds.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        let standard = ISO8601DateFormatter()
+        standard.formatOptions = [.withInternetDateTime]
+        return [withFractionalSeconds, standard]
+    }()
+
+    if let date = formatters.compactMap({ $0.date(from: value) }).first {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    return value
 }

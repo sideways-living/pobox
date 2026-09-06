@@ -1,4 +1,4 @@
-export const appVersion = "0.12.8";
+export const appVersion = "0.12.9";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.12.9-native-ios-parity",
+    version: "0.12.9",
+    releasedAt: "2026-09-06T16:45:00.000Z",
+    title: "Better iPhone app",
+    summary:
+      "The iPhone app now has separate History and Activity screens, clearer grouped post office views, and review actions for matching, creating, ignoring, or resolving mail items.",
+    audience: "ALL"
+  },
   {
     id: "0.12.8-native-macos-review-parity",
     version: "0.12.8",
