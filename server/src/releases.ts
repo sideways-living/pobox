@@ -1,4 +1,4 @@
-export const appVersion = "0.12.2";
+export const appVersion = "0.12.3";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.12.3-mail-parsing-rules",
+    version: "0.12.3",
+    releasedAt: "2026-09-06T14:45:00.000Z",
+    title: "Mail parsing rules",
+    summary:
+      "Mail2Day PO box subjects now deterministically mark mail waiting, and parcel collection emails with a Collect from location now mark parcel waiting when the post office maps to one saved PO box.",
+    audience: "ALL"
+  },
   {
     id: "0.12.2-review-queue-workflow",
     version: "0.12.2",

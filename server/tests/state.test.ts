@@ -104,6 +104,62 @@ describe("shared mailbox state", () => {
     expect(cleared?.parcelWaiting).toBe(false);
   });
 
+  it("processes exact Mail2Day subjects without review and flags mail waiting", async () => {
+    const daniel = await loginSession("daniel@example.com");
+    const office = await store.createPostOffice(daniel, "ws_company", {
+      name: "SOUTH MELBOURNE POST OFFICE",
+      address: "South Melbourne VIC",
+      latitude: -37.832,
+      longitude: 144.957,
+      geofenceRadius: 200
+    });
+    const box = await store.createMailbox(daniel, "ws_company", { postOfficeId: office.id, boxNumber: "3020" });
+
+    const result = await store.processIncomingMail({
+      workspaceId: "ws_company",
+      provider: "mock",
+      providerMessageId: "mail2day-3020",
+      sender: "mail2day@example.com",
+      subject: "Mail2Day: PO Box 3020 has mail",
+      receivedAt: "2026-09-06T03:15:00.000Z"
+    });
+
+    expect(result).toEqual({ kind: "processed", mailboxId: box.id, notificationType: "MAIL" });
+    await expect(store.listReviewItems(daniel, "ws_company")).resolves.toHaveLength(0);
+    const snapshot = await store.dashboard(daniel, "ws_company");
+    const updated = snapshot.postOffices.flatMap((item) => item.mailboxes).find((item) => item.id === box.id);
+    expect(updated).toMatchObject({
+      mailWaiting: true,
+      parcelWaiting: false,
+      latestNotificationAt: "2026-09-06T03:15:00.000Z"
+    });
+  });
+
+  it("processes parcel collect-from notices without review and flags parcel waiting", async () => {
+    const daniel = await loginSession("daniel@example.com");
+    await store.deleteMailbox(daniel, "ws_company", "box_5678");
+
+    const result = await store.processIncomingMail({
+      workspaceId: "ws_company",
+      provider: "mock",
+      providerMessageId: "parcel-south-melbourne",
+      sender: "parcel@example.com",
+      subject: "Your PO Box item is ready to collect",
+      bodyPreview: "Collect from: SOUTH MELBOURNE",
+      receivedAt: "2026-09-06T04:45:00.000Z"
+    });
+
+    expect(result).toEqual({ kind: "processed", mailboxId: "box_882", notificationType: "PARCEL" });
+    await expect(store.listReviewItems(daniel, "ws_company")).resolves.toHaveLength(0);
+    const snapshot = await store.dashboard(daniel, "ws_company");
+    const updated = snapshot.postOffices.flatMap((item) => item.mailboxes).find((item) => item.id === "box_882");
+    expect(updated).toMatchObject({
+      mailWaiting: false,
+      parcelWaiting: true,
+      latestParcelNotificationAt: "2026-09-06T04:45:00.000Z"
+    });
+  });
+
   it("lists parser exceptions that need review", async () => {
     const john = await loginSession("john@example.com");
     const result = await store.processIncomingMail({

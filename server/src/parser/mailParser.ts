@@ -4,7 +4,7 @@ const mailboxPattern =
   /\b(?:p\.?\s*o\.?\s*box|pobox|post\s*box|postbox|box)\s*([a-z0-9-]{2,12})\b/i;
 const mail2DaySubjectPattern = /^mail2day:\s*p\.?\s*o\.?\s*box\s*([a-z0-9-]{2,12})\s+has\s+mail\.?$/i;
 const parcelSubjectPattern = /^your po box item is ready to collect$/i;
-const collectFromPattern = /collect\s+from:\s*\|?\s*\*{0,2}\s*([A-Z][A-Z\s'.-]{2,80}?)(?:\s*\*{0,2}\s*(?:\n|\r|$|\|))/i;
+const collectFromPattern = /collect\s+from:\s*(?:\|)?\s*\*{0,2}\s*([a-z][a-z\s'.-]{2,80}?)(?:\s*\*{0,2}\s*(?:\||<|\n|\r|$))/i;
 
 export interface IncomingMailInput {
   sender: string;
@@ -53,18 +53,19 @@ function parseParcelNotification(input: IncomingMailInput, mailboxes: Mailbox[],
     return { notificationType: "PARCEL", confidence: 0.35, requiresReview: true };
   }
 
-  const postOffice = postOffices.find((office) => normalizeLocationName(office.name) === normalizeLocationName(collectFrom) && office.active);
-  if (!postOffice) {
+  const matchingPostOffices = postOffices.filter((office) => normalizeLocationName(office.name) === normalizeLocationName(collectFrom) && office.active);
+  if (matchingPostOffices.length === 0) {
     return { postOfficeName: collectFrom, notificationType: "PARCEL", confidence: 0.55, requiresReview: true };
   }
 
-  const activeBoxes = mailboxes.filter((box) => box.postOfficeId === postOffice.id && box.active);
+  const matchingPostOfficeIds = new Set(matchingPostOffices.map((office) => office.id));
+  const activeBoxes = mailboxes.filter((box) => matchingPostOfficeIds.has(box.postOfficeId) && box.active);
   if (activeBoxes.length !== 1) {
-    return { postOfficeName: postOffice.name, notificationType: "PARCEL", confidence: activeBoxes.length > 1 ? 0.65 : 0.55, requiresReview: true };
+    return { postOfficeName: collectFrom, notificationType: "PARCEL", confidence: activeBoxes.length > 1 ? 0.65 : 0.55, requiresReview: true };
   }
 
   return {
-    postOfficeName: postOffice.name,
+    postOfficeName: matchingPostOffices.find((office) => office.id === activeBoxes[0].postOfficeId)?.name ?? collectFrom,
     mailboxNumber: activeBoxes[0].boxNumber,
     mailboxId: activeBoxes[0].id,
     notificationType: "PARCEL",
@@ -75,7 +76,12 @@ function parseParcelNotification(input: IncomingMailInput, mailboxes: Mailbox[],
 }
 
 function extractCollectFrom(bodyPreview: string): string | undefined {
-  const match = bodyPreview.match(collectFromPattern);
+  const normalizedBody = bodyPreview
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const match = normalizedBody.match(collectFromPattern);
   return match?.[1]?.replace(/\s+/g, " ").trim();
 }
 
