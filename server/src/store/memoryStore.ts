@@ -429,19 +429,19 @@ export class MemoryStore implements AppStore {
     const workspacePostOffices = [...this.postOffices.values()].filter((office) => office.workspaceId === input.workspaceId);
     const parsed = parseMailNotification(input, workspaceBoxes, workspacePostOffices);
     if (!parsed.mailboxId || parsed.requiresReview) {
-      const existingReview = [...this.auditEvents.values()].find(
-        (event) => event.workspaceId === input.workspaceId && event.eventType === "mail.needs_review" && event.entityId === input.providerMessageId
-      );
+      const existingReview = [...this.auditEvents.values()].find((event) => reviewMatchesProviderMessage(event, input));
       if (existingReview) {
         const resolvedReview = [...this.auditEvents.values()].find(
           (event) => event.workspaceId === input.workspaceId
-            && (event.eventType === "mail.review_resolved" || event.eventType === "mail.review_ignored" || event.eventType === "mail.review_dismissed")
-            && event.entityId === input.providerMessageId
+            && isReviewResolutionEvent(event.eventType)
+            && reviewMatchesProviderMessage(event, input)
         );
-        return resolvedReview ? { kind: "duplicate", notificationType: parsed.notificationType } : { kind: "needs_review", notificationType: parsed.notificationType };
+        const notificationType = notificationTypeFromMetadata(existingReview.metadata, parsed.notificationType);
+        return resolvedReview ? { kind: "duplicate", notificationType } : { kind: "needs_review", notificationType };
       }
       this.audit("system", input.workspaceId, "mail.needs_review", "mail_message", input.providerMessageId, {
         provider: input.provider,
+        providerThreadId: input.providerThreadId,
         sender: input.sender,
         subject: input.subject,
         bodyPreview: input.bodyPreview,
@@ -609,7 +609,12 @@ export class MemoryStore implements AppStore {
       });
     }
 
-    this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, { reviewItemId, mailboxId });
+    this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, {
+      reviewItemId,
+      mailboxId,
+      provider: review.metadata.provider,
+      providerThreadId: review.metadata.providerThreadId
+    });
     return { kind: duplicate ? "duplicate" : "processed", mailboxId, notificationType: review.metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL" };
   }
 
@@ -617,14 +622,24 @@ export class MemoryStore implements AppStore {
     await this.requireMember(session, workspaceId, "ADMIN");
     const review = this.auditEvents.get(reviewItemId);
     if (!review || review.workspaceId !== workspaceId || review.eventType !== "mail.needs_review") throw new NotFoundError("Review item not found.");
-    this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, { reviewItemId, action: "resolved_without_box_change" });
+    this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, {
+      reviewItemId,
+      action: "resolved_without_box_change",
+      provider: review.metadata.provider,
+      providerThreadId: review.metadata.providerThreadId
+    });
   }
 
   async dismissReviewItem(session: Session, workspaceId: string, reviewItemId: string): Promise<void> {
     await this.requireMember(session, workspaceId, "ADMIN");
     const review = this.auditEvents.get(reviewItemId);
     if (!review || review.workspaceId !== workspaceId || review.eventType !== "mail.needs_review") throw new NotFoundError("Review item not found.");
-    this.audit(session.userId, workspaceId, "mail.review_ignored", "mail_message", review.entityId, { reviewItemId, action: "ignored" });
+    this.audit(session.userId, workspaceId, "mail.review_ignored", "mail_message", review.entityId, {
+      reviewItemId,
+      action: "ignored",
+      provider: review.metadata.provider,
+      providerThreadId: review.metadata.providerThreadId
+    });
   }
 
   async searchPostOfficeLocations(session: Session, workspaceId: string, query: string): Promise<LctrPostOfficeLocation[]> {
@@ -885,4 +900,20 @@ function reviewReasonFromMetadata(metadata: Record<string, unknown>) {
     notificationType: metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL",
     confidence: typeof metadata.confidence === "number" ? metadata.confidence : 0
   });
+}
+
+function isReviewResolutionEvent(eventType: string) {
+  return eventType === "mail.review_resolved" || eventType === "mail.review_ignored" || eventType === "mail.review_dismissed";
+}
+
+function reviewMatchesProviderMessage(event: AuditEvent, input: IncomingProviderMessage) {
+  if (event.workspaceId !== input.workspaceId) return false;
+  const metadata = event.metadata;
+  if (typeof metadata.provider === "string" && metadata.provider !== input.provider) return false;
+  if (event.entityId === input.providerMessageId) return true;
+  return Boolean(input.providerThreadId && metadata.providerThreadId === input.providerThreadId);
+}
+
+function notificationTypeFromMetadata(metadata: Record<string, unknown>, fallback: "MAIL" | "PARCEL") {
+  return metadata.notificationType === "PARCEL" ? "PARCEL" : metadata.notificationType === "MAIL" ? "MAIL" : fallback;
 }

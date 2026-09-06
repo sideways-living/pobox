@@ -17,6 +17,7 @@ export interface IncomingProviderMessage {
   workspaceId: string;
   provider: string;
   providerMessageId: string;
+  providerThreadId?: string;
   sender: string;
   subject: string;
   bodyPreview?: string;

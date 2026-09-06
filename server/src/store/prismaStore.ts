@@ -80,6 +80,13 @@ interface ReviewAuditRow {
   createdAt: Date;
 }
 
+interface ReviewMatchAuditRow {
+  workspaceId: string;
+  entityId: string;
+  eventType: string;
+  metadata: unknown;
+}
+
 export class PrismaStore implements AppStore {
   constructor(private readonly prisma = new PrismaClient()) {}
 
@@ -496,21 +503,28 @@ export class PrismaStore implements AppStore {
     ]);
     const parsed = parseMailNotification(input, boxes.map(this.toMailbox), postOffices.map(this.toPostOffice));
     if (!parsed.mailboxId || parsed.requiresReview) {
-      const existingReview = await this.prisma.auditEvent.findFirst({
-        where: { workspaceId: input.workspaceId, eventType: "mail.needs_review", entityId: input.providerMessageId }
+      const reviewMatches = await this.prisma.auditEvent.findMany({
+        where: {
+          workspaceId: input.workspaceId,
+          OR: [
+            { entityId: input.providerMessageId },
+            ...(input.providerThreadId ? [{ metadata: { path: ["providerThreadId"], equals: input.providerThreadId } }] : [])
+          ]
+        },
+        orderBy: { createdAt: "desc" },
+        take: 20
       });
+      const matchedReviewEvents = reviewMatches as ReviewMatchAuditRow[];
+      const existingReview = matchedReviewEvents.find((event: ReviewMatchAuditRow) => event.eventType === "mail.needs_review" && reviewMatchesProviderMessage(event, input));
       if (existingReview) {
-        const resolvedReview = await this.prisma.auditEvent.findFirst({
-          where: {
-            workspaceId: input.workspaceId,
-            eventType: { in: ["mail.review_resolved", "mail.review_ignored", "mail.review_dismissed"] },
-            entityId: input.providerMessageId
-          }
-        });
-        return resolvedReview ? { kind: "duplicate", notificationType: parsed.notificationType } : { kind: "needs_review", notificationType: parsed.notificationType };
+        const resolvedReview = matchedReviewEvents.find((event: ReviewMatchAuditRow) => isReviewResolutionEvent(event.eventType) && reviewMatchesProviderMessage(event, input));
+        const metadata = metadataRecord(existingReview.metadata);
+        const notificationType = notificationTypeFromMetadata(metadata, parsed.notificationType);
+        return resolvedReview ? { kind: "duplicate", notificationType } : { kind: "needs_review", notificationType };
       }
       await this.audit("system", input.workspaceId, "mail.needs_review", "mail_message", input.providerMessageId, {
         provider: input.provider,
+        providerThreadId: input.providerThreadId,
         sender: input.sender,
         subject: input.subject,
         bodyPreview: input.bodyPreview,
@@ -717,7 +731,12 @@ export class PrismaStore implements AppStore {
       ]);
     }
 
-    await this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, { reviewItemId, mailboxId });
+    await this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, {
+      reviewItemId,
+      mailboxId,
+      provider,
+      providerThreadId: typeof metadata.providerThreadId === "string" ? metadata.providerThreadId : undefined
+    });
     return { kind: duplicate ? "duplicate" : "processed", mailboxId, notificationType };
   }
 
@@ -725,14 +744,26 @@ export class PrismaStore implements AppStore {
     await this.requireMember(session, workspaceId, "ADMIN");
     const review = await this.prisma.auditEvent.findFirst({ where: { id: reviewItemId, workspaceId, eventType: "mail.needs_review" } });
     if (!review) throw new NotFoundError("Review item not found.");
-    await this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, { reviewItemId, action: "resolved_without_box_change" });
+    const metadata = metadataRecord(review.metadata);
+    await this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, {
+      reviewItemId,
+      action: "resolved_without_box_change",
+      provider: metadata.provider,
+      providerThreadId: metadata.providerThreadId
+    });
   }
 
   async dismissReviewItem(session: Session, workspaceId: string, reviewItemId: string): Promise<void> {
     await this.requireMember(session, workspaceId, "ADMIN");
     const review = await this.prisma.auditEvent.findFirst({ where: { id: reviewItemId, workspaceId, eventType: "mail.needs_review" } });
     if (!review) throw new NotFoundError("Review item not found.");
-    await this.audit(session.userId, workspaceId, "mail.review_ignored", "mail_message", review.entityId, { reviewItemId, action: "ignored" });
+    const metadata = metadataRecord(review.metadata);
+    await this.audit(session.userId, workspaceId, "mail.review_ignored", "mail_message", review.entityId, {
+      reviewItemId,
+      action: "ignored",
+      provider: metadata.provider,
+      providerThreadId: metadata.providerThreadId
+    });
   }
 
   async searchPostOfficeLocations(session: Session, workspaceId: string, query: string): Promise<LctrPostOfficeLocation[]> {
@@ -1160,4 +1191,24 @@ function reviewReasonFromMetadata(metadata: Record<string, unknown>) {
     notificationType: metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL",
     confidence: typeof metadata.confidence === "number" ? metadata.confidence : 0
   });
+}
+
+function isReviewResolutionEvent(eventType: string) {
+  return eventType === "mail.review_resolved" || eventType === "mail.review_ignored" || eventType === "mail.review_dismissed";
+}
+
+function reviewMatchesProviderMessage(event: { workspaceId: string; entityId: string; metadata: unknown }, input: IncomingProviderMessage) {
+  if (event.workspaceId !== input.workspaceId) return false;
+  const metadata = metadataRecord(event.metadata);
+  if (typeof metadata.provider === "string" && metadata.provider !== input.provider) return false;
+  if (event.entityId === input.providerMessageId) return true;
+  return Boolean(input.providerThreadId && metadata.providerThreadId === input.providerThreadId);
+}
+
+function metadataRecord(metadata: unknown): Record<string, unknown> {
+  return metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata as Record<string, unknown> : {};
+}
+
+function notificationTypeFromMetadata(metadata: Record<string, unknown>, fallback: "MAIL" | "PARCEL") {
+  return metadata.notificationType === "PARCEL" ? "PARCEL" : metadata.notificationType === "MAIL" ? "MAIL" : fallback;
 }

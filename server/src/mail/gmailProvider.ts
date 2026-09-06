@@ -96,6 +96,7 @@ export class GmailProviderClient implements MailProviderClient {
       const receivedAt = data.internalDate ? new Date(Number(data.internalDate)).toISOString() : undefined;
       results.push({
         providerMessageId: item.id,
+        providerThreadId: data.threadId ?? item.threadId ?? undefined,
         sender: headerValue(data, "from"),
         subject: headerValue(data, "subject"),
         bodyPreview: plainTextBody(data.payload) ?? htmlTextBody(data.payload) ?? data.snippet ?? undefined,

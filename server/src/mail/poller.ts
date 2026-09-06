@@ -26,6 +26,7 @@ export class MailPoller {
           workspaceId: this.options.workspaceId,
           provider: this.dependencies.provider.providerName,
           providerMessageId: message.providerMessageId,
+          providerThreadId: message.providerThreadId,
           sender: message.sender,
           subject: message.subject,
           bodyPreview: message.bodyPreview,

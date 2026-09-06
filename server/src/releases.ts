@@ -1,4 +1,4 @@
-export const appVersion = "0.12.3";
+export const appVersion = "0.12.4";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.12.4-gmail-polling-reliability",
+    version: "0.12.4",
+    releasedAt: "2026-09-06T15:05:00.000Z",
+    title: "Gmail polling reliability",
+    summary:
+      "Gmail polling now carries message and thread IDs through the review flow so repeated unread emails do not create duplicate Needs Review rows, while reviewed and ignored source messages are marked handled on the next poll.",
+    audience: "ADMIN"
+  },
   {
     id: "0.12.3-mail-parsing-rules",
     version: "0.12.3",

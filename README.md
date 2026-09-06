@@ -52,7 +52,16 @@ APNs, provider OAuth setup screens, SMTP delivery, and full Prisma-backed reposi
 
 ## Gmail Mail Polling
 
-The backend can poll a Gmail inbox for unread notification emails, parse messages such as `mail is present in box 1234`, update the matching box, and mark processed messages as read. Duplicate provider message IDs are marked read without adding another history event. New emails for a box that is already waiting still add a history event, but the outstanding count stays at one for that box.
+The backend can poll a Gmail inbox for unread notification emails, parse messages such as `Mail2Day: PO Box 3020 has mail`, update the matching box, and mark handled messages as read. New emails for a box that is already waiting still add a history event, but the outstanding count stays at one for that box.
+
+Polling behavior is intentionally explicit:
+
+- Matched mail notifications create one mail history event, flag `mailWaiting`, and are marked read in Gmail.
+- Matched parcel notifications create one parcel history event, flag `parcelWaiting`, and are marked read in Gmail.
+- Already imported Gmail message IDs are treated as duplicates and marked read without adding another history event.
+- Unclear messages create one Needs Review item and stay unread until a user resolves or ignores the item.
+- Repeated unread messages with the same Gmail message ID or same Gmail thread ID do not create more Needs Review rows.
+- Reviewed or ignored Needs Review items are treated as handled on the next poll, so Gmail can mark the original source message read.
 
 Set these in `.env` on the VPS:
 

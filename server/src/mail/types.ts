@@ -2,6 +2,7 @@ import type { AppStore, IncomingMailResult } from "../store/types.js";
 
 export interface ProviderUnreadMessage {
   providerMessageId: string;
+  providerThreadId?: string;
   sender: string;
   subject: string;
   bodyPreview?: string;
