@@ -130,12 +130,12 @@ final class MacMailboxViewModel: ObservableObject {
         }
     }
 
-    func updateUser(_ member: TeamMember, email: String, displayName: String, role: String) async {
+    func updateUser(_ member: TeamMember, email: String, displayName: String, role: String, status: String) async {
         await run {
             _ = try await client.updateUser(
                 workspaceId: workspaceId,
                 userId: member.id,
-                input: UpdateUserInput(email: email, displayName: displayName, role: role)
+                input: UpdateUserInput(email: email, displayName: displayName, role: role, status: status)
             )
             try await loadWorkspace()
         }
@@ -437,8 +437,8 @@ struct MacOverviewView: View {
         case "Team":
             MacTeamView(snapshot: model.snapshot, members: model.members) { email, displayName, password, role in
                 await model.createUser(email: email, displayName: displayName, password: password, role: role)
-            } updateUser: { member, email, displayName, role in
-                await model.updateUser(member, email: email, displayName: displayName, role: role)
+            } updateUser: { member, email, displayName, role, status in
+                await model.updateUser(member, email: email, displayName: displayName, role: role, status: status)
             } deleteUser: { member in
                 await model.deleteUser(member)
             }
@@ -985,7 +985,7 @@ struct MacTeamView: View {
     let snapshot: MailboxDashboardSnapshot?
     let members: [TeamMember]
     let createUser: (String, String, String, String) async -> Void
-    let updateUser: (TeamMember, String, String, String) async -> Void
+    let updateUser: (TeamMember, String, String, String, String) async -> Void
     let deleteUser: (TeamMember) async -> Void
 
     var body: some View {
@@ -1001,6 +1001,7 @@ struct MacTeamView: View {
                         MacTeamMemberRow(
                             member: member,
                             currentUserId: snapshot?.currentUser.id,
+                            canManage: snapshot?.currentUser.role == "ADMIN",
                             updateUser: updateUser,
                             deleteUser: deleteUser
                         )
@@ -1091,13 +1092,15 @@ struct MacCreateUserForm: View {
 struct MacTeamMemberRow: View {
     let member: TeamMember
     let currentUserId: String?
-    let updateUser: (TeamMember, String, String, String) async -> Void
+    let canManage: Bool
+    let updateUser: (TeamMember, String, String, String, String) async -> Void
     let deleteUser: (TeamMember) async -> Void
     @State private var editing = false
     @State private var confirmDelete = false
     @State private var displayName = ""
     @State private var email = ""
     @State private var role = "MEMBER"
+    @State private var status = "ACTIVE"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1112,20 +1115,33 @@ struct MacTeamMemberRow: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button {
-                    displayName = member.displayName
-                    email = member.email
-                    role = member.role
-                    editing.toggle()
-                } label: {
-                    Label("Edit", systemImage: "pencil")
+                if canManage {
+                    Button {
+                        displayName = member.displayName
+                        email = member.email
+                        role = member.role
+                        status = member.status
+                        editing.toggle()
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    Button(member.active ? "Disable" : "Reactivate") {
+                        Task {
+                            await updateUser(member, member.email, member.displayName, member.role, member.active ? "DISABLED" : "ACTIVE")
+                        }
+                    }
+                    .disabled(member.id == currentUserId)
+                    Button(role: .destructive) {
+                        confirmDelete = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .disabled(member.id == currentUserId)
+                } else {
+                    Text("Admin required")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                Button(role: .destructive) {
-                    confirmDelete = true
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-                .disabled(member.id == currentUserId)
             }
 
             if editing {
@@ -1140,9 +1156,16 @@ struct MacTeamMemberRow: View {
                     }
                     .pickerStyle(.segmented)
                     .disabled(member.id == currentUserId)
+                    Picker("Status", selection: $status) {
+                        Text("Active").tag("ACTIVE")
+                        Text("Invited").tag("INVITED")
+                        Text("Disabled").tag("DISABLED")
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(member.id == currentUserId)
                     Button {
                         Task {
-                            await updateUser(member, email, displayName, role)
+                            await updateUser(member, email, displayName, role, status)
                             editing = false
                         }
                     } label: {
@@ -1154,6 +1177,12 @@ struct MacTeamMemberRow: View {
                 .frame(maxWidth: 480, alignment: .leading)
             }
         }
+        .task(id: member.id) {
+            displayName = member.displayName
+            email = member.email
+            role = member.role
+            status = member.status
+        }
         .padding(14)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
         .confirmationDialog("Delete \(member.displayName)?", isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -1162,7 +1191,7 @@ struct MacTeamMemberRow: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This disables their pobox.watch access.")
+            Text("This disables their pobox.watch access and keeps historical audit records.")
         }
     }
 }

@@ -4,6 +4,7 @@ import type {
   CreatePostOfficeInput,
   CreateUserInput,
   DashboardSnapshot,
+  InviteUserResult,
   LoginResult,
   PasskeyAuthenticationOptions,
   PasskeyRegistrationOptions,
@@ -206,6 +207,17 @@ export async function createUser(input: CreateUserInput): Promise<TeamMember> {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input)
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function inviteUser(email: string, role: "ADMIN" | "MEMBER"): Promise<InviteUserResult> {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/team/invitations`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, role })
   });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();

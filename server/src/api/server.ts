@@ -32,7 +32,8 @@ const createUserSchema = z.object({
 const updateUserSchema = z.object({
   email: z.string().email().optional(),
   displayName: z.string().min(1).max(120).optional(),
-  role: z.enum(["ADMIN", "MEMBER"]).optional()
+  role: z.enum(["ADMIN", "MEMBER"]).optional(),
+  status: z.enum(["INVITED", "ACTIVE", "DISABLED"]).optional()
 }).refine((input) => Object.keys(input).length > 0, { message: "At least one field is required." });
 const createPostOfficeSchema = z.object({
   name: z.string().min(1).max(160),

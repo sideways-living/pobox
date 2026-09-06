@@ -68,7 +68,7 @@ interface MemberWithUserRow {
     profile: { displayName: string } | null;
   };
   role: TeamMemberSummary["role"];
-  status: string;
+  status: TeamMemberSummary["status"];
 }
 
 interface AuditEntityRow {
@@ -676,6 +676,36 @@ export class PrismaStore implements AppStore {
       .sort((a: TeamMemberSummary, b: TeamMemberSummary) => a.displayName.localeCompare(b.displayName));
   }
 
+  private async activeAdminCount(workspaceId: string): Promise<number> {
+    return this.prisma.workspaceMember.count({
+      where: {
+        workspaceId,
+        role: "ADMIN",
+        status: "ACTIVE",
+        user: { active: true }
+      }
+    });
+  }
+
+  private async assertUserManagementChangeIsSafe(
+    session: Session,
+    workspaceId: string,
+    userId: string,
+    member: { role: TeamMemberSummary["role"]; status: TeamMemberSummary["status"] },
+    nextRole: TeamMemberSummary["role"],
+    nextStatus: TeamMemberSummary["status"]
+  ) {
+    if (session.userId === userId && nextRole !== member.role) {
+      throw new ConflictError("You cannot change your own role.");
+    }
+    if (session.userId === userId && nextStatus !== member.status) {
+      throw new ConflictError("You cannot change your own access status.");
+    }
+    if (member.role === "ADMIN" && member.status === "ACTIVE" && (nextRole !== "ADMIN" || nextStatus !== "ACTIVE") && (await this.activeAdminCount(workspaceId)) <= 1) {
+      throw new ConflictError("At least one active admin is required.");
+    }
+  }
+
   async listReviewItems(session: Session, workspaceId: string): Promise<ReviewItem[]> {
     await this.requireMember(session, workspaceId);
     const [events, resolutions] = await Promise.all([
@@ -860,24 +890,31 @@ export class PrismaStore implements AppStore {
     });
     if (!member) throw new NotFoundError("User not found.");
 
-    if (session.userId === userId && input.role && input.role !== member.role) {
-      throw new ConflictError("You cannot change your own role.");
-    }
+    const nextRole = input.role ?? member.role;
+    const nextStatus = input.status ?? member.status;
+    await this.assertUserManagementChangeIsSafe(session, workspaceId, userId, member, nextRole, nextStatus);
 
     try {
       const updated = await this.prisma.user.update({
         where: { id: userId },
         data: {
           ...(input.email ? { email: input.email.toLowerCase() } : {}),
+          ...(input.status ? { active: input.status === "ACTIVE" } : {}),
           ...(input.displayName ? { profile: { upsert: { update: { displayName: input.displayName }, create: { displayName: input.displayName } } } } : {}),
-          ...(input.role ? { memberships: { update: { where: { workspaceId_userId: { workspaceId, userId } }, data: { role: input.role } } } } : {})
+          memberships: {
+            update: {
+              where: { workspaceId_userId: { workspaceId, userId } },
+              data: { role: nextRole, status: nextStatus }
+            }
+          }
         },
         include: { profile: true, memberships: { where: { workspaceId } } }
       });
       await this.audit(session.userId, workspaceId, "member.updated", "user", userId, {
         email: input.email?.toLowerCase(),
         displayName: input.displayName,
-        role: input.role
+        role: input.role,
+        status: input.status
       });
       return {
         id: updated.id,
@@ -900,6 +937,7 @@ export class PrismaStore implements AppStore {
     if (session.userId === userId) throw new ConflictError("You cannot delete your own user.");
     const member = await this.prisma.workspaceMember.findFirst({ where: { workspaceId, userId } });
     if (!member) throw new NotFoundError("User not found.");
+    await this.assertUserManagementChangeIsSafe(session, workspaceId, userId, member, member.role, "DISABLED");
     await this.prisma.$transaction([
       this.prisma.workspaceMember.update({
         where: { workspaceId_userId: { workspaceId, userId } },

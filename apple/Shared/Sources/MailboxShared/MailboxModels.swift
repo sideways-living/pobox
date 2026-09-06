@@ -154,11 +154,13 @@ public struct UpdateUserInput: Codable, Sendable {
     public let email: String?
     public let displayName: String?
     public let role: String?
+    public let status: String?
 
-    public init(email: String? = nil, displayName: String? = nil, role: String? = nil) {
+    public init(email: String? = nil, displayName: String? = nil, role: String? = nil, status: String? = nil) {
         self.email = email
         self.displayName = displayName
         self.role = role
+        self.status = status
     }
 }
 

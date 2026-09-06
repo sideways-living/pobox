@@ -49,6 +49,8 @@ export interface MailHistoryEvent {
   processedAt: string;
 }
 
+export type MemberStatus = "INVITED" | "ACTIVE" | "DISABLED";
+
 export interface CollectionHistoryEvent {
   id: string;
   workspaceId: string;
@@ -64,7 +66,7 @@ export interface TeamMember {
   email: string;
   displayName: string;
   role: "ADMIN" | "MEMBER";
-  status: string;
+  status: MemberStatus;
   active: boolean;
 }
 
@@ -95,6 +97,14 @@ export interface UpdateUserInput {
   email?: string;
   displayName?: string;
   role?: "ADMIN" | "MEMBER";
+  status?: MemberStatus;
+}
+
+export interface InviteUserResult {
+  invitationId: string;
+  email: string;
+  role: "ADMIN" | "MEMBER";
+  status: "PENDING_EMAIL_DELIVERY";
 }
 
 export interface CreatePostOfficeInput {

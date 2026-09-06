@@ -20,6 +20,7 @@ import {
   dismissReviewItem,
   loadAppChanges,
   loadDashboard,
+  inviteUser,
   loadMembers,
   loadPostOfficeDirectoryStatus,
   loadReviewItems,
@@ -38,7 +39,7 @@ import {
   updateUser,
   verifySecondFactor
 } from "./api";
-import type { AppChangesResponse, CollectionHistoryEvent, DashboardSnapshot, Mailbox, MailHistoryEvent, PostOffice, PostOfficeDirectoryStatus, PostOfficeLocationResult, ReviewItem, SecurityStatus, TeamMember, TotpSetup } from "./types";
+import type { AppChangesResponse, CollectionHistoryEvent, DashboardSnapshot, Mailbox, MailHistoryEvent, MemberStatus, PostOffice, PostOfficeDirectoryStatus, PostOfficeLocationResult, ReviewItem, SecurityStatus, TeamMember, TotpSetup } from "./types";
 import "./styles.css";
 
 type Section = "Overview" | "Mailboxes" | "Map" | "History" | "Needs Review" | "Team" | "Settings";
@@ -991,6 +992,9 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"ADMIN" | "MEMBER">("MEMBER");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"ADMIN" | "MEMBER">("MEMBER");
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -1000,13 +1004,27 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
       setDisplayName("");
       setPassword("");
       setRole("MEMBER");
+      setNotice(`${displayName} can now sign in after completing mandatory passkey and authenticator setup.`);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create user.");
     }
   }
 
-  async function saveMember(memberId: string, input: { email: string; displayName: string; role: "ADMIN" | "MEMBER" }) {
+  async function invite(event: React.FormEvent) {
+    event.preventDefault();
+    try {
+      const result = await inviteUser(inviteEmail, inviteRole);
+      setInviteEmail("");
+      setInviteRole("MEMBER");
+      setNotice(`Invitation prepared for ${result.email}. Email delivery still needs to be connected before this is sent automatically.`);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to invite user.");
+    }
+  }
+
+  async function saveMember(memberId: string, input: { email: string; displayName: string; role: "ADMIN" | "MEMBER"; status: MemberStatus }) {
     try {
       await updateUser(memberId, input);
       await refresh();
@@ -1017,7 +1035,7 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
   }
 
   async function removeMember(member: TeamMember) {
-    if (!window.confirm(`Delete ${member.displayName}? This will disable their access to pobox.watch.`)) return;
+    if (!window.confirm(`Delete access for ${member.displayName}? Their login will be disabled, but their historical audit records will be kept.`)) return;
     try {
       await deleteUser(member.id);
       await refresh();
@@ -1052,16 +1070,28 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
             <DetailRow label="Members" value={String(members.filter((member) => member.role === "MEMBER").length)} />
             <DetailRow label="Disabled" value={String(members.filter((member) => !member.active).length)} />
           </div>
+          <p className="muted-line">Only admins can manage users. Disabling or deleting a user turns off access while keeping historical audit records.</p>
         </Panel>
         {snapshot.currentUser.role === "ADMIN" && (
-          <Panel title="Add User">
+          <Panel title="Invite User">
+            <form className="form-grid" onSubmit={invite}>
+              <label>Email<input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} required /></label>
+              <label>Role<select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as "ADMIN" | "MEMBER")}><option value="MEMBER">Member</option><option value="ADMIN">Admin</option></select></label>
+              <button className="primary"><Plus size={17} />Prepare Invite</button>
+              <p className="muted-line">Use this when email delivery is ready. Until then, create a user with a temporary password below.</p>
+            </form>
+          </Panel>
+        )}
+        {snapshot.currentUser.role === "ADMIN" && (
+          <Panel title="Create User">
             <form className="form-grid" onSubmit={submit}>
               <label>Name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></label>
               <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
               <label>Temporary password<input type="password" value={password} minLength={12} onChange={(event) => setPassword(event.target.value)} required /></label>
-              <label>Role<select value={role} onChange={(event) => setRole(event.target.value as "ADMIN" | "MEMBER")}><option>MEMBER</option><option>ADMIN</option></select></label>
+              <label>Role<select value={role} onChange={(event) => setRole(event.target.value as "ADMIN" | "MEMBER")}><option value="MEMBER">Member</option><option value="ADMIN">Admin</option></select></label>
               <button className="primary"><Plus size={17} />Create User</button>
             </form>
+            {notice && <p className="muted-line">{notice}</p>}
           </Panel>
         )}
       </aside>
@@ -1079,32 +1109,36 @@ function TeamMemberRow({
   member: TeamMember;
   currentUserId: string;
   canManage: boolean;
-  onSave: (memberId: string, input: { email: string; displayName: string; role: "ADMIN" | "MEMBER" }) => Promise<void>;
+  onSave: (memberId: string, input: { email: string; displayName: string; role: "ADMIN" | "MEMBER"; status: MemberStatus }) => Promise<void>;
   onDelete: (member: TeamMember) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [email, setEmail] = useState(member.email);
   const [displayName, setDisplayName] = useState(member.displayName);
   const [role, setRole] = useState<"ADMIN" | "MEMBER">(member.role);
+  const [status, setStatus] = useState<MemberStatus>(member.status);
   const self = member.id === currentUserId;
 
   useEffect(() => {
     setEmail(member.email);
     setDisplayName(member.displayName);
     setRole(member.role);
-  }, [member.email, member.displayName, member.role]);
+    setStatus(member.status);
+  }, [member.email, member.displayName, member.role, member.status]);
 
   if (editing) {
     return (
       <form className="team-member editable-row" onSubmit={async (event) => {
         event.preventDefault();
-        await onSave(member.id, { email, displayName, role });
+        await onSave(member.id, { email, displayName, role, status });
         setEditing(false);
       }}>
         <div className="edit-fields">
           <label>Name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></label>
           <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
-          <label>Role<select value={role} onChange={(event) => setRole(event.target.value as "ADMIN" | "MEMBER")} disabled={self}><option>MEMBER</option><option>ADMIN</option></select></label>
+          <label>Role<select value={role} onChange={(event) => setRole(event.target.value as "ADMIN" | "MEMBER")} disabled={self}><option value="MEMBER">Member</option><option value="ADMIN">Admin</option></select></label>
+          <label>Status<select value={status} onChange={(event) => setStatus(event.target.value as MemberStatus)} disabled={self}><option value="ACTIVE">Active</option><option value="INVITED">Invited</option><option value="DISABLED">Disabled</option></select></label>
+          {self && <p className="field-note">You cannot change your own role, status, or delete your own account.</p>}
         </div>
         <div className="row-actions">
           <button className="primary" type="submit"><Save size={16} />Save</button>
@@ -1128,7 +1162,12 @@ function TeamMemberRow({
       {canManage && (
         <div className="row-actions">
           <button type="button" className="icon-button" title="Edit user" onClick={() => setEditing(true)}><Edit2 size={16} /></button>
-          <button type="button" className="icon-button danger" title="Delete user" disabled={self} onClick={() => onDelete(member)}><Trash2 size={16} /></button>
+          {member.active ? (
+            <button type="button" className="secondary" title="Disable user access" disabled={self} onClick={() => onSave(member.id, { email: member.email, displayName: member.displayName, role: member.role, status: "DISABLED" })}>Disable</button>
+          ) : (
+            <button type="button" className="secondary" title="Reactivate user access" disabled={self} onClick={() => onSave(member.id, { email: member.email, displayName: member.displayName, role: member.role, status: "ACTIVE" })}>Reactivate</button>
+          )}
+          <button type="button" className="icon-button danger" title="Delete user access" disabled={self} onClick={() => onDelete(member)}><Trash2 size={16} /></button>
         </div>
       )}
     </div>

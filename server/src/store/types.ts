@@ -6,7 +6,7 @@ import type {
 } from "@simplewebauthn/server";
 import type { LctrPostOfficeLocation } from "../lctr/postOfficeLookup.js";
 import type { PostOfficeDirectoryStatus } from "../lctr/postOfficeDirectory.js";
-import type { CollectionEvent, CollectionSource, DashboardSnapshot, Mailbox, PostOffice, Session, WorkspaceMember } from "../domain.js";
+import type { CollectionEvent, CollectionSource, DashboardSnapshot, Mailbox, MemberStatus, PostOffice, Role, Session, WorkspaceMember } from "../domain.js";
 import type { AppChange } from "../releases.js";
 
 export class ForbiddenError extends Error {}
@@ -35,8 +35,8 @@ export interface TeamMemberSummary {
   id: string;
   email: string;
   displayName: string;
-  role: "ADMIN" | "MEMBER";
-  status: string;
+  role: Role;
+  status: MemberStatus;
   active: boolean;
 }
 
@@ -60,13 +60,14 @@ export interface CreateUserInput {
   email: string;
   displayName: string;
   password: string;
-  role: "ADMIN" | "MEMBER";
+  role: Role;
 }
 
 export interface UpdateUserInput {
   email?: string;
   displayName?: string;
-  role?: "ADMIN" | "MEMBER";
+  role?: Role;
+  status?: MemberStatus;
 }
 
 export interface CreatePostOfficeInput {
@@ -169,7 +170,7 @@ export interface AppStore {
   createMailbox(session: Session, workspaceId: string, input: CreateMailboxInput): Promise<Mailbox>;
   updateMailbox(session: Session, workspaceId: string, mailboxId: string, input: UpdateMailboxInput): Promise<Mailbox>;
   deleteMailbox(session: Session, workspaceId: string, mailboxId: string): Promise<void>;
-  inviteMember(session: Session, workspaceId: string, email: string, role: "ADMIN" | "MEMBER"): Promise<{
+  inviteMember(session: Session, workspaceId: string, email: string, role: Role): Promise<{
     invitationId: string;
     email: string;
     role: "ADMIN" | "MEMBER";

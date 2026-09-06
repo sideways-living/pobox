@@ -646,10 +646,10 @@ input, select {
 }
 
 .team-member {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
   align-items: center;
-  gap: 3px;
+  gap: 12px;
   padding: 12px;
   background: #f8faf8;
   border: 1px solid #e0e5df;
@@ -695,7 +695,7 @@ input, select {
 
 .edit-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
   width: 100%;
   min-width: 0;
@@ -1192,9 +1192,20 @@ input, select {
     padding: 18px;
   }
 
-  .topbar, .topbar-actions, .summary-band, .mailbox, .panel-heading, .office-title, .team-member, .map-card-footer {
+  .topbar, .topbar-actions, .summary-band, .mailbox, .panel-heading, .office-title, .map-card-footer {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .team-member {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .team-badges,
+  .row-actions {
+    justify-content: flex-start;
+    justify-items: start;
   }
 
   .map-board-copy {

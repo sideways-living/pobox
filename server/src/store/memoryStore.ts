@@ -546,6 +546,25 @@ export class MemoryStore implements AppStore {
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
   }
 
+  private activeAdminCount(workspaceId: string): number {
+    return [...this.members.values()].filter((candidate) => {
+      const user = this.users.get(candidate.userId);
+      return candidate.workspaceId === workspaceId && candidate.role === "ADMIN" && candidate.status === "ACTIVE" && user?.active;
+    }).length;
+  }
+
+  private assertUserManagementChangeIsSafe(session: Session, workspaceId: string, userId: string, member: WorkspaceMember, nextRole: WorkspaceMember["role"], nextStatus: WorkspaceMember["status"]) {
+    if (session.userId === userId && nextRole !== member.role) {
+      throw new ConflictError("You cannot change your own role.");
+    }
+    if (session.userId === userId && nextStatus !== member.status) {
+      throw new ConflictError("You cannot change your own access status.");
+    }
+    if (member.role === "ADMIN" && member.status === "ACTIVE" && (nextRole !== "ADMIN" || nextStatus !== "ACTIVE") && this.activeAdminCount(workspaceId) <= 1) {
+      throw new ConflictError("At least one active admin is required.");
+    }
+  }
+
   async listReviewItems(session: Session, workspaceId: string): Promise<ReviewItem[]> {
     await this.requireMember(session, workspaceId);
     const resolvedProviderMessages = new Set(
@@ -713,9 +732,9 @@ export class MemoryStore implements AppStore {
     const member = [...this.members.values()].find((candidate) => candidate.workspaceId === workspaceId && candidate.userId === userId);
     const user = this.users.get(userId);
     if (!member || !user) throw new NotFoundError("User not found.");
-    if (session.userId === userId && input.role && input.role !== member.role) {
-      throw new ConflictError("You cannot change your own role.");
-    }
+    const nextRole = input.role ?? member.role;
+    const nextStatus = input.status ?? member.status;
+    this.assertUserManagementChangeIsSafe(session, workspaceId, userId, member, nextRole, nextStatus);
     const email = input.email?.toLowerCase();
     if (email && [...this.users.values()].some((candidate) => candidate.id !== userId && candidate.email.toLowerCase() === email)) {
       throw new ConflictError("User email already exists.");
@@ -723,18 +742,21 @@ export class MemoryStore implements AppStore {
     const updatedUser = {
       ...user,
       email: email ?? user.email,
-      displayName: input.displayName ?? user.displayName
+      displayName: input.displayName ?? user.displayName,
+      active: input.status ? input.status === "ACTIVE" : user.active
     };
     const updatedMember = {
       ...member,
-      role: input.role ?? member.role
+      role: nextRole,
+      status: nextStatus
     };
     this.users.set(userId, updatedUser);
     this.members.set(member.id, updatedMember);
     this.audit(session.userId, workspaceId, "member.updated", "user", userId, {
       email,
       displayName: input.displayName,
-      role: input.role
+      role: input.role,
+      status: input.status
     });
     return {
       id: updatedUser.id,
@@ -752,6 +774,7 @@ export class MemoryStore implements AppStore {
     const member = [...this.members.values()].find((candidate) => candidate.workspaceId === workspaceId && candidate.userId === userId);
     const user = this.users.get(userId);
     if (!member || !user) throw new NotFoundError("User not found.");
+    this.assertUserManagementChangeIsSafe(session, workspaceId, userId, member, member.role, "DISABLED");
     this.users.set(userId, { ...user, active: false });
     this.members.set(member.id, { ...member, status: "DISABLED" });
     this.audit(session.userId, workspaceId, "member.deleted", "user", userId, {});

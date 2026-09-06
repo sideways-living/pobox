@@ -369,6 +369,8 @@ describe("shared mailbox state", () => {
         role: "MEMBER"
       })
     ).rejects.toThrow("Admin role required.");
+    await expect(store.updateUser(sarah, "ws_company", "usr_daniel", { displayName: "Changed" })).rejects.toThrow("Admin role required.");
+    await expect(store.deleteUser(sarah, "ws_company", "usr_daniel")).rejects.toThrow("Admin role required.");
   });
 
   it("allows admins to create users, post offices, and mailboxes", async () => {
@@ -468,6 +470,15 @@ describe("shared mailbox state", () => {
     expect(updatedUser.displayName).toBe("Ops Updated");
     expect(updatedUser.role).toBe("ADMIN");
 
+    const disabledUser = await store.updateUser(daniel, "ws_company", user.id, { status: "DISABLED" });
+    expect(disabledUser.status).toBe("DISABLED");
+    expect(disabledUser.active).toBe(false);
+    await expect(store.login("ops-delete@example.com", "Temporary123!")).rejects.toThrow("Invalid email or password.");
+
+    const reactivatedUser = await store.updateUser(daniel, "ws_company", user.id, { status: "ACTIVE" });
+    expect(reactivatedUser.status).toBe("ACTIVE");
+    expect(reactivatedUser.active).toBe(true);
+
     await store.deleteMailbox(daniel, "ws_company", mailbox.id);
     await store.deletePostOffice(daniel, "ws_company", office.id);
     await store.deleteUser(daniel, "ws_company", user.id);
@@ -477,11 +488,35 @@ describe("shared mailbox state", () => {
     expect(snapshot.postOffices.flatMap((candidate) => candidate.mailboxes).some((candidate) => candidate.id === mailbox.id)).toBe(false);
     const members = await store.listMembers(daniel, "ws_company");
     expect(members.find((candidate) => candidate.id === user.id)?.active).toBe(false);
+    expect(members.find((candidate) => candidate.id === user.id)?.status).toBe("DISABLED");
+    expect([...store.auditEvents.values()].some((event) => event.eventType === "member.deleted" && event.entityId === user.id)).toBe(true);
   });
 
   it("does not allow admins to delete themselves", async () => {
     const daniel = await loginSession("daniel@example.com");
     await expect(store.deleteUser(daniel, "ws_company", daniel.userId)).rejects.toThrow("You cannot delete your own user.");
+    await expect(store.updateUser(daniel, "ws_company", daniel.userId, { status: "DISABLED" })).rejects.toThrow("You cannot change your own access status.");
+    await expect(store.updateUser(daniel, "ws_company", daniel.userId, { role: "MEMBER" })).rejects.toThrow("You cannot change your own role.");
+  });
+
+  it("keeps at least one active admin", async () => {
+    const daniel = await loginSession("daniel@example.com");
+    await store.updateUser(daniel, "ws_company", "usr_sarah", { status: "DISABLED" });
+
+    await expect(store.updateUser(daniel, "ws_company", daniel.userId, { status: "DISABLED" })).rejects.toThrow("You cannot change your own access status.");
+    await expect(store.deleteUser(daniel, "ws_company", "usr_daniel")).rejects.toThrow("You cannot delete your own user.");
+
+    const ops = await store.createUser(daniel, "ws_company", {
+      email: "second-admin@example.com",
+      displayName: "Second Admin",
+      password: "Temporary123!",
+      role: "ADMIN"
+    });
+    await store.updateUser(daniel, "ws_company", "usr_sarah", { role: "MEMBER", status: "ACTIVE" });
+    await store.deleteUser(daniel, "ws_company", ops.id);
+
+    const remainingAdmins = (await store.listMembers(daniel, "ws_company")).filter((member) => member.role === "ADMIN" && member.status === "ACTIVE" && member.active);
+    expect(remainingAdmins.map((member) => member.id)).toEqual(["usr_daniel"]);
   });
 
   it("makes simultaneous collection idempotent", async () => {
