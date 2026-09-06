@@ -82,7 +82,7 @@ describe("LCTR post office lookup", () => {
     });
   });
 
-  it("ranks typed name suggestions by exact and word-start matches before contains matches", () => {
+  it("ranks typed name suggestions by prefix, word-start, then contains matches", () => {
     const results = rankedLocations([
       {
         sourceId: "south-melbourne",
@@ -101,8 +101,18 @@ describe("LCTR post office lookup", () => {
         suburb: "Fitzroy",
         postcode: "3065",
         state: "VIC",
-        latitude: -37.7999,
-        longitude: 144.9829
+          latitude: -37.7999,
+          longitude: 144.9829
+      },
+      {
+        sourceId: "south-yarra",
+        name: "South Yarra Post Office",
+        address: "Toorak Road, South Yarra, VIC, 3141",
+        suburb: "South Yarra",
+        postcode: "3141",
+        state: "VIC",
+        latitude: -37.838,
+        longitude: 144.992
       },
       {
         sourceId: "east-richmond",
@@ -112,10 +122,75 @@ describe("LCTR post office lookup", () => {
         postcode: "3121",
         state: "VIC",
         latitude: -37.825,
-        longitude: 144.997
+          longitude: 144.997
+      },
+      {
+        sourceId: "kensington-south",
+        name: "Kensington South Parcel Locker",
+        address: "Bellair Street, Kensington, VIC, 3031",
+        suburb: "Kensington",
+        postcode: "3031",
+        state: "VIC",
+        latitude: -37.793,
+        longitude: 144.93
       }
     ], "south");
 
-    expect(results.map((result) => result.sourceId)).toEqual(["south-melbourne", "fitzroy-south"]);
+    expect(results.map((result) => result.sourceId)).toEqual(["south-melbourne", "south-yarra", "fitzroy-south", "kensington-south"]);
+    expect(results[0]).toMatchObject({ address: "Clarendon Street, South Melbourne, VIC, 3205", suburb: "South Melbourne", state: "VIC" });
+  });
+
+  it("matches typed substrings from suburb or address when the name does not match", () => {
+    const results = rankedLocations([
+      {
+        sourceId: "market-street",
+        name: "CBD Parcel Locker",
+        address: "Market Street, South Melbourne, VIC, 3205",
+        suburb: "South Melbourne",
+        postcode: "3205",
+        state: "VIC",
+        latitude: -37.832,
+        longitude: 144.959
+      },
+      {
+        sourceId: "smith-street",
+        name: "Fitzroy LPO",
+        address: "Smith Street, Fitzroy, VIC, 3065",
+        suburb: "Fitzroy",
+        postcode: "3065",
+        state: "VIC",
+        latitude: -37.799,
+        longitude: 144.982
+      }
+    ], "melb");
+
+    expect(results.map((result) => result.sourceId)).toEqual(["market-street"]);
+  });
+
+  it("normalizes case, punctuation, and spacing in ranked suggestions", () => {
+    const results = rankedLocations([
+      {
+        sourceId: "st-kilda",
+        name: "St Kilda Post Office",
+        address: "Acland Street, St Kilda, VIC, 3182",
+        suburb: "St Kilda",
+        postcode: "3182",
+        state: "VIC",
+        latitude: -37.866,
+        longitude: 144.981
+      },
+      {
+        sourceId: "kilda-road",
+        name: "Melbourne Business Centre",
+        address: "St Kilda Road, Melbourne, VIC, 3004",
+        suburb: "Melbourne",
+        postcode: "3004",
+        state: "VIC",
+        latitude: -37.821,
+        longitude: 144.969
+      }
+    ], " ST.   KIL ");
+
+    expect(results.map((result) => result.sourceId)).toEqual(["st-kilda", "kilda-road"]);
   });
 });

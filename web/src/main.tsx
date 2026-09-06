@@ -1522,7 +1522,7 @@ function AddPostOfficeForm({ snapshot, refresh, setError }: { snapshot: Dashboar
             <button type="button" className="lookup-result" key={location.sourceId} onClick={() => selectLocation(location)}>
               <strong>{location.name}</strong>
               <span>{location.address}</span>
-              <small>{[location.phone, location.hours].filter(Boolean).join(" - ")}</small>
+              <small>{[location.suburb, location.state, location.postcode, location.phone, location.hours].filter(Boolean).join(" - ")}</small>
             </button>
           ))}
         </div>
@@ -1783,11 +1783,13 @@ function latestOfficeEvent(office: PostOffice) {
 }
 
 function filteredPostOffices(postOffices: PostOffice[], query: string) {
-  const normalized = query.trim().toLowerCase();
+  const normalized = normalizeSearchText(query);
   if (!normalized) return postOffices;
-  return postOffices.filter((office) =>
-    [office.name, office.address, office.phone ?? ""].some((value) => value.toLowerCase().includes(normalized))
-  );
+  return postOffices
+    .map((office) => ({ office, score: scorePostOfficeSuggestion(office, normalized) }))
+    .filter((result) => result.score > 0)
+    .sort((a, b) => b.score - a.score || a.office.name.localeCompare(b.office.name))
+    .map((result) => result.office);
 }
 
 function duplicateMailboxAtOffice(postOffices: PostOffice[], postOfficeId: string, boxNumber: string, excludeMailboxId?: string) {
@@ -1799,6 +1801,29 @@ function duplicateMailboxAtOffice(postOffices: PostOffice[], postOfficeId: strin
 
 function normalizeBoxNumber(value: string) {
   return value.replace(/^\s*(?:p\.?\s*o\.?\s*box|pobox|post\s*box|postbox|box)\s*/i, "").replace(/[^a-z0-9]/gi, "").toUpperCase();
+}
+
+function scorePostOfficeSuggestion(office: PostOffice, query: string) {
+  const name = normalizeSearchText(office.name);
+  const address = normalizeSearchText(office.address);
+  const phone = normalizeSearchText(office.phone ?? "");
+
+  if (name === query) return 115;
+  if (name.startsWith(query)) return 105;
+  if (startsWithSearchWord(name, query)) return 90;
+  if (startsWithSearchWord(address, query)) return 84;
+  if (name.includes(query)) return 74;
+  if (address.includes(query)) return 60;
+  if (phone.includes(query)) return 30;
+  return 0;
+}
+
+function normalizeSearchText(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function startsWithSearchWord(value: string, query: string) {
+  return value.split(/\s+/).some((word) => word.startsWith(query));
 }
 
 function isMailEvent(event: MailHistoryEvent | CollectionHistoryEvent): event is MailHistoryEvent {

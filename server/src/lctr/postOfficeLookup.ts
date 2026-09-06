@@ -68,10 +68,11 @@ export async function searchLctrPostOffices(query: string, state?: string): Prom
 }
 
 export function rankedLocations(locations: LctrPostOfficeLocation[], normalizedQuery: string) {
-  const suburbAnchors = locations.filter((location) => normalize(location.suburb) === normalizedQuery);
+  const query = normalizeSearchText(normalizedQuery);
+  const suburbAnchors = locations.filter((location) => normalizeSearchText(location.suburb) === query);
 
   return locations
-    .map((location) => ({ location, score: scoreLocation(location, normalizedQuery, suburbAnchors) }))
+    .map((location) => ({ location, score: scoreLocation(location, query, suburbAnchors) }))
     .filter((result) => result.score > 0)
     .sort((a, b) => b.score - a.score || a.location.name.localeCompare(b.location.name))
     .slice(0, 20)
@@ -257,29 +258,32 @@ function dedupeLocations(locations: LctrPostOfficeLocation[]) {
 }
 
 function scoreLocation(location: LctrPostOfficeLocation, query: string, suburbAnchors: LctrPostOfficeLocation[] = []) {
-  const postcode = normalize(location.postcode);
-  const suburb = normalize(location.suburb);
-  const name = normalize(location.name);
-  const address = normalize(location.address);
+  const postcode = normalizeSearchText(location.postcode);
+  const suburb = normalizeSearchText(location.suburb);
+  const state = normalizeSearchText(location.state);
+  const name = normalizeSearchText(location.name);
+  const address = normalizeSearchText(location.address);
 
-  if (postcode === query) return 100;
-  if (suburb === query) return 95;
-  if (name === query) return 90;
-  if (postcode.startsWith(query)) return 80;
-  if (suburb.startsWith(query)) return 78;
-  if (name.startsWith(query)) return 76;
-  if (startsWithWord(name, query)) return 72;
-  if (startsWithWord(suburb, query)) return 70;
-  if (name.includes(query)) return 65;
-  if (suburb.includes(query)) return 60;
-  if (address.includes(query)) return 50;
+  if (postcode === query) return 120;
+  if (name === query) return 115;
+  if (suburb === query) return 112;
+  if (name.startsWith(query)) return 105;
+  if (suburb.startsWith(query)) return 102;
+  if (postcode.startsWith(query)) return 98;
+  if (startsWithWord(name, query)) return 90;
+  if (startsWithWord(suburb, query)) return 88;
+  if (startsWithWord(address, query)) return 84;
+  if (name.includes(query)) return 74;
+  if (suburb.includes(query)) return 70;
+  if (address.includes(query)) return 60;
+  if (state === query) return 40;
   const nearestAnchorKm = nearestDistanceKm(location, suburbAnchors);
   if (nearestAnchorKm !== undefined && nearestAnchorKm <= 15) return Math.max(1, 45 - nearestAnchorKm);
   return 0;
 }
 
 function startsWithWord(value: string, query: string) {
-  return value.split(/\s+/).some((part) => part.startsWith(query));
+  return words(value).some((part) => part.startsWith(query));
 }
 
 function nearestDistanceKm(location: LctrPostOfficeLocation, anchors: LctrPostOfficeLocation[]) {
@@ -303,6 +307,14 @@ function toRadians(value: number) {
 
 function normalize(value?: string) {
   return (value ?? "").trim().toLowerCase();
+}
+
+function normalizeSearchText(value?: string) {
+  return normalize(value).replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function words(value: string) {
+  return value.split(/\s+/).filter(Boolean);
 }
 
 function stringValue(value: unknown) {

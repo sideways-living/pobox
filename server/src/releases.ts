@@ -1,4 +1,4 @@
-export const appVersion = "0.12.0";
+export const appVersion = "0.12.1";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.12.1-post-office-search-autocomplete",
+    version: "0.12.1",
+    releasedAt: "2026-09-06T14:05:00.000Z",
+    title: "Post office search autocomplete",
+    summary:
+      "Post office search suggestions now rank starts-with matches first, then later-word matches, then contains matches, and show suburb, state, postcode, address, phone, and hours where available.",
+    audience: "ALL"
+  },
   {
     id: "0.12.0-po-box-add-edit-flow",
     version: "0.12.0",
