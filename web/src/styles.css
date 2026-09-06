@@ -249,6 +249,19 @@ h3 {
   justify-content: flex-end;
 }
 
+.office-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 7px;
+  color: #65736c;
+  font-size: 0.84rem;
+}
+
+.office-meta span {
+  min-width: 0;
+}
+
 .office-title p, .small {
   color: #65736c;
   margin-bottom: 0;
@@ -307,7 +320,7 @@ h3 {
 
 .mailbox-table-head, .mailbox-row {
   display: grid;
-  grid-template-columns: minmax(140px, 1.2fr) minmax(110px, 0.7fr) minmax(180px, 1.2fr) minmax(190px, auto);
+  grid-template-columns: minmax(150px, 1.05fr) minmax(150px, 0.8fr) minmax(210px, 1.1fr) minmax(210px, auto);
   align-items: center;
   gap: 12px;
 }
@@ -386,6 +399,15 @@ h3 {
   display: grid;
   gap: 18px;
   align-content: start;
+}
+
+.post-offices-page {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 390px);
+}
+
+.post-offices-page .side-panels {
+  position: sticky;
+  top: 18px;
 }
 
 .map-location {

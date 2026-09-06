@@ -537,6 +537,9 @@ function MailboxSection({
   const waitingCount = snapshot.outstandingMailboxCount;
   const clearCount = totalMailboxes(snapshot) - waitingCount;
   const canManage = !compact && snapshot.currentUser.role === "ADMIN" && Boolean(refresh && setError);
+  const waitingOffices = snapshot.postOffices.filter((office) => office.mailboxes.some(hasWaitingItem)).length;
+  const mailWaitingCount = snapshot.postOffices.flatMap((office) => office.mailboxes).filter((box) => box.mailWaiting).length;
+  const parcelWaitingCount = snapshot.postOffices.flatMap((office) => office.mailboxes).filter((box) => box.parcelWaiting).length;
 
   async function saveOffice(officeId: string, input: { name: string; address: string; phone?: string; latitude: number; longitude: number; geofenceRadius: number }) {
     if (!refresh || !setError) return;
@@ -584,24 +587,27 @@ function MailboxSection({
     }
   }
 
-  return (
+  const list = (
     <Panel title={compact ? "Post Office Snapshot" : "Post Offices"} aside={`Updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}>
       {!compact && (
-        <div className="filter-bar" role="group" aria-label="Post office filter">
-          <button className={filter === "all" ? "filter active" : "filter"} onClick={() => setFilter("all")}>All offices {snapshot.postOffices.length}</button>
-          <button className={filter === "waiting" ? "filter active" : "filter"} onClick={() => setFilter("waiting")}>Waiting {waitingCount}</button>
-          <button className={filter === "clear" ? "filter active" : "filter"} onClick={() => setFilter("clear")}>Clear {clearCount}</button>
-        </div>
-      )}
-      {!compact && (
-        <div className="post-office-summary-block">
-          <h3>Post Office Summary</h3>
-          <div className="post-office-summary">
-            <DetailRow label="Post offices" value={String(snapshot.postOffices.length)} />
-            <DetailRow label="Assigned boxes" value={String(totalMailboxes(snapshot))} />
-            <DetailRow label="Locations needing collection" value={String(snapshot.postOffices.filter((office) => office.mailboxes.some(hasWaitingItem)).length)} />
+        <>
+          <div className="filter-bar" role="group" aria-label="Post office filter">
+            <button className={filter === "all" ? "filter active" : "filter"} onClick={() => setFilter("all")}>All offices {snapshot.postOffices.length}</button>
+            <button className={filter === "waiting" ? "filter active" : "filter"} onClick={() => setFilter("waiting")}>Waiting {waitingCount}</button>
+            <button className={filter === "clear" ? "filter active" : "filter"} onClick={() => setFilter("clear")}>Clear {clearCount}</button>
           </div>
-        </div>
+          <div className="post-office-summary-block">
+            <h3>Post Office Summary</h3>
+            <div className="post-office-summary">
+              <DetailRow label="Post offices" value={String(snapshot.postOffices.length)} />
+              <DetailRow label="Assigned boxes" value={String(totalMailboxes(snapshot))} />
+              <DetailRow label="Mail waiting" value={String(mailWaitingCount)} />
+              <DetailRow label="Parcels waiting" value={String(parcelWaitingCount)} />
+              <DetailRow label="Locations needing collection" value={String(waitingOffices)} />
+              <DetailRow label="Clear boxes" value={String(clearCount)} />
+            </div>
+          </div>
+        </>
       )}
       {snapshot.postOffices.length > 0 ? (
         <div className="office-list">
@@ -625,6 +631,30 @@ function MailboxSection({
         <div className="empty-state"><MapPin size={22} />No post offices have been added yet.</div>
       )}
     </Panel>
+  );
+
+  if (compact) return list;
+
+  return (
+    <div className="page-grid post-offices-page">
+      <section className="page-main">{list}</section>
+      <aside className="side-panels">
+        <Panel title="Collection Snapshot">
+          <div className="detail-list">
+            <DetailRow label="Mail waiting" value={String(mailWaitingCount)} />
+            <DetailRow label="Parcels waiting" value={String(parcelWaitingCount)} />
+            <DetailRow label="Clear boxes" value={String(clearCount)} />
+            <DetailRow label="Mapped offices" value={String(snapshot.postOffices.filter((office) => Number.isFinite(office.latitude) && Number.isFinite(office.longitude)).length)} />
+          </div>
+        </Panel>
+        {canManage && refresh && setError && (
+          <>
+            <AddPostOfficeForm snapshot={snapshot} refresh={refresh} setError={setError} />
+            <AddMailboxForm snapshot={snapshot} refresh={refresh} setError={setError} />
+          </>
+        )}
+      </aside>
+    </div>
   );
 }
 
@@ -665,6 +695,9 @@ function OfficeSection({
   });
   if (boxes.length === 0 && filter !== "all") return null;
   const waiting = office.mailboxes.filter(hasWaitingItem).length;
+  const mailWaiting = office.mailboxes.filter((box) => box.mailWaiting).length;
+  const parcelWaiting = office.mailboxes.filter((box) => box.parcelWaiting).length;
+  const latestEvent = latestOfficeEvent(office);
   return (
     <article className="office">
       {editingOffice ? (
@@ -698,9 +731,17 @@ function OfficeSection({
           <div>
             <h3>{office.name}</h3>
             <p>{office.address}</p>
+            <div className="office-meta">
+              {office.phone && <span>{office.phone}</span>}
+              <span>{office.mailboxes.length} {office.mailboxes.length === 1 ? "box" : "boxes"}</span>
+              <span>{office.geofenceRadius}m geofence</span>
+              <span>{latestEvent}</span>
+            </div>
           </div>
           <div className="office-actions">
             <StatusPill tone={waiting > 0 ? "warning" : "ok"}>{waiting > 0 ? `${waiting} waiting` : "Clear"}</StatusPill>
+            {mailWaiting > 0 && <StatusPill tone="warning">{mailWaiting} mail</StatusPill>}
+            {parcelWaiting > 0 && <StatusPill tone="info">{parcelWaiting} parcel</StatusPill>}
             <a className="text-link" href={appleMapsUrl(office)} target="_blank" rel="noreferrer"><ExternalLink size={15} />Apple Maps</a>
             {canManage && (
               <div className="row-actions">
@@ -713,7 +754,7 @@ function OfficeSection({
       )}
       <div className="mailbox-table">
         <div className="mailbox-table-head">
-          <span>Box</span>
+          <span>PO Box</span>
           <span>Status</span>
           <span>Last event</span>
           <span>Action</span>
@@ -1068,10 +1109,6 @@ function SettingsSection({ snapshot, refresh, setError }: { snapshot: DashboardS
           </div>
         </Panel>
       </section>
-      <aside className="side-panels">
-        <AddPostOfficeForm snapshot={snapshot} refresh={refresh} setError={setError} />
-        <AddMailboxForm snapshot={snapshot} refresh={refresh} setError={setError} />
-      </aside>
     </div>
   );
 }
@@ -1697,6 +1734,14 @@ function mailboxStatus(box: Mailbox) {
 function latestMailboxNotificationAt(box: Mailbox) {
   const dates = [box.latestNotificationAt, box.latestParcelNotificationAt].filter(Boolean) as string[];
   return dates.sort((a, b) => b.localeCompare(a))[0];
+}
+
+function latestOfficeEvent(office: PostOffice) {
+  const dates = office.mailboxes
+    .flatMap((box) => [box.latestNotificationAt, box.latestParcelNotificationAt, box.lastCollectedAt])
+    .filter(Boolean) as string[];
+  if (dates.length === 0) return "No events yet";
+  return `Last event ${new Date(dates.sort((a, b) => b.localeCompare(a))[0]).toLocaleString()}`;
 }
 
 function normalizeBoxNumber(value: string) {

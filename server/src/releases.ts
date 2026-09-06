@@ -1,4 +1,4 @@
-export const appVersion = "0.11.8";
+export const appVersion = "0.11.9";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.11.9-production-post-offices-page",
+    version: "0.11.9",
+    releasedAt: "2026-09-06T13:15:00.000Z",
+    title: "Post Offices management page",
+    summary:
+      "The Post Offices page now groups locations with their boxes, shows mail and parcel waiting counts, keeps last event details visible, and includes the add flows for post offices and PO boxes in one place.",
+    audience: "ALL"
+  },
   {
     id: "0.11.8-embedded-apple-maps",
     version: "0.11.8",
