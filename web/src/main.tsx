@@ -130,7 +130,6 @@ function App() {
   if (securityGate) {
     return (
       <MandatorySecuritySetup
-        previousLoginAt={securityGate.previousLoginAt}
         onComplete={async () => {
           setSecurityGate(null);
           await finishLogin();
@@ -260,8 +259,8 @@ function SectionView({
 }
 
 function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?: string) => Promise<void>; error: string | null; setError: (value: string | null) => void }) {
-  const [email, setEmail] = useState("john@example.com");
-  const [password, setPassword] = useState("Password123!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -304,10 +303,24 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
       }
       if (result.ok) await onLogin(result.previousLoginAt);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to sign in with passkey.");
+      setError(err instanceof Error ? err.message : "Unable to sign in with passkey. Use password if this account still needs security setup.");
     } finally {
       setBusy(false);
     }
+  }
+
+  function usePasswordFallback() {
+    setPasswordMode(true);
+    setChallengeId(null);
+    setTwoFactorCode("");
+    setError(null);
+  }
+
+  function usePasskeyMode() {
+    setPasswordMode(false);
+    setChallengeId(null);
+    setTwoFactorCode("");
+    setError(null);
   }
 
   return (
@@ -316,7 +329,7 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
         <div className="brand large"><Mail size={26} />pobox.watch</div>
         <div className="login-copy">
           <h1>Sign in with your passkey</h1>
-          <p>pobox.watch requires a passkey and authenticator 2FA for every account.</p>
+          <p>Use your passkey first. If your account is not set up yet, use your password once and finish security setup before entering the app.</p>
         </div>
         {!challengeId && <label>Email<input value={email} autoComplete="username webauthn" onChange={(event) => setEmail(event.target.value)} /></label>}
         {!challengeId && passwordMode && <label>Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>}
@@ -331,9 +344,9 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
           {challengeId ? <Shield size={18} /> : passwordMode ? <LogIn size={18} /> : <KeyRound size={18} />}
           {challengeId ? "Verify Code" : passwordMode ? "Continue with Password" : "Continue with Passkey"}
         </button>
-        {challengeId && <button type="button" className="secondary" onClick={() => setChallengeId(null)}>Use Password Instead</button>}
-        {!challengeId && !passwordMode && <button type="button" className="secondary" disabled={busy} onClick={() => setPasswordMode(true)}>Use Password to Set Up Security</button>}
-        {!challengeId && passwordMode && <button type="button" className="secondary" disabled={busy} onClick={() => setPasswordMode(false)}><KeyRound size={18} />Back to Passkey</button>}
+        {challengeId && <button type="button" className="secondary" disabled={busy} onClick={usePasskeyMode}>Cancel Verification</button>}
+        {!challengeId && !passwordMode && <button type="button" className="secondary" disabled={busy} onClick={usePasswordFallback}>Use Password to Set Up Security</button>}
+        {!challengeId && passwordMode && <button type="button" className="secondary" disabled={busy} onClick={usePasskeyMode}><KeyRound size={18} />Back to Passkey</button>}
         <button type="button" className="link-button">Forgot Password?</button>
       </form>
     </main>
@@ -341,13 +354,11 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
 }
 
 function MandatorySecuritySetup({
-  previousLoginAt,
   onComplete,
   onLogout,
   error,
   setError
 }: {
-  previousLoginAt?: string;
   onComplete: () => Promise<void>;
   onLogout: () => Promise<void>;
   error: string | null;
@@ -433,8 +444,7 @@ function MandatorySecuritySetup({
         <div className="login-copy">
           <p className="workspace">Security setup required</p>
           <h1>Finish securing your account</h1>
-          <p>Before you can use pobox.watch, add a passkey and turn on authenticator 2FA.</p>
-          {previousLoginAt && <p className="small">After setup, your change notice will include updates since {new Date(previousLoginAt).toLocaleString()}.</p>}
+          <p>Add a passkey and turn on authenticator app 2FA. After both are done, you can continue to pobox.watch.</p>
         </div>
 
         {error && <div className="alert">{error}</div>}
@@ -471,8 +481,10 @@ function MandatorySecuritySetup({
           </div>
         )}
 
-        <button className="primary" disabled={busy || !canContinue} onClick={continueToApp}>Continue to pobox.watch</button>
-        <button className="secondary" disabled={busy} onClick={onLogout}><LogOut size={17} />Log Out</button>
+        <div className="setup-actions">
+          <button className="primary" disabled={busy || !canContinue} onClick={continueToApp}>Continue to pobox.watch</button>
+          <button className="secondary" disabled={busy} onClick={onLogout}><LogOut size={17} />Log Out</button>
+        </div>
       </section>
     </main>
   );

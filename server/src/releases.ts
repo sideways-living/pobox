@@ -1,4 +1,4 @@
-export const appVersion = "0.12.6";
+export const appVersion = "0.12.7";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.12.7-passkey-first-login-polish",
+    version: "0.12.7",
+    releasedAt: "2026-09-06T16:05:00.000Z",
+    title: "Clearer sign-in",
+    summary:
+      "Sign-in now starts with passkey. If your account still needs setup, you can use your password once, add a passkey and authenticator app, then continue.",
+    audience: "ALL"
+  },
   {
     id: "0.12.6-release-notices-seen-on-dismiss",
     version: "0.12.6",

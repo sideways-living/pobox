@@ -569,6 +569,11 @@ input, select {
   padding-left: 0;
 }
 
+.setup-actions {
+  display: grid;
+  gap: 10px;
+}
+
 .admin-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);

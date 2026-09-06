@@ -30,6 +30,18 @@ describe("release notices", () => {
     return `pobox_watch_session=${cookie?.value}`;
   }
 
+  async function passwordLoginCookieWithoutSecurity() {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: { email: "daniel@example.com", password: "Password123!" }
+    });
+    expect(response.statusCode).toBe(200);
+    const cookie = response.cookies.find((item) => item.name === "pobox_watch_session");
+    expect(cookie?.value).toBeTruthy();
+    return `pobox_watch_session=${cookie?.value}`;
+  }
+
   function markSecurityComplete(userId: string) {
     const user = store.users.get(userId);
     if (!user) throw new Error(`Missing fixture user ${userId}.`);
@@ -71,5 +83,18 @@ describe("release notices", () => {
     expect(dismissal.statusCode).toBe(200);
     expect(dismissal.json().lastSeenVersion).toBe(appVersion);
     expect(dismissal.json().changes).toHaveLength(0);
+  });
+
+  it("blocks app routes until passkey and authenticator setup are complete", async () => {
+    const cookie = await passwordLoginCookieWithoutSecurity();
+
+    const blocked = await app.inject({ method: "GET", url: "/api/v1/workspaces/ws_company/dashboard", headers: { cookie } });
+    expect(blocked.statusCode).toBe(403);
+    expect(blocked.json().error).toBe("Passkey and authenticator 2FA setup are required before using pobox.watch.");
+
+    markSecurityComplete("usr_daniel");
+    const allowed = await app.inject({ method: "GET", url: "/api/v1/workspaces/ws_company/dashboard", headers: { cookie } });
+    expect(allowed.statusCode).toBe(200);
+    expect(allowed.json().currentUser.email).toBe("daniel@example.com");
   });
 });
