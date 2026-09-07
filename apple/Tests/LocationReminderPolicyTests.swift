@@ -1,5 +1,5 @@
 import XCTest
-@testable import MailboxShared
+@testable import PoboxWatchShared
 
 final class LocationReminderPolicyTests: XCTestCase {
     func testRequiresWaitingMail() {

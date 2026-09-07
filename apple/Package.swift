@@ -8,10 +8,10 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .library(name: "MailboxShared", targets: ["MailboxShared"])
+        .library(name: "PoboxWatchShared", targets: ["PoboxWatchShared"])
     ],
     targets: [
-        .target(name: "MailboxShared", path: "Shared/Sources/MailboxShared"),
-        .testTarget(name: "MailboxSharedTests", dependencies: ["MailboxShared"], path: "Tests")
+        .target(name: "PoboxWatchShared", path: "Shared/Sources/PoboxWatchShared"),
+        .testTarget(name: "PoboxWatchSharedTests", dependencies: ["PoboxWatchShared"], path: "Tests")
     ]
 )

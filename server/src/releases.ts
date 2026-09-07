@@ -1,4 +1,4 @@
-export const appVersion = "0.13.2";
+export const appVersion = "0.13.3";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.3-pobox-watch-branding-cleanup",
+    version: "0.13.3",
+    releasedAt: "2026-09-07T02:00:00.000Z",
+    title: "pobox.watch naming cleanup",
+    summary:
+      "The Apple project and shared app code now use pobox.watch naming so the app, builds, and source structure are consistently branded.",
+    audience: "ALL"
+  },
   {
     id: "0.13.2-production-readiness-polish",
     version: "0.13.2",
