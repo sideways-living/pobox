@@ -6,6 +6,7 @@ import type {
   DashboardSnapshot,
   InviteUserResult,
   LoginResult,
+  NativeHandoffResponse,
   PasskeyAuthenticationOptions,
   PasskeyRegistrationOptions,
   PostOfficeDirectoryStatus,
@@ -87,6 +88,15 @@ export async function authenticatePasskey(responseJson: unknown): Promise<LoginR
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ response: responseJson })
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function beginNativeHandoff(): Promise<NativeHandoffResponse> {
+  const response = await fetch(`${apiBase}/api/v1/auth/native-handoff`, {
+    method: "POST",
+    credentials: "include"
   });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();

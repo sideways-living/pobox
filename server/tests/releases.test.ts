@@ -98,6 +98,40 @@ describe("release notices", () => {
     expect(allowed.json().currentUser.email).toBe("daniel@example.com");
   });
 
+  it("creates one-use native app handoff codes after mandatory security is complete", async () => {
+    const insecureCookie = await passwordLoginCookieWithoutSecurity();
+    const blocked = await app.inject({ method: "POST", url: "/api/v1/auth/native-handoff", headers: { cookie: insecureCookie } });
+    expect(blocked.statusCode).toBe(403);
+
+    const cookie = await loginCookie();
+    const handoff = await app.inject({ method: "POST", url: "/api/v1/auth/native-handoff", headers: { cookie } });
+    expect(handoff.statusCode).toBe(200);
+    expect(handoff.json().code).toBeTruthy();
+
+    const consumed = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/native-handoff/consume",
+      payload: { code: handoff.json().code }
+    });
+    expect(consumed.statusCode).toBe(200);
+    const nativeCookie = consumed.cookies.find((item) => item.name === "pobox_watch_session");
+    expect(nativeCookie?.value).toBeTruthy();
+
+    const dashboard = await app.inject({
+      method: "GET",
+      url: "/api/v1/workspaces/ws_company/dashboard",
+      headers: { cookie: `pobox_watch_session=${nativeCookie?.value}` }
+    });
+    expect(dashboard.statusCode).toBe(200);
+
+    const reused = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/native-handoff/consume",
+      payload: { code: handoff.json().code }
+    });
+    expect(reused.statusCode).toBe(401);
+  });
+
   it("reports the app version in health checks for deployment verification", async () => {
     const response = await app.inject({ method: "GET", url: "/api/health" });
 

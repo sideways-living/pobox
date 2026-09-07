@@ -1145,6 +1145,22 @@ input, select {
   box-shadow: 0 20px 60px rgba(16, 35, 29, 0.28);
 }
 
+.modal-card {
+  width: min(100%, 440px);
+  display: grid;
+  gap: 14px;
+  background: #ffffff;
+  border: 1px solid #d8ded8;
+  border-radius: 8px;
+  padding: 22px;
+  box-shadow: 0 20px 60px rgba(16, 35, 29, 0.28);
+}
+
+.native-return-button {
+  min-height: 44px;
+  text-decoration: none;
+}
+
 .change-modal h2 {
   font-size: 1.45rem;
   margin-bottom: 8px;

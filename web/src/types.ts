@@ -181,6 +181,11 @@ export interface PasskeyAuthenticationOptions {
   options: PublicKeyCredentialRequestOptionsJSON;
 }
 
+export interface NativeHandoffResponse {
+  code: string;
+  expiresAt: string;
+}
+
 export interface AppChange {
   id: string;
   version: string;

@@ -4,7 +4,8 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
-import Fastify from "fastify";
+import Fastify, { type FastifyReply } from "fastify";
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
@@ -20,6 +21,7 @@ const totpConfirmSchema = z.object({ code: z.string().min(6).max(32) });
 const passkeyRegistrationSchema = z.object({ response: z.any(), friendlyName: z.string().min(1).max(80).optional() });
 const passkeyAuthenticationOptionsSchema = z.object({ email: z.string().email().optional() });
 const passkeyAuthenticationSchema = z.object({ response: z.any() });
+const nativeHandoffConsumeSchema = z.object({ code: z.string().min(32).max(128) });
 const postOfficeLookupSchema = z.object({ query: z.string().min(2).max(80), state: z.string().length(3).optional() });
 const collectSchema = z.object({ source: z.enum(["IPHONE", "MACOS", "WEB", "ADMIN", "NOTIFICATION"]).default("WEB") });
 const inviteSchema = z.object({ email: z.string().email(), role: z.enum(["ADMIN", "MEMBER"]) });
@@ -74,6 +76,7 @@ function sessionCookie(cookies: Record<string, string | undefined>) {
 export async function buildServer(store: AppStore = new MemoryStore()) {
   await store.seedDemo();
   const app = Fastify({ logger: true });
+  const nativeHandoffCodes = new Map<string, { userId: string; expiresAt: number }>();
   await app.register(helmet, {
     contentSecurityPolicy: {
       directives: {
@@ -120,6 +123,26 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     return session;
   }
 
+  function setSessionCookie(reply: FastifyReply, session: { id: string; expiresAt: string }) {
+    reply.setCookie(sessionCookieName, session.id, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      expires: new Date(session.expiresAt)
+    });
+  }
+
+  async function securedNativeSession(request: { cookies: Record<string, string | undefined> }) {
+    const session = await store.getSession(sessionCookie(request.cookies));
+    const status = await store.securityStatus(session);
+    if (status.passkeyCount < 1 || !status.totpEnabled) {
+      throw new ForbiddenError("Passkey and authenticator 2FA setup are required before returning to the pobox.watch app.");
+    }
+    await store.requireMember(session, "ws_company");
+    return session;
+  }
+
   app.get("/api/health", async () => ({
     ok: true,
     service: "pobox-watch-api",
@@ -135,26 +158,14 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
       return { ok: false, twoFactorRequired: true, challengeId: result.challengeId, expiresAt: result.expiresAt, methods: result.methods };
     }
     const session = result;
-    reply.setCookie(sessionCookieName, session.id, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      expires: new Date(session.expiresAt)
-    });
+    setSessionCookie(reply, session);
     return { ok: true, expiresAt: session.expiresAt, previousLoginAt: session.previousLoginAt };
   });
 
   app.post("/api/v1/auth/2fa/verify", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = twoFactorSchema.parse(request.body);
     const session = await store.verifySecondFactor(body.challengeId, body.code);
-    reply.setCookie(sessionCookieName, session.id, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      expires: new Date(session.expiresAt)
-    });
+    setSessionCookie(reply, session);
     return { ok: true, expiresAt: session.expiresAt, previousLoginAt: session.previousLoginAt };
   });
 
@@ -187,13 +198,25 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
       return { ok: false, twoFactorRequired: true, challengeId: result.challengeId, expiresAt: result.expiresAt, methods: result.methods };
     }
     const session = result;
-    reply.setCookie(sessionCookieName, session.id, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      expires: new Date(session.expiresAt)
-    });
+    setSessionCookie(reply, session);
+    return { ok: true, expiresAt: session.expiresAt, previousLoginAt: session.previousLoginAt };
+  });
+
+  app.post("/api/v1/auth/native-handoff", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request) => {
+    const session = await securedNativeSession(request);
+    const code = randomBytes(32).toString("base64url");
+    const expiresAt = Date.now() + 1000 * 60 * 2;
+    nativeHandoffCodes.set(code, { userId: session.userId, expiresAt });
+    return { code, expiresAt: new Date(expiresAt).toISOString() };
+  });
+
+  app.post("/api/v1/auth/native-handoff/consume", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const body = nativeHandoffConsumeSchema.parse(request.body);
+    const handoff = nativeHandoffCodes.get(body.code);
+    nativeHandoffCodes.delete(body.code);
+    if (!handoff || handoff.expiresAt < Date.now()) throw new UnauthorizedError("Native app sign-in link expired. Please try again.");
+    const session = await store.createSessionForUser(handoff.userId);
+    setSessionCookie(reply, session);
     return { ok: true, expiresAt: session.expiresAt, previousLoginAt: session.previousLoginAt };
   });
 

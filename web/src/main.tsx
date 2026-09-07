@@ -6,6 +6,7 @@ import type { Annotation, Map as AppleMap } from "@apple/mapkit-loader";
 import { AlertTriangle, Bell, Check, Clock, Edit2, ExternalLink, KeyRound, LogIn, LogOut, Mail, MapPin, Package, Plus, RefreshCw, Route, Save, Shield, Trash2, Users, X } from "lucide-react";
 import {
   authenticatePasskey,
+  beginNativeHandoff,
   beginPasskeyAuthentication,
   beginPasskeyRegistration,
   beginTotpSetup,
@@ -44,6 +45,18 @@ import "./styles.css";
 
 type Section = "Overview" | "Mailboxes" | "Map" | "History" | "Needs Review" | "Team" | "Settings";
 type MailboxFilter = "all" | "waiting" | "clear";
+const allowedNativeReturnSchemes = new Set(["poboxwatch:", "pobox.watch:"]);
+
+function nativeReturnUrlFromLocation() {
+  const value = new URLSearchParams(window.location.search).get("nativeReturn");
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return allowedNativeReturnSchemes.has(url.protocol) ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 function App() {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
@@ -55,6 +68,8 @@ function App() {
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [changeNotice, setChangeNotice] = useState<AppChangesResponse | null>(null);
   const [securityGate, setSecurityGate] = useState<{ previousLoginAt?: string } | null>(null);
+  const [nativeReturnLink, setNativeReturnLink] = useState<string | null>(null);
+  const nativeReturnUrl = useMemo(nativeReturnUrlFromLocation, []);
 
   async function refresh() {
     const nextSnapshot = await loadDashboard();
@@ -81,6 +96,20 @@ function App() {
 
   async function finishLogin() {
     await refresh();
+    if (nativeReturnUrl) {
+      try {
+        const handoff = await beginNativeHandoff();
+        const returnUrl = new URL(nativeReturnUrl);
+        returnUrl.searchParams.set("code", handoff.code);
+        returnUrl.searchParams.set("expiresAt", handoff.expiresAt);
+        const link = returnUrl.toString();
+        setNativeReturnLink(link);
+        window.location.href = link;
+        return;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unable to return to the native app.");
+      }
+    }
     try {
       const changes = await loadAppChanges();
       if (changes.changes.length > 0) setChangeNotice(changes);
@@ -212,6 +241,7 @@ function App() {
           refresh={refresh}
           setError={setError}
         />
+        {nativeReturnLink && <NativeReturnModal returnLink={nativeReturnLink} />}
         {changeNotice && <ChangeNoticeModal notice={changeNotice} onClose={dismissChangeNotice} />}
       </section>
     </main>
@@ -351,6 +381,18 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
         <button type="button" className="link-button">Forgot Password?</button>
       </form>
     </main>
+  );
+}
+
+function NativeReturnModal({ returnLink }: { returnLink: string }) {
+  return (
+    <div className="modal-backdrop">
+      <section className="modal-card">
+        <h2>Return to the app</h2>
+        <p>Your account is signed in. Open pobox.watch to finish signing in on this device.</p>
+        <a className="primary native-return-button" href={returnLink}>Open pobox.watch App</a>
+      </section>
+    </div>
   );
 }
 

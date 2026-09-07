@@ -212,6 +212,12 @@ export class PrismaStore implements AppStore {
     return this.createSession(challenge.userId, challenge.user.lastLoginAt?.toISOString());
   }
 
+  async createSessionForUser(userId: string): Promise<Session> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.active) throw new UnauthorizedError("Missing user.");
+    return this.createSession(user.id, user.lastLoginAt?.toISOString());
+  }
+
   async securityStatus(session: Session): Promise<SecurityStatus> {
     const [user, passkeyCount, recoveryCodesRemaining] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: session.userId } }),

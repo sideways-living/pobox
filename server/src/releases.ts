@@ -1,4 +1,4 @@
-export const appVersion = "0.13.3";
+export const appVersion = "0.13.4";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.4-native-login-return",
+    version: "0.13.4",
+    releasedAt: "2026-09-07T02:30:00.000Z",
+    title: "Native app sign-in return",
+    summary:
+      "When the iPhone or Mac app opens pobox.watch for secure sign-in, the browser now returns to the app automatically after passkey and authenticator checks are complete.",
+    audience: "ALL"
+  },
   {
     id: "0.13.3-pobox-watch-branding-cleanup",
     version: "0.13.3",

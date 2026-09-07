@@ -13,10 +13,18 @@ struct PoboxWatchMacOSApp: App {
     }
 }
 
+@MainActor
 final class PoboxWatchMacOSAppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
+    private let model = MacMailboxViewModel()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1120, height: 760),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -25,7 +33,7 @@ final class PoboxWatchMacOSAppDelegate: NSObject, NSApplicationDelegate {
         )
         window.title = "pobox.watch"
         window.contentMinSize = NSSize(width: 940, height: 620)
-        window.contentView = NSHostingView(rootView: MacRootView())
+        window.contentView = NSHostingView(rootView: MacRootView(model: model))
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -34,6 +42,17 @@ final class PoboxWatchMacOSAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+
+    @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
+        guard let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
+              let url = URL(string: urlString)
+        else { return }
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        Task { @MainActor in
+            await model.consumeNativeHandoff(from: url)
+        }
     }
 }
 
@@ -56,8 +75,28 @@ final class MacMailboxViewModel: ObservableObject {
     private let workspaceId = "ws_company"
 
     func openPasskeySignIn() {
-        guard let url = URL(string: "https://pobox.watch") else { return }
+        guard var components = URLComponents(string: "https://pobox.watch") else { return }
+        components.queryItems = [URLQueryItem(name: "nativeReturn", value: "poboxwatch://auth")]
+        guard let url = components.url else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    func consumeNativeHandoff(from url: URL) async {
+        guard url.scheme == "poboxwatch",
+              url.host == "auth",
+              let code = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?
+                .first(where: { $0.name == "code" })?
+                .value
+        else { return }
+        await run {
+            _ = try await client.consumeNativeHandoff(code: code)
+            passwordMode = false
+            password = ""
+            twoFactorChallengeId = nil
+            twoFactorCode = ""
+            try await loadWorkspace()
+        }
     }
 
     func signInWithPassword() async {
@@ -256,7 +295,11 @@ final class MacMailboxViewModel: ObservableObject {
 }
 
 struct MacRootView: View {
-    @StateObject private var model = MacMailboxViewModel()
+    @StateObject private var model: MacMailboxViewModel
+
+    init(model: MacMailboxViewModel = MacMailboxViewModel()) {
+        _model = StateObject(wrappedValue: model)
+    }
 
     var body: some View {
         if model.snapshot == nil {
@@ -345,7 +388,7 @@ struct MacLoginView: View {
                 }
             }
 
-            Text("Passkey setup and first secure sign-in currently happen at pobox.watch in your browser. After setup, use the Mac app with the same secured account.")
+            Text("Passkey sign-in opens pobox.watch in your browser and returns here automatically after your account is secure.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: 520, alignment: .leading)

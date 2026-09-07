@@ -35,6 +35,17 @@ public actor PoboxWatchAPIClient {
         return try decoder.decode(LoginResult.self, from: data)
     }
 
+    public func consumeNativeHandoff(code: String) async throws -> LoginResult {
+        let url = baseURL.appending(path: "/api/v1/auth/native-handoff/consume")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(NativeHandoffRequest(code: code))
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+        return try decoder.decode(LoginResult.self, from: data)
+    }
+
     public func logout() async throws {
         let url = baseURL.appending(path: "/api/v1/auth/logout")
         var request = URLRequest(url: url)
@@ -229,6 +240,10 @@ private struct LoginRequest: Encodable {
 
 private struct TwoFactorRequest: Encodable {
     let challengeId: String
+    let code: String
+}
+
+private struct NativeHandoffRequest: Encodable {
     let code: String
 }
 

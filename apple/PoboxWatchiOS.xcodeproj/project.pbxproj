@@ -43,8 +43,9 @@
 /* Begin PBXFileReference section */
 		BA623A716C187C5CA97AC072 /* pobox.watch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "pobox.watch.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		54BAC908F278B9E5641724F2 /* PoboxWatchShared.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PoboxWatchShared.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		4A2B812B0000000000000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		5EA029BAA74B6AEAA2A8B7B6 /* PoboxWatchiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoboxWatchiOSApp.swift; sourceTree = "<group>"; };
+			4A2B812B0000000000000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+			4A2B812B0000000000000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+			5EA029BAA74B6AEAA2A8B7B6 /* PoboxWatchiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoboxWatchiOSApp.swift; sourceTree = "<group>"; };
 		1699F8903E81A884E231D1A5 /* LocationReminderPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationReminderPolicy.swift; sourceTree = "<group>"; };
 		7451E3C90F480C8FFE75816C /* PoboxWatchAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoboxWatchAPIClient.swift; sourceTree = "<group>"; };
 		8383CFF48734BB1E6121572E /* MailboxModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailboxModels.swift; sourceTree = "<group>"; };
@@ -97,10 +98,11 @@
 		};
 		CDBDBC9EDC04291169BF4BF2 /* PoboxWatchiOS */ = {
 			isa = PBXGroup;
-			children = (
-				4A2B812B0000000000000002 /* Assets.xcassets */,
-				5EA029BAA74B6AEAA2A8B7B6 /* PoboxWatchiOSApp.swift */,
-			);
+				children = (
+					4A2B812B0000000000000002 /* Assets.xcassets */,
+					4A2B812B0000000000000004 /* Info.plist */,
+					5EA029BAA74B6AEAA2A8B7B6 /* PoboxWatchiOSApp.swift */,
+				);
 			path = PoboxWatchiOS;
 			sourceTree = "<group>";
 		};
@@ -359,15 +361,14 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "pobox.watch";
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = iOS/PoboxWatchiOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.13.3;
+				MARKETING_VERSION = 0.13.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch";
 				PRODUCT_NAME = "pobox.watch";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -386,15 +387,14 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "pobox.watch";
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = iOS/PoboxWatchiOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.13.3;
+				MARKETING_VERSION = 0.13.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch";
 				PRODUCT_NAME = "pobox.watch";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -422,7 +422,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.13.3;
+				MARKETING_VERSION = 0.13.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch.shared";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -451,7 +451,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.13.3;
+				MARKETING_VERSION = 0.13.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch.shared";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

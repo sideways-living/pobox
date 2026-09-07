@@ -137,6 +137,7 @@ export interface AppStore {
   seedDemo(): Promise<void>;
   login(email: string, password: string): Promise<LoginResult>;
   verifySecondFactor(challengeId: string, code: string): Promise<Session>;
+  createSessionForUser(userId: string): Promise<Session>;
   getSession(sessionId?: string): Promise<Session>;
   securityStatus(session: Session): Promise<SecurityStatus>;
   beginTotpSetup(session: Session): Promise<TotpSetup>;

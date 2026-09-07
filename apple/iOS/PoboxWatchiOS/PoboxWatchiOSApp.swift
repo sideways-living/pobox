@@ -30,8 +30,28 @@ final class iPhoneMailboxViewModel: ObservableObject {
     private let workspaceId = "ws_company"
 
     func openPasskeySignIn() {
-        guard let url = URL(string: "https://pobox.watch") else { return }
+        guard var components = URLComponents(string: "https://pobox.watch") else { return }
+        components.queryItems = [URLQueryItem(name: "nativeReturn", value: "poboxwatch://auth")]
+        guard let url = components.url else { return }
         UIApplication.shared.open(url)
+    }
+
+    func consumeNativeHandoff(from url: URL) async {
+        guard url.scheme == "poboxwatch",
+              url.host == "auth",
+              let code = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?
+                .first(where: { $0.name == "code" })?
+                .value
+        else { return }
+        await run {
+            _ = try await client.consumeNativeHandoff(code: code)
+            passwordMode = false
+            password = ""
+            twoFactorChallengeId = nil
+            twoFactorCode = ""
+            try await loadWorkspace()
+        }
     }
 
     func signInWithPassword() async {
@@ -240,6 +260,9 @@ struct iPhoneRootView: View {
                 iPhoneDashboardView(model: model)
             }
         }
+        .onOpenURL { url in
+            Task { await model.consumeNativeHandoff(from: url) }
+        }
     }
 }
 
@@ -322,7 +345,7 @@ struct iPhoneLoginView: View {
                 }
 
                 Section {
-                    Text("Passkey setup and first secure sign-in currently happen at pobox.watch in Safari. After setup, use the iPhone app with the same secured account.")
+                    Text("Passkey sign-in opens pobox.watch in Safari and returns here automatically after your account is secure.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }

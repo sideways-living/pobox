@@ -185,6 +185,12 @@ export class MemoryStore implements AppStore {
     return this.createSession(user);
   }
 
+  async createSessionForUser(userId: string): Promise<Session> {
+    const user = this.users.get(userId);
+    if (!user?.active) throw new UnauthorizedError("Missing user.");
+    return this.createSession(user);
+  }
+
   async securityStatus(session: Session): Promise<SecurityStatus> {
     const user = this.users.get(session.userId);
     if (!user) throw new UnauthorizedError("Missing user.");
