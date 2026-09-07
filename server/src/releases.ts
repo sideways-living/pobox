@@ -1,4 +1,4 @@
-export const appVersion = "0.13.4";
+export const appVersion = "0.13.5";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,15 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.5-native-email-prefill",
+    version: "0.13.5",
+    releasedAt: "2026-09-07T03:00:00.000Z",
+    title: "Faster native app sign-in",
+    summary:
+      "The iPhone and Mac apps now check the email address before opening passkey sign-in and carry it into the browser so it does not need to be typed again.",
+    audience: "ALL"
+  },
   {
     id: "0.13.4-native-login-return",
     version: "0.13.4",

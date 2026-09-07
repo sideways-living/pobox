@@ -75,10 +75,27 @@ final class MacMailboxViewModel: ObservableObject {
     private let workspaceId = "ws_company"
 
     func openPasskeySignIn() {
+        guard let loginEmail = validatedLoginEmail() else { return }
         guard var components = URLComponents(string: "https://pobox.watch") else { return }
-        components.queryItems = [URLQueryItem(name: "nativeReturn", value: "poboxwatch://auth")]
+        components.queryItems = [
+            URLQueryItem(name: "nativeReturn", value: "poboxwatch://auth"),
+            URLQueryItem(name: "email", value: loginEmail)
+        ]
         guard let url = components.url else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    private func validatedLoginEmail() -> String? {
+        let value = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let pattern = #"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$"#
+        let isValid = value.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+        if !isValid {
+            errorMessage = "Enter a valid email address before continuing with passkey sign-in."
+            return nil
+        }
+        email = value
+        errorMessage = nil
+        return value
     }
 
     func consumeNativeHandoff(from url: URL) async {
@@ -376,6 +393,7 @@ struct MacLoginView: View {
                         Label("Continue with Passkey", systemImage: "key.fill")
                     }
                     .buttonStyle(.borderedProminent)
+                    .disabled(model.isLoading || model.email.isEmpty)
 
                     Button("Use Password to Set Up Security") {
                         model.passwordMode = true

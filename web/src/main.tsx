@@ -58,6 +58,11 @@ function nativeReturnUrlFromLocation() {
   }
 }
 
+function loginEmailFromLocation() {
+  const value = new URLSearchParams(window.location.search).get("email")?.trim().toLowerCase();
+  return value && value.includes("@") ? value : "";
+}
+
 function App() {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -290,7 +295,7 @@ function SectionView({
 }
 
 function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?: string) => Promise<void>; error: string | null; setError: (value: string | null) => void }) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(loginEmailFromLocation);
   const [password, setPassword] = useState("");
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [twoFactorCode, setTwoFactorCode] = useState("");
