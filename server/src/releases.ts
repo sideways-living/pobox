@@ -1,4 +1,4 @@
-export const appVersion = "0.13.6";
+export const appVersion = "0.13.7";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.7-shared-workspace-safety",
+    version: "0.13.7",
+    releasedAt: "2026-09-12T01:00:00.000Z",
+    title: "More reliable shared updates",
+    summary: "Changes made by your team now refresh without changing your signed-in identity. The web app reconnects automatically after connection loss. Older edits cannot overwrite newer changes, and removing someone only removes access to the selected workspace. Update your iPhone or Mac app to keep editing and collecting.",
+    audience: "ALL"
+  },
   {
     id: "0.13.6-security-recovery",
     version: "0.13.6",

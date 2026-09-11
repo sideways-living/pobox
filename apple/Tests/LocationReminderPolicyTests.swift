@@ -4,7 +4,7 @@ import XCTest
 final class LocationReminderPolicyTests: XCTestCase {
     func testRequiresWaitingMail() {
         let policy = LocationReminderPolicy()
-        let office = PostOffice(
+        let office = PostOffice(updatedAt: nil,
             id: "po",
             name: "Melbourne GPO",
             address: "350 Bourke Street",
@@ -14,7 +14,7 @@ final class LocationReminderPolicyTests: XCTestCase {
             geofenceRadius: 200,
             active: true,
             mailboxes: [
-                Mailbox(id: "box", postOfficeId: "office", name: "PO Box 1234", boxNumber: "1234", active: true, mailWaiting: false, parcelWaiting: false, latestNotificationAt: nil, latestParcelNotificationAt: nil, lastCollectedAt: nil, lastCollectedBy: nil)
+                Mailbox(updatedAt: nil, id: "box", postOfficeId: "office", name: "PO Box 1234", boxNumber: "1234", active: true, mailWaiting: false, parcelWaiting: false, latestNotificationAt: nil, latestParcelNotificationAt: nil, lastCollectedAt: nil, lastCollectedBy: nil)
             ]
         )
         XCTAssertFalse(policy.shouldPrompt(postOffice: office, now: Date(), lastPromptAt: nil))
@@ -22,7 +22,7 @@ final class LocationReminderPolicyTests: XCTestCase {
 
     func testAllowsParcelOnlyPrompt() {
         let policy = LocationReminderPolicy()
-        let office = PostOffice(
+        let office = PostOffice(updatedAt: nil,
             id: "po",
             name: "Melbourne GPO",
             address: "350 Bourke Street",
@@ -32,7 +32,7 @@ final class LocationReminderPolicyTests: XCTestCase {
             geofenceRadius: 200,
             active: true,
             mailboxes: [
-                Mailbox(id: "box", postOfficeId: "office", name: "PO Box 1234", boxNumber: "1234", active: true, mailWaiting: false, parcelWaiting: true, latestNotificationAt: nil, latestParcelNotificationAt: "2026-09-03T02:30:00.000Z", lastCollectedAt: nil, lastCollectedBy: nil)
+                Mailbox(updatedAt: nil, id: "box", postOfficeId: "office", name: "PO Box 1234", boxNumber: "1234", active: true, mailWaiting: false, parcelWaiting: true, latestNotificationAt: nil, latestParcelNotificationAt: "2026-09-03T02:30:00.000Z", lastCollectedAt: nil, lastCollectedBy: nil)
             ]
         )
         XCTAssertTrue(policy.shouldPrompt(postOffice: office, now: Date(), lastPromptAt: nil))

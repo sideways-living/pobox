@@ -32,6 +32,7 @@ export interface IncomingMailResult {
 }
 
 export interface TeamMemberSummary {
+  version?: string;
   id: string;
   email: string;
   displayName: string;
@@ -64,6 +65,7 @@ export interface CreateUserInput {
 }
 
 export interface UpdateUserInput {
+  expectedVersion?: string;
   email?: string;
   displayName?: string;
   role?: Role;
@@ -80,6 +82,7 @@ export interface CreatePostOfficeInput {
 }
 
 export interface UpdatePostOfficeInput {
+  expectedUpdatedAt?: string;
   name?: string;
   address?: string;
   phone?: string;
@@ -95,6 +98,7 @@ export interface CreateMailboxInput {
 }
 
 export interface UpdateMailboxInput {
+  expectedUpdatedAt?: string;
   postOfficeId?: string;
   boxNumber?: string;
 }
@@ -157,7 +161,7 @@ export interface AppStore {
   pendingMailAcknowledgements(workspaceId: string, provider: string): Promise<string[]>;
   acknowledgeMail(workspaceId: string, provider: string, messageId: string): Promise<void>;
   failMailAcknowledgement(workspaceId: string, provider: string, messageId: string, reason: string): Promise<void>;
-  collectMailbox(session: Session, workspaceId: string, mailboxId: string, source: CollectionSource): Promise<CollectionEvent>;
+  collectMailbox(session: Session, workspaceId: string, mailboxId: string, source: CollectionSource, expectedUpdatedAt?: string): Promise<CollectionEvent>;
   listMembers(session: Session, workspaceId: string): Promise<TeamMemberSummary[]>;
   listReviewItems(session: Session, workspaceId: string): Promise<ReviewItem[]>;
   resolveReviewItem(session: Session, workspaceId: string, reviewItemId: string, mailboxId: string, newMailbox?: { postOfficeId: string; boxNumber: string }): Promise<IncomingMailResult>;

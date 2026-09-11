@@ -1,5 +1,6 @@
 import type { MailPollerDependencies, MailPollerOptions, MailPollSummary } from "./types.js";
 import { MailAuthenticationError, safeMailError } from "./retry.js";
+import { realtimeHub } from "../realtime/hub.js";
 
 export class MailPoller {
   private timer: NodeJS.Timeout | undefined;
@@ -54,7 +55,8 @@ export class MailPoller {
           continue;
         }
         try {
-          const result = await store.processIncomingMail({ workspaceId, provider: provider.providerName, ...message });
+          const result = await store.processIncomingMail({ ...message, workspaceId, provider: provider.providerName });
+          if (result.kind !== "duplicate") realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
           if (result.kind === "processed") summary.processed += 1;
           else if (result.kind === "duplicate") summary.duplicates += 1;
           else summary.needsReview += 1;

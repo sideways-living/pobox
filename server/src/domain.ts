@@ -27,6 +27,7 @@ export interface Workspace {
 }
 
 export interface WorkspaceMember {
+  version?: string;
   id: string;
   workspaceId: string;
   userId: string;
@@ -35,6 +36,7 @@ export interface WorkspaceMember {
 }
 
 export interface PostOffice {
+  updatedAt?: string;
   id: string;
   workspaceId: string;
   name: string;

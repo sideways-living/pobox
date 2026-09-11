@@ -21,3 +21,7 @@ for (const [id, subject] of [["missing", "Mail2Day: PO Box 3020 has mail"], ["ma
 }
 await app.listen({ host: "127.0.0.1", port: 4189 });
 console.log(`REVIEW_SESSION=${session.id}`);
+const memberSession = await store.createSessionForUser("usr_john");
+store.users.get("usr_john")!.totpEnabled = true;
+store.passkeyCredentials.set("member-fixture", { id: "member-fixture", userId: "usr_john", credentialId: "member-fixture", publicKey: Buffer.from("fixture"), counter: 0, transports: [], friendlyName: "Fixture" });
+console.log(`MEMBER_SESSION=${memberSession.id}`);

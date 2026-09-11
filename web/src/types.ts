@@ -1,6 +1,7 @@
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
 
 export interface Mailbox {
+  updatedAt: string;
   id: string;
   postOfficeId: string;
   name: string;
@@ -15,6 +16,7 @@ export interface Mailbox {
 }
 
 export interface PostOffice {
+  updatedAt: string;
   id: string;
   name: string;
   address: string;
@@ -62,6 +64,7 @@ export interface CollectionHistoryEvent {
 }
 
 export interface TeamMember {
+  version: string;
   id: string;
   email: string;
   displayName: string;
@@ -94,6 +97,7 @@ export interface CreateUserInput {
 }
 
 export interface UpdateUserInput {
+  expectedVersion: string;
   email?: string;
   displayName?: string;
   role?: "ADMIN" | "MEMBER";
@@ -117,6 +121,7 @@ export interface CreatePostOfficeInput {
 }
 
 export interface UpdatePostOfficeInput {
+  expectedUpdatedAt: string;
   name?: string;
   address?: string;
   phone?: string;
@@ -153,6 +158,7 @@ export interface CreateMailboxInput {
 }
 
 export interface UpdateMailboxInput {
+  expectedUpdatedAt: string;
   postOfficeId?: string;
   boxNumber?: string;
 }

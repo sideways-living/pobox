@@ -29,6 +29,7 @@ public struct CurrentUser: Codable, Identifiable, Sendable {
 }
 
 public struct TeamMember: Codable, Identifiable, Sendable {
+    public let version: String?
     public let id: String
     public let email: String
     public let displayName: String
@@ -38,6 +39,7 @@ public struct TeamMember: Codable, Identifiable, Sendable {
 }
 
 public struct PostOffice: Codable, Identifiable, Sendable {
+    public let updatedAt: String?
     public let id: String
     public let name: String
     public let address: String
@@ -50,6 +52,7 @@ public struct PostOffice: Codable, Identifiable, Sendable {
 }
 
 public struct Mailbox: Codable, Identifiable, Sendable {
+    public let updatedAt: String?
     public let id: String
     public let postOfficeId: String
     public let name: String
@@ -151,12 +154,14 @@ public struct CreateUserInput: Codable, Sendable {
 }
 
 public struct UpdateUserInput: Codable, Sendable {
+    public let expectedVersion: String?
     public let email: String?
     public let displayName: String?
     public let role: String?
     public let status: String?
 
-    public init(email: String? = nil, displayName: String? = nil, role: String? = nil, status: String? = nil) {
+    public init(email: String? = nil, displayName: String? = nil, role: String? = nil, status: String? = nil, expectedVersion: String? = nil) {
+        self.expectedVersion = expectedVersion
         self.email = email
         self.displayName = displayName
         self.role = role
@@ -183,6 +188,7 @@ public struct CreatePostOfficeInput: Codable, Sendable {
 }
 
 public struct UpdatePostOfficeInput: Codable, Sendable {
+    public let expectedUpdatedAt: String?
     public let name: String?
     public let address: String?
     public let phone: String?
@@ -190,7 +196,8 @@ public struct UpdatePostOfficeInput: Codable, Sendable {
     public let longitude: Double?
     public let geofenceRadius: Int?
 
-    public init(name: String? = nil, address: String? = nil, phone: String? = nil, latitude: Double? = nil, longitude: Double? = nil, geofenceRadius: Int? = nil) {
+    public init(name: String? = nil, address: String? = nil, phone: String? = nil, latitude: Double? = nil, longitude: Double? = nil, geofenceRadius: Int? = nil, expectedUpdatedAt: String? = nil) {
+        self.expectedUpdatedAt = expectedUpdatedAt
         self.name = name
         self.address = address
         self.phone = phone
@@ -213,10 +220,12 @@ public struct CreateMailboxInput: Codable, Sendable {
 }
 
 public struct UpdateMailboxInput: Codable, Sendable {
+    public let expectedUpdatedAt: String?
     public let postOfficeId: String?
     public let boxNumber: String?
 
-    public init(postOfficeId: String? = nil, boxNumber: String? = nil) {
+    public init(postOfficeId: String? = nil, boxNumber: String? = nil, expectedUpdatedAt: String? = nil) {
+        self.expectedUpdatedAt = expectedUpdatedAt
         self.postOfficeId = postOfficeId
         self.boxNumber = boxNumber
     }

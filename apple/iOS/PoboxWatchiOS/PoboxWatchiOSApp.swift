@@ -28,6 +28,7 @@ final class iPhoneMailboxViewModel: ObservableObject {
 
     private let client = PoboxWatchAPIClient.live
     private let workspaceId = "ws_company"
+    private var loadGeneration = 0
     private var nativeSignInProof: NativeSignInProof?
 
     func openPasskeySignIn() {
@@ -108,12 +109,13 @@ final class iPhoneMailboxViewModel: ObservableObject {
         busyMailboxId = mailbox.id
         defer { busyMailboxId = nil }
         await run {
-            try await client.collectMailbox(workspaceId: workspaceId, mailboxId: mailbox.id, source: .iPhone)
+            try await client.collectMailbox(workspaceId: workspaceId, mailboxId: mailbox.id, source: .iPhone, expectedUpdatedAt: mailbox.updatedAt)
             try await loadWorkspace()
         }
     }
 
     func logout() async {
+        loadGeneration += 1
         await run {
             try await client.logout()
             snapshot = nil
@@ -128,12 +130,16 @@ final class iPhoneMailboxViewModel: ObservableObject {
     }
 
     private func loadWorkspace() async throws {
+        loadGeneration += 1
+        let generation = loadGeneration
         async let dashboard = client.dashboard(workspaceId: workspaceId)
         async let reviews = client.reviewItems(workspaceId: workspaceId)
         async let team = client.teamMembers(workspaceId: workspaceId)
-        snapshot = try await dashboard
-        reviewItems = try await reviews
-        members = try await team
+        let values = try await (dashboard, reviews, team)
+        guard generation == loadGeneration else { return }
+        snapshot = values.0
+        reviewItems = values.1
+        members = values.2
     }
 
     func createUser(email: String, displayName: String, password: String, role: String) async {
@@ -151,7 +157,7 @@ final class iPhoneMailboxViewModel: ObservableObject {
             _ = try await client.updateUser(
                 workspaceId: workspaceId,
                 userId: member.id,
-                input: UpdateUserInput(email: email, displayName: displayName, role: role, status: status)
+                input: UpdateUserInput(email: email, displayName: displayName, role: role, status: status, expectedVersion: member.version)
             )
             try await loadWorkspace()
         }
@@ -186,7 +192,7 @@ final class iPhoneMailboxViewModel: ObservableObject {
             _ = try await client.updatePostOffice(
                 workspaceId: workspaceId,
                 postOfficeId: office.id,
-                input: UpdatePostOfficeInput(name: name, address: address, phone: phone, latitude: latitude, longitude: longitude, geofenceRadius: geofenceRadius)
+                input: UpdatePostOfficeInput(name: name, address: address, phone: phone, latitude: latitude, longitude: longitude, geofenceRadius: geofenceRadius, expectedUpdatedAt: office.updatedAt)
             )
             try await loadWorkspace()
         }
@@ -214,7 +220,7 @@ final class iPhoneMailboxViewModel: ObservableObject {
             _ = try await client.updateMailbox(
                 workspaceId: workspaceId,
                 mailboxId: mailbox.id,
-                input: UpdateMailboxInput(postOfficeId: postOfficeId, boxNumber: boxNumber)
+                input: UpdateMailboxInput(postOfficeId: postOfficeId, boxNumber: boxNumber, expectedUpdatedAt: mailbox.updatedAt)
             )
             try await loadWorkspace()
         }
@@ -289,6 +295,13 @@ struct iPhoneRootView: View {
         }
         .onOpenURL { url in
             Task { await model.consumeNativeHandoff(from: url) }
+        }
+        .task(id: model.snapshot?.currentUser.id) {
+            guard model.snapshot != nil else { return }
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                if !model.isLoading { await model.refresh() }
+            }
         }
     }
 }

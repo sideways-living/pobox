@@ -118,12 +118,12 @@ public actor PoboxWatchAPIClient {
         return try decoder.decode([TeamMember].self, from: data)
     }
 
-    public func collectMailbox(workspaceId: String, mailboxId: String, source: MailboxCollectionSource) async throws {
+    public func collectMailbox(workspaceId: String, mailboxId: String, source: MailboxCollectionSource, expectedUpdatedAt: String?) async throws {
         let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/mailboxes/\(mailboxId)/collect")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try encoder.encode(["source": source.rawValue])
+        request.httpBody = try encoder.encode(["source": source.rawValue, "expectedUpdatedAt": expectedUpdatedAt ?? ""])
         let (data, response) = try await session.data(for: request)
         try validate(response, data: data)
     }
@@ -227,7 +227,7 @@ public actor PoboxWatchAPIClient {
     }
 
     private func validate(_ response: URLResponse, data: Data) throws {
-        if let http = response as? HTTPURLResponse, http.statusCode == 401 {
+        if let http = response as? HTTPURLResponse, http.statusCode == 401 || (http.statusCode == 403 && http.url?.lastPathComponent == "dashboard") {
             throw PoboxWatchAPIError.authenticationRequired
         }
         guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {

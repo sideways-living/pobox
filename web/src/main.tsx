@@ -74,9 +74,11 @@ function App() {
   const [changeNotice, setChangeNotice] = useState<AppChangesResponse | null>(null);
   const [securityGate, setSecurityGate] = useState<{ previousLoginAt?: string } | null>(null);
   const [nativeReturnLink, setNativeReturnLink] = useState<string | null>(null);
+  const refreshGeneration = useRef(0);
   const nativeReturnUrl = useMemo(nativeReturnUrlFromLocation, []);
   useEffect(() => {
     const expired = () => {
+      refreshGeneration.current++;
       setSnapshot(null);
       setMembers([]);
       setReviewItems([]);
@@ -90,29 +92,53 @@ function App() {
   }, []);
 
   async function refresh() {
+    const generation = ++refreshGeneration.current;
     const nextSnapshot = await loadDashboard();
+    const nextMembers = nextSnapshot.currentUser.role === "ADMIN" ? await loadMembers() : [];
+    const nextReviews = await loadReviewItems();
+    if (generation !== refreshGeneration.current) return;
     setSnapshot(nextSnapshot);
-    if (nextSnapshot.currentUser.role === "ADMIN") {
-      setMembers(await loadMembers());
-    }
-    setReviewItems(await loadReviewItems());
+    setMembers(nextMembers);
+    setReviewItems(nextReviews);
     setError(null);
   }
 
   useEffect(() => {
     if (!snapshot) return;
-    const socket = new WebSocket(realtimeUrl());
-    socket.onopen = () => setConnected(true);
-    socket.onclose = event => { setConnected(false); if (event.code === 1008) window.dispatchEvent(new Event("pobox-session-expired")); };
-    socket.onerror = () => setConnected(false);
-    socket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      if (message.type === "dashboard.updated") {
-        setSnapshot(message.snapshot);
-        void loadReviewItems().then(setReviewItems).catch(() => setError("Unable to refresh the review queue. Reload to see current items."));
-      }
+    let stopped = false;
+    let socket: WebSocket;
+    let retry: ReturnType<typeof setTimeout>;
+    let delay = 500;
+    let refreshing = false;
+    let dirty = false;
+    const reload = async () => {
+      dirty = true;
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        while (dirty && !stopped) { dirty = false; await refresh(); }
+      } catch { if (!stopped) setError("Unable to refresh live changes. Retrying shortly."); }
+      finally { refreshing = false; }
     };
-    return () => socket.close();
+    const connect = () => {
+      if (stopped) return;
+      socket = new WebSocket(realtimeUrl());
+      socket.onopen = () => { delay = 500; setConnected(true); void reload(); };
+      socket.onclose = event => {
+        setConnected(false);
+        if (stopped) return;
+        if (event.code === 1008) { window.dispatchEvent(new Event("pobox-session-expired")); return; }
+        retry = setTimeout(connect, delay);
+        delay = Math.min(delay * 2, 15000);
+      };
+      socket.onerror = () => socket.close();
+      socket.onmessage = event => {
+        try { if (["workspace.changed", "dashboard.updated"].includes(JSON.parse(event.data).type)) void reload(); } catch { /* Ignore non-JSON heartbeat messages. */ }
+      };
+    };
+    connect();
+    const poll = setInterval(() => { void reload(); }, 30000);
+    return () => { stopped = true; clearTimeout(retry); clearInterval(poll); socket?.close(); };
   }, [snapshot?.workspace.id]);
 
   async function finishLogin() {
@@ -163,6 +189,7 @@ function App() {
   }
 
   async function handleLogout() {
+    refreshGeneration.current++;
     try {
       await logout();
     } catch (err) {
@@ -579,7 +606,7 @@ function OverviewSection({ snapshot, busyId, mutate }: { snapshot: DashboardSnap
                     </div>
                     <div className="mailbox-list">
                       {waiting.map((box) => (
-                        <MailboxRow key={box.id} box={box} busy={busyId === box.id} onCollect={() => mutate(() => collectMailbox(box.id), box.id)} />
+                        <MailboxRow key={box.id} box={box} busy={busyId === box.id} onCollect={() => mutate(() => collectMailbox(box.id, box.updatedAt), box.id)} />
                       ))}
                     </div>
                   </article>
@@ -632,7 +659,7 @@ function MailboxSection({
   const mailWaitingCount = snapshot.postOffices.flatMap((office) => office.mailboxes).filter((box) => box.mailWaiting).length;
   const parcelWaitingCount = snapshot.postOffices.flatMap((office) => office.mailboxes).filter((box) => box.parcelWaiting).length;
 
-  async function saveOffice(officeId: string, input: { name: string; address: string; phone?: string; latitude: number; longitude: number; geofenceRadius: number }) {
+  async function saveOffice(officeId: string, input: { expectedUpdatedAt: string; name: string; address: string; phone?: string; latitude: number; longitude: number; geofenceRadius: number }) {
     if (!refresh || !setError) return false;
     try {
       await updatePostOffice(officeId, input);
@@ -657,7 +684,7 @@ function MailboxSection({
     }
   }
 
-  async function saveMailbox(mailboxId: string, input: { postOfficeId: string; boxNumber: string }) {
+  async function saveMailbox(mailboxId: string, input: { expectedUpdatedAt: string; postOfficeId: string; boxNumber: string }) {
     if (!refresh || !setError) return false;
     try {
       await updateMailbox(mailboxId, input);
@@ -771,13 +798,14 @@ function OfficeSection({
   busyId: string | null;
   mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>;
   canManage: boolean;
-  onSaveOffice: (officeId: string, input: { name: string; address: string; phone?: string; latitude: number; longitude: number; geofenceRadius: number }) => Promise<boolean>;
+  onSaveOffice: (officeId: string, input: { expectedUpdatedAt: string; name: string; address: string; phone?: string; latitude: number; longitude: number; geofenceRadius: number }) => Promise<boolean>;
   onDeleteOffice: (office: PostOffice) => Promise<void>;
-  onSaveMailbox: (mailboxId: string, input: { postOfficeId: string; boxNumber: string }) => Promise<boolean>;
+  onSaveMailbox: (mailboxId: string, input: { expectedUpdatedAt: string; postOfficeId: string; boxNumber: string }) => Promise<boolean>;
   onDeleteMailbox: (mailbox: Mailbox) => Promise<void>;
 }) {
   const [editingOffice, setEditingOffice] = useState(false);
   const [name, setName] = useState(office.name);
+  const [officeVersion, setOfficeVersion] = useState(office.updatedAt);
   const [address, setAddress] = useState(office.address);
   const [phone, setPhone] = useState(office.phone ?? "");
   const [latitude, setLatitude] = useState(String(office.latitude));
@@ -799,6 +827,7 @@ function OfficeSection({
         <form className="editable-row office-edit" onSubmit={async (event) => {
           event.preventDefault();
           const saved = await onSaveOffice(office.id, {
+            expectedUpdatedAt: officeVersion,
             name,
             address,
             phone,
@@ -840,7 +869,7 @@ function OfficeSection({
             <a className="text-link" href={appleMapsUrl(office)} target="_blank" rel="noreferrer"><ExternalLink size={15} />Apple Maps</a>
             {canManage && (
               <div className="row-actions">
-                <button type="button" className="icon-button" title="Edit post office" onClick={() => setEditingOffice(true)}><Edit2 size={16} /></button>
+                <button type="button" className="icon-button" title="Edit post office" onClick={() => { setOfficeVersion(office.updatedAt); setName(office.name); setAddress(office.address); setPhone(office.phone ?? ""); setLatitude(String(office.latitude)); setLongitude(String(office.longitude)); setGeofenceRadius(String(office.geofenceRadius)); setEditingOffice(true); }}><Edit2 size={16} /></button>
                 <button type="button" className="icon-button danger" title="Delete post office" onClick={() => onDeleteOffice(office)}><Trash2 size={16} /></button>
               </div>
             )}
@@ -859,7 +888,7 @@ function OfficeSection({
             key={box.id}
             box={box}
             busy={busyId === box.id}
-            onCollect={() => mutate(() => collectMailbox(box.id), box.id)}
+            onCollect={() => mutate(() => collectMailbox(box.id, box.updatedAt), box.id)}
             postOffices={postOffices}
             canManage={canManage}
             onSave={onSaveMailbox}
@@ -1093,18 +1122,20 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
     }
   }
 
-  async function saveMember(memberId: string, input: { email: string; displayName: string; role: "ADMIN" | "MEMBER"; status: MemberStatus }) {
+  async function saveMember(memberId: string, input: { expectedVersion: string; email: string; displayName: string; role: "ADMIN" | "MEMBER"; status: MemberStatus }) {
     try {
       await updateUser(memberId, input);
       await refresh();
       setError(null);
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update user.");
+      return false;
     }
   }
 
   async function removeMember(member: TeamMember) {
-    if (!window.confirm(`Delete access for ${member.displayName}? Their login will be disabled, but their historical audit records will be kept.`)) return;
+    if (!window.confirm(`Remove ${member.displayName}'s access to this workspace? Access to other workspaces and historical records will be kept.`)) return;
     try {
       await deleteUser(member.id);
       await refresh();
@@ -1178,7 +1209,7 @@ function TeamMemberRow({
   member: TeamMember;
   currentUserId: string;
   canManage: boolean;
-  onSave: (memberId: string, input: { email: string; displayName: string; role: "ADMIN" | "MEMBER"; status: MemberStatus }) => Promise<void>;
+  onSave: (memberId: string, input: { expectedVersion: string; email: string; displayName: string; role: "ADMIN" | "MEMBER"; status: MemberStatus }) => Promise<boolean>;
   onDelete: (member: TeamMember) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -1186,21 +1217,23 @@ function TeamMemberRow({
   const [displayName, setDisplayName] = useState(member.displayName);
   const [role, setRole] = useState<"ADMIN" | "MEMBER">(member.role);
   const [status, setStatus] = useState<MemberStatus>(member.status);
+  const [memberVersion, setMemberVersion] = useState(member.version);
   const self = member.id === currentUserId;
 
   useEffect(() => {
+    if (editing) return;
+    setMemberVersion(member.version);
     setEmail(member.email);
     setDisplayName(member.displayName);
     setRole(member.role);
     setStatus(member.status);
-  }, [member.email, member.displayName, member.role, member.status]);
+  }, [editing, member.version, member.email, member.displayName, member.role, member.status]);
 
   if (editing) {
     return (
       <form className="team-member editable-row" onSubmit={async (event) => {
         event.preventDefault();
-        await onSave(member.id, { email, displayName, role, status });
-        setEditing(false);
+        if (await onSave(member.id, { expectedVersion: memberVersion, email, displayName, role, status })) setEditing(false);
       }}>
         <div className="edit-fields">
           <label>Name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></label>
@@ -1232,9 +1265,9 @@ function TeamMemberRow({
         <div className="row-actions">
           <button type="button" className="icon-button" title="Edit user" onClick={() => setEditing(true)}><Edit2 size={16} /></button>
           {member.active ? (
-            <button type="button" className="secondary" title="Disable user access" disabled={self} onClick={() => onSave(member.id, { email: member.email, displayName: member.displayName, role: member.role, status: "DISABLED" })}>Disable</button>
+            <button type="button" className="secondary" title="Disable user access" disabled={self} onClick={() => onSave(member.id, { expectedVersion: member.version, email: member.email, displayName: member.displayName, role: member.role, status: "DISABLED" })}>Disable</button>
           ) : (
-            <button type="button" className="secondary" title="Reactivate user access" disabled={self} onClick={() => onSave(member.id, { email: member.email, displayName: member.displayName, role: member.role, status: "ACTIVE" })}>Reactivate</button>
+            <button type="button" className="secondary" title="Reactivate user access" disabled={self} onClick={() => onSave(member.id, { expectedVersion: member.version, email: member.email, displayName: member.displayName, role: member.role, status: "ACTIVE" })}>Reactivate</button>
           )}
           <button type="button" className="icon-button danger" title="Delete user access" disabled={self} onClick={() => onDelete(member)}><Trash2 size={16} /></button>
         </div>
@@ -1843,11 +1876,12 @@ function MailboxRow({
   table?: boolean;
   postOffices?: PostOffice[];
   canManage?: boolean;
-  onSave?: (mailboxId: string, input: { postOfficeId: string; boxNumber: string }) => Promise<boolean>;
+  onSave?: (mailboxId: string, input: { expectedUpdatedAt: string; postOfficeId: string; boxNumber: string }) => Promise<boolean>;
   onDelete?: (mailbox: Mailbox) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [postOfficeId, setPostOfficeId] = useState(box.postOfficeId);
+  const [boxVersion, setBoxVersion] = useState(box.updatedAt);
   const [officeQuery, setOfficeQuery] = useState("");
   const [boxNumber, setBoxNumber] = useState(box.boxNumber);
   const status = mailboxStatus(box);
@@ -1875,7 +1909,7 @@ function MailboxRow({
         <form className="mailbox-row editable-row" onSubmit={async (event) => {
           event.preventDefault();
           if (!onSave || duplicate) return;
-          if (await onSave(box.id, { postOfficeId, boxNumber: boxNumber.trim() })) setEditing(false);
+          if (await onSave(box.id, { expectedUpdatedAt: boxVersion, postOfficeId, boxNumber: boxNumber.trim() })) setEditing(false);
         }}>
           <div className="edit-fields">
             <label>Find post office<input value={officeQuery} onChange={(event) => setOfficeQuery(event.target.value)} placeholder="Search saved post offices" autoComplete="off" /></label>
@@ -1903,7 +1937,7 @@ function MailboxRow({
           {hasWaitingItem(box) && <button disabled={busy} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button>}
           {canManage && (
             <>
-              <button type="button" className="icon-button" title="Edit PO box" onClick={() => setEditing(true)}><Edit2 size={16} /></button>
+              <button type="button" className="icon-button" title="Edit PO box" onClick={() => { setBoxVersion(box.updatedAt); setPostOfficeId(box.postOfficeId); setBoxNumber(box.boxNumber); setEditing(true); }}><Edit2 size={16} /></button>
               <button type="button" className="icon-button danger" title="Delete PO box" onClick={() => onDelete?.(box)}><Trash2 size={16} /></button>
             </>
           )}

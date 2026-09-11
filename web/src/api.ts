@@ -167,12 +167,12 @@ export async function markAppChangesSeen(version: string): Promise<AppChangesRes
   return response.json();
 }
 
-export async function collectMailbox(mailboxId: string) {
+export async function collectMailbox(mailboxId: string, expectedUpdatedAt: string) {
   const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/mailboxes/${mailboxId}/collect`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ source: "WEB" })
+    body: JSON.stringify({ source: "WEB", expectedUpdatedAt })
   });
   if (!response.ok) throw new Error(await errorMessage(response));
 }
@@ -347,7 +347,7 @@ export function realtimeUrl() {
 }
 
 async function errorMessage(response: Response) {
-  if (response.status === 401 && !response.url.includes("/auth/")) window.dispatchEvent(new Event("pobox-session-expired"));
+  if ((response.status === 401 && !response.url.includes("/auth/")) || (response.status === 403 && response.url.endsWith("/dashboard"))) window.dispatchEvent(new Event("pobox-session-expired"));
   try {
     const body = await response.json();
     return body.error ?? response.statusText;

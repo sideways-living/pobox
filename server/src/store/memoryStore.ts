@@ -128,7 +128,7 @@ export class MemoryStore implements AppStore {
         active: true
       }
     ];
-    offices.forEach((office) => this.postOffices.set(office.id, office));
+    offices.forEach((office) => this.postOffices.set(office.id, { ...office, updatedAt: new Date().toISOString() }));
 
     const boxes = [
       ["box_1234", "po_melbourne_gpo", "PO Box 1234", "1234"],
@@ -157,7 +157,7 @@ export class MemoryStore implements AppStore {
 
   async login(email: string, password: string): Promise<LoginResult> {
     const user = [...this.users.values()].find((candidate) => candidate.email.toLowerCase() === email.toLowerCase());
-    if (!user || !user.active || !(await argon2.verify(user.passwordHash, password))) {
+    if (!user || !user.active || ![...this.members.values()].some(member => member.userId === user.id && member.status === "ACTIVE") || !(await argon2.verify(user.passwordHash, password))) {
       throw new UnauthorizedError("Invalid email or password.");
     }
     if (user.totpEnabled) {
@@ -410,6 +410,7 @@ export class MemoryStore implements AppStore {
   }
 
   async requireMember(session: Session, workspaceId: string, role?: "ADMIN"): Promise<WorkspaceMember> {
+    if (!this.users.get(session.userId)?.active) throw new ForbiddenError("Workspace access denied.");
     const member = [...this.members.values()].find(
       (candidate) =>
         candidate.userId === session.userId &&
@@ -551,10 +552,11 @@ export class MemoryStore implements AppStore {
     return { kind: "processed", mailboxId: mailbox.id, notificationType: parsed.notificationType };
   }
 
-  async collectMailbox(session: Session, workspaceId: string, mailboxId: string, source: CollectionSource): Promise<CollectionEvent> {
+  async collectMailbox(session: Session, workspaceId: string, mailboxId: string, source: CollectionSource, expectedUpdatedAt?: string): Promise<CollectionEvent> {
     await this.requireMember(session, workspaceId);
     const mailbox = this.mailboxes.get(mailboxId);
-    if (!mailbox || mailbox.workspaceId !== workspaceId) throw new NotFoundError("PO box not found.");
+    if (!mailbox || mailbox.workspaceId !== workspaceId || !mailbox.active) throw new NotFoundError("PO box not found.");
+    if (expectedUpdatedAt && expectedUpdatedAt !== mailbox.updatedAt) throw new ConflictError("This PO box changed. Refresh before collecting.");
     if (!mailbox.mailWaiting && !mailbox.parcelWaiting) {
       const existing = [...this.collectionEvents.values()]
         .filter((event) => event.mailboxId === mailboxId)
@@ -595,11 +597,12 @@ export class MemoryStore implements AppStore {
         if (!user) throw new NotFoundError("User not found.");
         return {
           id: user.id,
+          version: member.version ?? member.id,
           email: user.email,
           displayName: user.displayName,
           role: member.role,
           status: member.status,
-          active: user.active
+          active: user.active && member.status === "ACTIVE"
         };
       })
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -817,10 +820,12 @@ export class MemoryStore implements AppStore {
     const member = [...this.members.values()].find((candidate) => candidate.workspaceId === workspaceId && candidate.userId === userId);
     const user = this.users.get(userId);
     if (!member || !user) throw new NotFoundError("User not found.");
+    if (input.expectedVersion && input.expectedVersion !== (member.version ?? member.id)) throw new ConflictError("This user's access changed. Cancel editing and reload before saving.");
     const nextRole = input.role ?? member.role;
     const nextStatus = input.status ?? member.status;
     this.assertUserManagementChangeIsSafe(session, workspaceId, userId, member, nextRole, nextStatus);
     const email = input.email?.toLowerCase();
+    if (((email && email !== user.email) || (input.displayName && input.displayName !== user.displayName)) && [...this.members.values()].some(candidate => candidate.userId === userId && candidate.workspaceId !== workspaceId)) throw new ForbiddenError("Shared account identity must be managed outside this workspace.");
     if (email && [...this.users.values()].some((candidate) => candidate.id !== userId && candidate.email.toLowerCase() === email)) {
       throw new ConflictError("User email already exists.");
     }
@@ -828,10 +833,11 @@ export class MemoryStore implements AppStore {
       ...user,
       email: email ?? user.email,
       displayName: input.displayName ?? user.displayName,
-      active: input.status ? input.status === "ACTIVE" : user.active
+      active: user.active
     };
     const updatedMember = {
       ...member,
+      version: nanoid(),
       role: nextRole,
       status: nextStatus
     };
@@ -845,11 +851,12 @@ export class MemoryStore implements AppStore {
     });
     return {
       id: updatedUser.id,
+      version: updatedMember.version,
       email: updatedUser.email,
       displayName: updatedUser.displayName,
       role: updatedMember.role,
       status: updatedMember.status,
-      active: updatedUser.active
+      active: updatedUser.active && updatedMember.status === "ACTIVE"
     };
   }
 
@@ -860,14 +867,14 @@ export class MemoryStore implements AppStore {
     const user = this.users.get(userId);
     if (!member || !user) throw new NotFoundError("User not found.");
     this.assertUserManagementChangeIsSafe(session, workspaceId, userId, member, member.role, "DISABLED");
-    this.users.set(userId, { ...user, active: false });
-    this.members.set(member.id, { ...member, status: "DISABLED" });
+    this.members.set(member.id, { ...member, version: nanoid(), status: "DISABLED" });
     this.audit(session.userId, workspaceId, "member.deleted", "user", userId, {});
   }
 
   async createPostOffice(session: Session, workspaceId: string, input: CreatePostOfficeInput): Promise<PostOffice> {
     await this.requireMember(session, workspaceId, "ADMIN");
     const office: PostOffice = {
+      updatedAt: new Date().toISOString(),
       id: nanoid(),
       workspaceId,
       name: input.name,
@@ -887,8 +894,10 @@ export class MemoryStore implements AppStore {
     await this.requireMember(session, workspaceId, "ADMIN");
     const office = this.postOffices.get(postOfficeId);
     if (!office || office.workspaceId !== workspaceId || !office.active) throw new NotFoundError("Post office not found.");
+    if (input.expectedUpdatedAt && input.expectedUpdatedAt !== office.updatedAt) throw new ConflictError("This post office changed. Cancel editing and reload before saving.");
     const updated = {
       ...office,
+      updatedAt: new Date(Math.max(Date.now(), Date.parse(office.updatedAt ?? "") + 1 || 0)).toISOString(),
       name: input.name ?? office.name,
       address: input.address ?? office.address,
       phone: input.phone ?? office.phone,
@@ -951,6 +960,7 @@ export class MemoryStore implements AppStore {
     await this.requireMember(session, workspaceId, "ADMIN");
     const mailbox = this.mailboxes.get(mailboxId);
     if (!mailbox || mailbox.workspaceId !== workspaceId || !mailbox.active) throw new NotFoundError("PO box not found.");
+    if (input.expectedUpdatedAt && input.expectedUpdatedAt !== mailbox.updatedAt) throw new ConflictError("This PO box changed. Cancel editing and reload before saving.");
     if (input.postOfficeId) {
       const office = this.postOffices.get(input.postOfficeId);
       if (!office || office.workspaceId !== workspaceId || !office.active) throw new NotFoundError("Post office not found.");

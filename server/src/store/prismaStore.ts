@@ -62,6 +62,7 @@ interface PasskeyCredentialRow {
 }
 
 interface MemberWithUserRow {
+  updatedAt: Date;
   user: {
     id: string;
     email: string;
@@ -172,7 +173,7 @@ export class PrismaStore implements AppStore {
 
   async login(email: string, password: string): Promise<LoginResult> {
     const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() }, include: { profile: true } });
-    if (!user || !user.active || !(await argon2.verify(user.passwordHash, password))) {
+    if (!user || !user.active || !(await this.prisma.workspaceMember.count({ where: { userId: user.id, status: "ACTIVE" } })) || !(await argon2.verify(user.passwordHash, password))) {
       throw new UnauthorizedError("Invalid email or password.");
     }
     if (user.totpEnabled) {
@@ -501,7 +502,7 @@ export class PrismaStore implements AppStore {
 
   async requireMember(session: Session, workspaceId: string, role?: "ADMIN"): Promise<WorkspaceMember> {
     const member = await this.prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId: session.userId, status: "ACTIVE" }
+      where: { workspaceId, userId: session.userId, status: "ACTIVE", user: { active: true } }
     });
     if (!member) throw new ForbiddenError("Workspace access denied.");
     if (role && member.role !== role) throw new ForbiddenError("Admin role required.");
@@ -683,16 +684,18 @@ export class PrismaStore implements AppStore {
     return { kind: "processed", mailboxId: parsed.mailboxId, notificationType: parsed.notificationType };
   }
 
-  async collectMailbox(session: Session, workspaceId: string, mailboxId: string, source: CollectionSource): Promise<CollectionEvent> {
+  async collectMailbox(session: Session, workspaceId: string, mailboxId: string, source: CollectionSource, expectedUpdatedAt?: string): Promise<CollectionEvent> {
     await this.requireMember(session, workspaceId);
     const event = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await this.lockManagement(tx, workspaceId, session, false);
       const updated = await tx.mailbox.updateMany({
-        where: { id: mailboxId, workspaceId, active: true, OR: [{ mailWaiting: true }, { parcelWaiting: true }] },
+        where: { id: mailboxId, workspaceId, active: true, ...(expectedUpdatedAt ? { updatedAt: new Date(expectedUpdatedAt) } : {}), OR: [{ mailWaiting: true }, { parcelWaiting: true }] },
         data: { mailWaiting: false, parcelWaiting: false, lastCollectedAt: new Date(), lastCollectedBy: session.userId }
       });
       if (updated.count !== 1) {
         const mailbox = await tx.mailbox.findFirst({ where: { id: mailboxId, workspaceId } });
         if (!mailbox) throw new NotFoundError("PO box not found.");
+        if (expectedUpdatedAt && mailbox.updatedAt.toISOString() !== expectedUpdatedAt) throw new ConflictError("This PO box changed. Refresh before collecting.");
         const existing = await tx.collectionEvent.findFirst({ where: { mailboxId }, orderBy: { collectedAt: "desc" } });
         throw new ConflictError(
           existing ? `Already collected at ${existing.collectedAt.toISOString()} by ${existing.collectedBy}.` : "PO box is already clear."
@@ -725,12 +728,13 @@ export class PrismaStore implements AppStore {
     });
     return (members as MemberWithUserRow[])
       .map((member): TeamMemberSummary => ({
+        version: member.updatedAt.toISOString(),
         id: member.user.id,
         email: member.user.email,
         displayName: member.user.profile?.displayName ?? member.user.email,
         role: member.role,
         status: member.status,
-        active: member.user.active
+        active: member.user.active && member.status === "ACTIVE"
       }))
       .sort((a: TeamMemberSummary, b: TeamMemberSummary) => a.displayName.localeCompare(b.displayName));
   }
@@ -808,6 +812,7 @@ export class PrismaStore implements AppStore {
   private async completeReview(session: Session, workspaceId: string, reviewItemId: string, eventType: "mail.review_resolved" | "mail.review_ignored", mailboxId?: string, newMailbox?: { postOfficeId: string; boxNumber: string }): Promise<IncomingMailResult> {
     await this.requireMember(session, workspaceId, "ADMIN");
     return this.prisma.$transaction(async (tx) => {
+      await this.lockManagement(tx, workspaceId, session);
       const review = await tx.auditEvent.findFirst({ where: { id: reviewItemId, workspaceId, eventType: "mail.needs_review" } });
       if (!review) throw new NotFoundError("Review item not found.");
       const metadata = review.metadata && typeof review.metadata === "object" && !Array.isArray(review.metadata)
@@ -923,35 +928,39 @@ export class PrismaStore implements AppStore {
   async createUser(session: Session, workspaceId: string, input: CreateUserInput): Promise<TeamMemberSummary> {
     await this.requireMember(session, workspaceId, "ADMIN");
     const email = input.email.toLowerCase();
+    const passwordHash = await argon2.hash(input.password);
     try {
-      const user = await this.prisma.user.create({
-        data: {
-          email,
-          passwordHash: await argon2.hash(input.password),
-          emailVerified: true,
-          active: true,
-          profile: { create: { displayName: input.displayName } },
-          memberships: {
-            create: {
-              workspaceId,
-              role: input.role,
-              status: "ACTIVE",
-              invitedBy: session.userId,
-              joinedAt: new Date()
+      return await this.prisma.$transaction(async (tx) => {
+        await this.lockManagement(tx, workspaceId, session);
+        const user = await tx.user.create({
+          data: {
+            email,
+            passwordHash,
+            emailVerified: true,
+            active: true,
+            profile: { create: { displayName: input.displayName } },
+            memberships: {
+              create: {
+                workspaceId,
+                role: input.role,
+                status: "ACTIVE",
+                invitedBy: session.userId,
+                joinedAt: new Date()
+              }
             }
-          }
-        },
-        include: { profile: true, memberships: { where: { workspaceId } } }
+          },
+          include: { profile: true, memberships: { where: { workspaceId } } }
+        });
+        await this.audit(session.userId, workspaceId, "member.created", "user", user.id, { email, role: input.role }, tx);
+        return {
+          id: user.id,
+          email: user.email,
+          displayName: user.profile?.displayName ?? user.email,
+          role: user.memberships[0]?.role ?? input.role,
+          status: user.memberships[0]?.status ?? "ACTIVE",
+          active: user.active
+        };
       });
-      await this.audit(session.userId, workspaceId, "member.created", "user", user.id, { email, role: input.role });
-      return {
-        id: user.id,
-        email: user.email,
-        displayName: user.profile?.displayName ?? user.email,
-        role: user.memberships[0]?.role ?? input.role,
-        status: user.memberships[0]?.status ?? "ACTIVE",
-        active: user.active
-      };
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
         throw new ConflictError("User email already exists.");
@@ -962,73 +971,73 @@ export class PrismaStore implements AppStore {
 
   async updateUser(session: Session, workspaceId: string, userId: string, input: UpdateUserInput): Promise<TeamMemberSummary> {
     await this.requireMember(session, workspaceId, "ADMIN");
-    const member = await this.prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId },
-      include: { user: { include: { profile: true } } }
-    });
-    if (!member) throw new NotFoundError("User not found.");
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockManagement(tx, workspaceId, session);
+      const actor = await tx.workspaceMember.findFirst({ where: { workspaceId, userId: session.userId, role: "ADMIN", status: "ACTIVE", user: { active: true } } });
+      if (!actor) throw new ForbiddenError("Admin role required.");
+      const member = await tx.workspaceMember.findFirst({
+        where: { workspaceId, userId },
+        include: { user: { include: { profile: true } } }
+      });
+      if (!member) throw new NotFoundError("User not found.");
+      if (input.expectedVersion && input.expectedVersion !== member.updatedAt.toISOString()) throw new ConflictError("This user's access changed. Cancel editing and reload before saving.");
+      const nextRole = input.role ?? member.role;
+      const nextStatus = input.status ?? member.status;
+      if (session.userId === userId && (nextRole !== member.role || nextStatus !== member.status)) throw new ConflictError("You cannot change your own role or access status.");
+      if (member.role === "ADMIN" && member.status === "ACTIVE" && (nextRole !== "ADMIN" || nextStatus !== "ACTIVE") && await tx.workspaceMember.count({ where: { workspaceId, role: "ADMIN", status: "ACTIVE", user: { active: true } } }) <= 1) throw new ConflictError("At least one active admin is required.");
+      const changesIdentity = (input.email !== undefined && input.email.toLowerCase() !== member.user.email) || (input.displayName !== undefined && input.displayName !== (member.user.profile?.displayName ?? member.user.email));
+      if (changesIdentity && await tx.workspaceMember.count({ where: { userId, workspaceId: { not: workspaceId } } })) throw new ForbiddenError("Shared account identity must be managed outside this workspace.");
 
-    const nextRole = input.role ?? member.role;
-    const nextStatus = input.status ?? member.status;
-    await this.assertUserManagementChangeIsSafe(session, workspaceId, userId, member, nextRole, nextStatus);
-
-    try {
-      const updated = await this.prisma.user.update({
-        where: { id: userId },
-        data: {
-          ...(input.email ? { email: input.email.toLowerCase() } : {}),
-          ...(input.status ? { active: input.status === "ACTIVE" } : {}),
-          ...(input.displayName ? { profile: { upsert: { update: { displayName: input.displayName }, create: { displayName: input.displayName } } } } : {}),
-          memberships: {
-            update: {
-              where: { workspaceId_userId: { workspaceId, userId } },
-              data: { role: nextRole, status: nextStatus }
+      try {
+        const updated = await tx.user.update({
+          where: { id: userId },
+          data: {
+            ...(input.email ? { email: input.email.toLowerCase() } : {}),
+            ...(input.displayName ? { profile: { upsert: { update: { displayName: input.displayName }, create: { displayName: input.displayName } } } } : {}),
+            memberships: {
+              update: {
+                where: { workspaceId_userId: { workspaceId, userId } },
+                data: { role: nextRole, status: nextStatus, updatedAt: new Date(Math.max(Date.now(), member.updatedAt.getTime() + 1)) }
+              }
             }
-          }
-        },
-        include: { profile: true, memberships: { where: { workspaceId } } }
-      });
-      await this.audit(session.userId, workspaceId, "member.updated", "user", userId, {
-        email: input.email?.toLowerCase(),
-        displayName: input.displayName,
-        role: input.role,
-        status: input.status
-      });
-      return {
-        id: updated.id,
-        email: updated.email,
-        displayName: updated.profile?.displayName ?? updated.email,
-        role: updated.memberships[0]?.role ?? member.role,
-        status: updated.memberships[0]?.status ?? member.status,
-        active: updated.active
-      };
-    } catch (error) {
-      if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new ConflictError("User email already exists.");
+          },
+          include: { profile: true, memberships: { where: { workspaceId } } }
+        });
+        await this.audit(session.userId, workspaceId, "member.updated", "user", userId, {
+          email: input.email?.toLowerCase(),
+          displayName: input.displayName,
+          role: input.role,
+          status: input.status
+        }, tx);
+        return {
+          id: updated.id,
+          version: updated.memberships[0]?.updatedAt.toISOString(),
+          email: updated.email,
+          displayName: updated.profile?.displayName ?? updated.email,
+          role: updated.memberships[0]?.role ?? member.role,
+          status: updated.memberships[0]?.status ?? member.status,
+          active: updated.active && nextStatus === "ACTIVE"
+        };
+      } catch (error) {
+        if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
+          throw new ConflictError("User email already exists.");
+        }
+        throw error;
       }
-      throw error;
-    }
+    });
   }
 
   async deleteUser(session: Session, workspaceId: string, userId: string): Promise<void> {
     await this.requireMember(session, workspaceId, "ADMIN");
     if (session.userId === userId) throw new ConflictError("You cannot delete your own user.");
-    const member = await this.prisma.workspaceMember.findFirst({ where: { workspaceId, userId } });
-    if (!member) throw new NotFoundError("User not found.");
-    await this.assertUserManagementChangeIsSafe(session, workspaceId, userId, member, member.role, "DISABLED");
-    await this.prisma.$transaction([
-      this.prisma.workspaceMember.update({
-        where: { workspaceId_userId: { workspaceId, userId } },
-        data: { status: "DISABLED" }
-      }),
-      this.prisma.user.update({ where: { id: userId }, data: { active: false } })
-    ]);
-    await this.audit(session.userId, workspaceId, "member.deleted", "user", userId, {});
+    await this.updateUser(session, workspaceId, userId, { status: "DISABLED" });
+    await this.audit(session.userId, workspaceId, "member.deleted", "user", userId, { historyPreserved: true });
   }
 
   async createPostOffice(session: Session, workspaceId: string, input: CreatePostOfficeInput): Promise<PostOffice> {
     await this.requireMember(session, workspaceId, "ADMIN");
     return this.prisma.$transaction(async (tx) => {
+      await this.lockManagement(tx, workspaceId, session);
       const office = await tx.postOffice.create({
         data: {
           workspaceId,
@@ -1049,9 +1058,10 @@ export class PrismaStore implements AppStore {
   async updatePostOffice(session: Session, workspaceId: string, postOfficeId: string, input: UpdatePostOfficeInput): Promise<PostOffice> {
     await this.requireMember(session, workspaceId, "ADMIN");
     return this.prisma.$transaction(async (tx) => {
-      await this.lockManagement(tx, workspaceId);
+      await this.lockManagement(tx, workspaceId, session);
       const office = await tx.postOffice.findFirst({ where: { id: postOfficeId, workspaceId, active: true } });
       if (!office) throw new NotFoundError("Post office not found.");
+      if (input.expectedUpdatedAt && input.expectedUpdatedAt !== office.updatedAt.toISOString()) throw new ConflictError("This post office changed. Cancel editing and reload before saving.");
       const updated = await tx.postOffice.update({
         where: { id: postOfficeId },
         data: {
@@ -1060,7 +1070,8 @@ export class PrismaStore implements AppStore {
           phone: input.phone,
           latitude: input.latitude,
           longitude: input.longitude,
-          geofenceRadius: input.geofenceRadius
+          geofenceRadius: input.geofenceRadius,
+          updatedAt: new Date(Math.max(Date.now(), office.updatedAt.getTime() + 1))
         }
       });
       await this.audit(session.userId, workspaceId, "post_office.updated", "post_office", postOfficeId, { name: updated.name }, tx);
@@ -1071,7 +1082,7 @@ export class PrismaStore implements AppStore {
   async deletePostOffice(session: Session, workspaceId: string, postOfficeId: string): Promise<void> {
     await this.requireMember(session, workspaceId, "ADMIN");
     await this.prisma.$transaction(async (tx) => {
-      await this.lockManagement(tx, workspaceId);
+      await this.lockManagement(tx, workspaceId, session);
       const offices = await tx.$queryRaw<Array<{ id: string; name: string }>>`SELECT id, name FROM "PostOffice" WHERE id = ${postOfficeId} AND "workspaceId" = ${workspaceId} AND active = true FOR UPDATE`;
       if (!offices.length) throw new NotFoundError("Post office not found.");
       await tx.mailbox.updateMany({ where: { workspaceId, postOfficeId }, data: { active: false } });
@@ -1090,15 +1101,18 @@ export class PrismaStore implements AppStore {
     return this.saveManagedMailbox(session, workspaceId, input, mailboxId);
   }
 
-  private async lockManagement(tx: Prisma.TransactionClient, workspaceId: string) {
+  private async lockManagement(tx: Prisma.TransactionClient, workspaceId: string, session: Session, admin = true) {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`management:${workspaceId}`}, 0))::text`;
+    const member = await tx.workspaceMember.findFirst({ where: { workspaceId, userId: session.userId, status: "ACTIVE", ...(admin ? { role: "ADMIN" as const } : {}), user: { active: true } } });
+    if (!member) throw new ForbiddenError("Workspace permission changed. Refresh and try again.");
   }
 
   private async saveManagedMailbox(session: Session, workspaceId: string, input: UpdateMailboxInput, mailboxId?: string): Promise<Mailbox> {
     return this.prisma.$transaction(async (tx) => {
-      await this.lockManagement(tx, workspaceId);
+      await this.lockManagement(tx, workspaceId, session);
       const existing = mailboxId ? await tx.mailbox.findFirst({ where: { id: mailboxId, workspaceId, active: true } }) : null;
       if (mailboxId && !existing) throw new NotFoundError("PO box not found.");
+      if (existing && input.expectedUpdatedAt && input.expectedUpdatedAt !== existing.updatedAt.toISOString()) throw new ConflictError("This PO box changed. Cancel editing and reload before saving.");
       const postOfficeId = input.postOfficeId ?? existing?.postOfficeId ?? "";
       const boxNumber = normalizeMailboxNumber(input.boxNumber ?? existing?.boxNumber ?? "");
       if (!boxNumber) throw new ConflictError("Enter a PO box number.");
@@ -1108,8 +1122,12 @@ export class PrismaStore implements AppStore {
       const boxes = await tx.mailbox.findMany({ where: { workspaceId, postOfficeId } });
       const duplicate = boxes.find((box) => box.id !== mailboxId && normalizeMailboxNumber(box.boxNumber) === boxNumber);
       if (duplicate) throw new ConflictError(duplicate.active ? "This post office already has that PO box number." : "This PO box number belongs to an archived record. Contact an administrator to restore it.");
-      const data = { postOfficeId, boxNumber, name: `PO Box ${boxNumber}` };
-      const saved = mailboxId ? await tx.mailbox.update({ where: { id: mailboxId }, data }) : await tx.mailbox.create({ data: { ...data, workspaceId } });
+      const data = { postOfficeId, boxNumber, name: `PO Box ${boxNumber}`, updatedAt: new Date(Math.max(Date.now(), (existing?.updatedAt.getTime() ?? 0) + 1)) };
+      if (mailboxId) {
+        const changed = await tx.mailbox.updateMany({ where: { id: mailboxId, workspaceId, active: true, updatedAt: existing!.updatedAt }, data });
+        if (changed.count !== 1) throw new ConflictError("This PO box changed. Cancel editing and reload before saving.");
+      }
+      const saved = mailboxId ? await tx.mailbox.findUniqueOrThrow({ where: { id: mailboxId } }) : await tx.mailbox.create({ data: { ...data, workspaceId } });
       await this.audit(session.userId, workspaceId, mailboxId ? "mailbox.updated" : "mailbox.created", "mailbox", saved.id, { boxNumber, previousPostOfficeId: existing?.postOfficeId, previousBoxNumber: existing?.boxNumber }, tx);
       return this.toMailbox(saved);
     });
@@ -1118,7 +1136,7 @@ export class PrismaStore implements AppStore {
   async deleteMailbox(session: Session, workspaceId: string, mailboxId: string): Promise<void> {
     await this.requireMember(session, workspaceId, "ADMIN");
     await this.prisma.$transaction(async (tx) => {
-      await this.lockManagement(tx, workspaceId);
+      await this.lockManagement(tx, workspaceId, session);
       const mailbox = await tx.mailbox.findFirst({ where: { id: mailboxId, workspaceId, active: true } });
       if (!mailbox) throw new NotFoundError("PO box not found.");
       await tx.mailbox.update({ where: { id: mailboxId }, data: { active: false } });
@@ -1129,18 +1147,21 @@ export class PrismaStore implements AppStore {
   async inviteMember(session: Session, workspaceId: string, email: string, role: "ADMIN" | "MEMBER") {
     await this.requireMember(session, workspaceId, "ADMIN");
     const tokenHash = createHash("sha256").update(randomBytes(32)).digest("hex");
-    const invitation = await this.prisma.invitation.create({
-      data: {
-        workspaceId,
-        email: email.toLowerCase(),
-        role,
-        tokenHash,
-        invitedBy: session.userId,
-        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7)
-      }
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockManagement(tx, workspaceId, session);
+      const invitation = await tx.invitation.create({
+        data: {
+          workspaceId,
+          email: email.toLowerCase(),
+          role,
+          tokenHash,
+          invitedBy: session.userId,
+          expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7)
+        }
+      });
+      await this.audit(session.userId, workspaceId, "member.invited", "workspace", workspaceId, { email, role }, tx);
+      return { invitationId: invitation.id, email, role, status: "PENDING_EMAIL_DELIVERY" };
     });
-    await this.audit(session.userId, workspaceId, "member.invited", "workspace", workspaceId, { email, role });
-    return { invitationId: invitation.id, email, role, status: "PENDING_EMAIL_DELIVERY" };
   }
 
   private async audit(actorUserId: string | undefined, workspaceId: string, eventType: string, entityType: string, entityId: string, metadata: Record<string, unknown>, database: Prisma.TransactionClient = this.prisma): Promise<AuditEvent> {
@@ -1164,6 +1185,7 @@ export class PrismaStore implements AppStore {
   }
 
   private toPostOffice(office: {
+    updatedAt: Date;
     id: string;
     workspaceId: string;
     name: string;
@@ -1176,6 +1198,7 @@ export class PrismaStore implements AppStore {
   }): PostOffice {
     return {
       id: office.id,
+      updatedAt: office.updatedAt.toISOString(),
       workspaceId: office.workspaceId,
       name: office.name,
       address: office.address,

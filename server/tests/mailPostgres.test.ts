@@ -215,4 +215,56 @@ describe.skipIf(!url)("PostgreSQL mail durability and worker concurrency", () =>
     await expect(second.createMailbox(session, workspaceId, { postOfficeId: office.id, boxNumber: "999" })).rejects.toThrow("Post office not found");
     expect(await prisma.auditEvent.count({ where: { workspaceId, eventType: "post_office.deleted" } })).toBe(1);
   });
+
+  it("allows one simultaneous edit and rejects the stale competing edit", async () => {
+    const box = await prisma.mailbox.findUniqueOrThrow({ where: { id: mailboxId } });
+    const results = await Promise.allSettled([
+      first.updateMailbox(session, workspaceId, mailboxId, { boxNumber: "8001", expectedUpdatedAt: box.updatedAt.toISOString() }),
+      second.updateMailbox(session, workspaceId, mailboxId, { boxNumber: "8002", expectedUpdatedAt: box.updatedAt.toISOString() })
+    ]);
+    expect(results.filter(item => item.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(item => item.status === "rejected")).toHaveLength(1);
+  });
+
+  it("records one simultaneous collection and rejects stale collection after new mail", async () => {
+    await first.processIncomingMail(mail("first"));
+    const box = await prisma.mailbox.findUniqueOrThrow({ where: { id: mailboxId } });
+    const results = await Promise.allSettled([
+      first.collectMailbox(session, workspaceId, mailboxId, "WEB", box.updatedAt.toISOString()),
+      second.collectMailbox(session, workspaceId, mailboxId, "WEB", box.updatedAt.toISOString())
+    ]);
+    expect(results.filter(item => item.status === "fulfilled")).toHaveLength(1);
+    expect(await prisma.collectionEvent.count({ where: { workspaceId, mailboxId } })).toBe(1);
+    await first.processIncomingMail(mail("new-mail"));
+    await expect(second.collectMailbox(session, workspaceId, mailboxId, "WEB", box.updatedAt.toISOString())).rejects.toThrow("changed");
+    expect((await prisma.mailbox.findUniqueOrThrow({ where: { id: mailboxId } })).mailWaiting).toBe(true);
+  });
+
+  it("serializes competing admin removals and preserves an active administrator", async () => {
+    const otherAdmin = await prisma.user.create({ data: { email: `${randomUUID()}@example.test`, passwordHash: "unused", memberships: { create: { workspaceId, role: "ADMIN", status: "ACTIVE" } } } });
+    users.push(otherAdmin.id);
+    const otherSession = { ...session, userId: otherAdmin.id };
+    const results = await Promise.allSettled([
+      first.updateUser(session, workspaceId, otherAdmin.id, { status: "DISABLED" }),
+      second.updateUser(otherSession, workspaceId, session.userId, { status: "DISABLED" })
+    ]);
+    expect(results.filter(item => item.status === "fulfilled")).toHaveLength(1);
+    expect(await prisma.workspaceMember.count({ where: { workspaceId, role: "ADMIN", status: "ACTIVE" } })).toBe(1);
+  });
+
+  it("removes only the chosen membership and preserves collection attribution", async () => {
+    const anotherWorkspace = randomUUID(); workspaces.push(anotherWorkspace);
+    await prisma.workspace.create({ data: { id: anotherWorkspace, name: "Other workspace" } });
+    const shared = await prisma.user.create({ data: { email: `${randomUUID()}@example.test`, passwordHash: "unused", memberships: { create: [{ workspaceId, role: "MEMBER", status: "ACTIVE" }, { workspaceId: anotherWorkspace, role: "MEMBER", status: "ACTIVE" }] } } });
+    users.push(shared.id);
+    const sharedSession = { ...session, userId: shared.id };
+    await first.processIncomingMail(mail("attribution"));
+    const collection = await first.collectMailbox(sharedSession, workspaceId, mailboxId, "WEB");
+    await first.deleteUser(session, workspaceId, shared.id);
+    await expect(second.requireMember(sharedSession, workspaceId)).rejects.toThrow();
+    expect((await second.requireMember(sharedSession, anotherWorkspace)).status).toBe("ACTIVE");
+    expect((await prisma.collectionEvent.findUniqueOrThrow({ where: { id: collection.id } })).collectedBy).toBe(shared.id);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: shared.id } })).active).toBe(true);
+    await expect(first.updateUser(session, workspaceId, shared.id, { email: "hijack@example.test" })).rejects.toThrow("Shared account");
+  });
 });

@@ -17,7 +17,8 @@ export class RealtimeHub {
   }
 
   emitWorkspace(workspaceId: string, event: unknown) {
-    const payload = JSON.stringify(event);
+    // Never broadcast caller-specific dashboard identity or role data.
+    const payload = JSON.stringify({ type: "workspace.changed" });
     for (const client of this.clients) {
       if (client.workspaceId === workspaceId && client.socket.readyState === client.socket.OPEN) {
         void client.authorize().then(() => {

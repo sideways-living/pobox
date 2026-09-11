@@ -23,7 +23,7 @@ const passkeyAuthenticationOptionsSchema = z.object({ email: z.string().email().
 const passkeyAuthenticationSchema = z.object({ response: z.any() });
 const nativeHandoffConsumeSchema = z.object({ code: z.string().min(32).max(128), verifier: z.string().regex(/^[A-Za-z0-9_-]{43,128}$/) });
 const postOfficeLookupSchema = z.object({ query: z.string().min(2).max(80), state: z.string().length(3).optional() });
-const collectSchema = z.object({ source: z.enum(["IPHONE", "MACOS", "WEB", "ADMIN", "NOTIFICATION"]).default("WEB") });
+const collectSchema = z.object({ expectedUpdatedAt: z.string().datetime(), source: z.enum(["IPHONE", "MACOS", "WEB", "ADMIN", "NOTIFICATION"]).default("WEB") });
 const inviteSchema = z.object({ email: z.string().email(), role: z.enum(["ADMIN", "MEMBER"]) });
 const createUserSchema = z.object({
   email: z.string().email(),
@@ -32,6 +32,7 @@ const createUserSchema = z.object({
   role: z.enum(["ADMIN", "MEMBER"])
 });
 const updateUserSchema = z.object({
+  expectedVersion: z.string().min(1).max(100),
   email: z.string().email().optional(),
   displayName: z.string().min(1).max(120).optional(),
   role: z.enum(["ADMIN", "MEMBER"]).optional(),
@@ -46,6 +47,7 @@ const createPostOfficeSchema = z.object({
   geofenceRadius: z.number().int().min(25).max(5000).default(200)
 });
 const updatePostOfficeSchema = z.object({
+  expectedUpdatedAt: z.string().datetime(),
   name: z.string().trim().min(1).max(160).optional(),
   address: z.string().trim().min(1).max(240).optional(),
   phone: z.string().max(80).optional(),
@@ -59,6 +61,7 @@ const createMailboxSchema = z.object({
   boxNumber: z.string().trim().min(1).max(40)
 });
 const updateMailboxSchema = z.object({
+  expectedUpdatedAt: z.string().datetime(),
   postOfficeId: z.string().min(1).optional(),
   boxNumber: z.string().trim().min(1).max(40).optional()
 }).refine((input) => Object.keys(input).length > 0, { message: "At least one field is required." });
@@ -275,8 +278,8 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const { workspaceId, mailboxId } = request.params as { workspaceId: string; mailboxId: string };
     const body = collectSchema.parse(request.body ?? {});
     const session = await securedSession(request, workspaceId);
-    const event = await store.collectMailbox(session, workspaceId, mailboxId, body.source);
-    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    const event = await store.collectMailbox(session, workspaceId, mailboxId, body.source, body.expectedUpdatedAt);
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
     return event;
   });
 
@@ -304,7 +307,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const body = resolveReviewSchema.parse(request.body);
     const session = await securedSession(request, workspaceId);
     const result = await store.resolveReviewItem(session, workspaceId, reviewItemId, "mailboxId" in body ? body.mailboxId : "", "newMailbox" in body ? body.newMailbox : undefined);
-    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
     return result;
   });
 
@@ -312,7 +315,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const { workspaceId, reviewItemId } = request.params as { workspaceId: string; reviewItemId: string };
     const session = await securedSession(request, workspaceId);
     await store.markReviewItemResolved(session, workspaceId, reviewItemId);
-    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
     return reply.code(204).send();
   });
 
@@ -320,7 +323,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const { workspaceId, reviewItemId } = request.params as { workspaceId: string; reviewItemId: string };
     const session = await securedSession(request, workspaceId);
     await store.dismissReviewItem(session, workspaceId, reviewItemId);
-    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
     return reply.code(204).send();
   });
 
@@ -348,7 +351,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const body = createUserSchema.parse(request.body);
     const session = await securedSession(request, workspaceId);
     const member = await store.createUser(session, workspaceId, body);
-    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
     return member;
   });
 
@@ -357,7 +360,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const body = updateUserSchema.parse(request.body);
     const session = await securedSession(request, workspaceId);
     const member = await store.updateUser(session, workspaceId, userId, body);
-    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
     return member;
   });
 
@@ -365,7 +368,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const { workspaceId, userId } = request.params as { workspaceId: string; userId: string };
     const session = await securedSession(request, workspaceId);
     await store.deleteUser(session, workspaceId, userId);
-    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
     return reply.code(204).send();
   });
 
@@ -374,7 +377,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const body = createPostOfficeSchema.parse(request.body);
     const session = await securedSession(request, workspaceId);
     const postOffice = await store.createPostOffice(session, workspaceId, body);
-    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
     return postOffice;
   });
 
@@ -383,7 +386,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const body = updatePostOfficeSchema.parse(request.body);
     const session = await securedSession(request, workspaceId);
     const postOffice = await store.updatePostOffice(session, workspaceId, postOfficeId, body);
-    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
     return postOffice;
   });
 
@@ -391,7 +394,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const { workspaceId, postOfficeId } = request.params as { workspaceId: string; postOfficeId: string };
     const session = await securedSession(request, workspaceId);
     await store.deletePostOffice(session, workspaceId, postOfficeId);
-    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
     return reply.code(204).send();
   });
 
@@ -400,7 +403,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const body = createMailboxSchema.parse(request.body);
     const session = await securedSession(request, workspaceId);
     const mailbox = await store.createMailbox(session, workspaceId, body);
-    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
     return mailbox;
   });
 
@@ -409,7 +412,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const body = updateMailboxSchema.parse(request.body);
     const session = await securedSession(request, workspaceId);
     const mailbox = await store.updateMailbox(session, workspaceId, mailboxId, body);
-    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
     return mailbox;
   });
 
@@ -417,15 +420,17 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const { workspaceId, mailboxId } = request.params as { workspaceId: string; mailboxId: string };
     const session = await securedSession(request, workspaceId);
     await store.deleteMailbox(session, workspaceId, mailboxId);
-    realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
     return reply.code(204).send();
   });
 
   app.get("/api/v1/workspaces/:workspaceId/realtime", { websocket: true }, async (socket, request) => {
     const { workspaceId } = request.params as { workspaceId: string };
-    await securedSession(request, workspaceId);
-    realtimeHub.add(workspaceId, socket, async () => { await securedSession(request, workspaceId); });
-    socket.send(JSON.stringify({ type: "connected", workspaceId }));
+    try {
+      await securedSession(request, workspaceId);
+      realtimeHub.add(workspaceId, socket, async () => { await securedSession(request, workspaceId); });
+      socket.send(JSON.stringify({ type: "connected", workspaceId }));
+    } catch { socket.close(1008, "Workspace access denied"); }
   });
 
   const webDistPath =
