@@ -51,6 +51,7 @@ import type {
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "./types.js";
 
 export class MemoryStore implements AppStore {
+  async checkReadiness(): Promise<void> {}
   users = new Map<string, User>();
   workspaces = new Map<string, Workspace>();
   members = new Map<string, WorkspaceMember>();

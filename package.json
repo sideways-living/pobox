@@ -1,7 +1,7 @@
 {
   "name": "pobox-watch-monorepo",
   "private": true,
-  "version": "0.13.8",
+  "version": "0.13.9",
   "description": "pobox.watch shared PO box monitoring system.",
   "workspaces": [
     "server",
@@ -13,6 +13,7 @@
     "dev:web": "npm run dev --workspace web",
     "build": "npm run build --workspace server && npm run build --workspace web",
     "test": "npm run test --workspace server",
+    "test:deploy": "node --test deploy/tests/deployment.test.mjs",
     "typecheck": "npm run typecheck --workspace server && npm run typecheck --workspace web"
   },
   "engines": {

@@ -1,66 +1,66 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
+umask 077
+main() {
 APP_DIR="${APP_DIR:-/home/pobox/htdocs/pobox.watch}"
-APP_PORT="${APP_PORT:-4175}"
+RELEASES_DIR="${RELEASES_DIR:-/home/pobox/releases/pobox.watch}"
 PM2_NAME="${PM2_NAME:-pobox-watch-api}"
-SITE_URL="${SITE_URL:-https://pobox.watch}"
 REMOTE="${REMOTE:-origin}"
 BRANCH="${BRANCH:-main}"
-STASH_UNTRACKED="${STASH_UNTRACKED:-true}"
-
-fail() {
-  echo "FAIL: $*" >&2
-  exit 1
-}
-
-cd "$APP_DIR" || fail "Cannot cd to $APP_DIR"
-[[ -f package.json ]] || fail "package.json not found in $APP_DIR"
-[[ -f .env ]] || fail ".env not found in $APP_DIR"
-
-echo "Deploying pobox.watch from $APP_DIR using $REMOTE/$BRANCH"
-
+cd "$APP_DIR"
+export ENV_FILE="$APP_DIR/.env"
+[[ -f "$ENV_FILE" ]] || { echo 'Missing .env' >&2; exit 1; }
+for tool in git node npm pm2 tar pg_dump pg_restore; do command -v "$tool" >/dev/null || { echo "Missing required tool: $tool" >&2; exit 1; }; done
+[[ -z "$(git ls-files -- .env)" ]] || { echo 'Refusing to deploy a tracked .env' >&2; exit 1; }
+mkdir -p "$RELEASES_DIR"
+lock="$RELEASES_DIR/.deploy-lock"
+mkdir "$lock" || { echo 'Deployment lock exists. Check for another deploy before removing it.' >&2; exit 1; }
+trap 'rmdir "$lock"' EXIT
+trap 'echo "Deployment stopped. Inspect the failed step; no automatic database rollback was attempted." >&2' ERR
 if [[ -n "$(git status --porcelain)" ]]; then
-  echo "Local VPS drift detected:"
-  git status --short
-  stash_name="vps deploy drift $(date -u +%Y-%m-%dT%H-%M-%SZ)"
-  if [[ "$STASH_UNTRACKED" == "true" ]]; then
-    git stash push --include-untracked -m "$stash_name"
-  else
-    git stash push -m "$stash_name"
-  fi
+  git stash push --include-untracked -m "pobox deployment drift $(date -u +%Y%m%dT%H%M%SZ)"
+  git rev-parse refs/stash > "$RELEASES_DIR/last-drift-stash"
+  echo "Drift preserved in stash $(cat "$RELEASES_DIR/last-drift-stash"). Do not pop it into a release."
 fi
-
 git fetch "$REMOTE" "$BRANCH"
-git checkout "$BRANCH"
-git pull --ff-only "$REMOTE" "$BRANCH"
-
-npm install --include=dev
-
-set -a
-# shellcheck disable=SC1091
-source .env
-set +a
-
-required_env=(NODE_ENV PORT DATABASE_URL SESSION_SECRET ENCRYPTION_KEY APP_BASE_URL API_BASE_URL CORS_ORIGIN WEBAUTHN_RP_ID WEBAUTHN_ORIGIN)
-for name in "${required_env[@]}"; do
-  [[ -n "${!name:-}" ]] || fail "Missing required env var: $name"
-done
-[[ "${NODE_ENV}" == "production" ]] || fail "NODE_ENV must be production"
-[[ "${PORT}" == "$APP_PORT" ]] || fail ".env PORT is ${PORT}, expected ${APP_PORT}"
-
-storage="${POBOX_WATCH_STORAGE:-${MAILBOX_STORAGE:-}}"
-[[ "$storage" == "prisma" ]] || fail "POBOX_WATCH_STORAGE or MAILBOX_STORAGE must be prisma in production"
-
-npm run prisma:generate --workspace server
-npm run prisma:migrate --workspace server
-npm run build
-
-if pm2 describe "$PM2_NAME" >/dev/null; then
-  pm2 restart "$PM2_NAME" --update-env
-else
-  pm2 start npm --name "$PM2_NAME" -- run start --workspace server
+target="$(git rev-parse FETCH_HEAD)"
+if [[ -n "${DEPLOY_COMMIT:-}" && "$DEPLOY_COMMIT" != "$target" ]]; then
+  echo 'Fetched branch tip differs from DEPLOY_COMMIT; stopping before install/migration.' >&2; exit 1
 fi
+git checkout "$BRANCH"
+git merge --ff-only "$target"
+[[ "$(git rev-parse HEAD)" == "$target" ]] || { echo 'Local branch is ahead of the intended remote commit; preserved, not reset.' >&2; exit 1; }
+export DEPLOY_COMMIT="$target"
+export RELEASE_DIR="$RELEASES_DIR/$(date -u +%Y%m%dT%H%M%SZ)-${target:0:12}-$$"
+mkdir "$RELEASE_DIR"
+git archive "$target" | tar -x -C "$RELEASE_DIR"
+cd "$RELEASE_DIR"
+set -a
+source "$ENV_FILE"
+set +a
+export WEB_DIST_PATH="$RELEASE_DIR/web/dist"
+node deploy/scripts/validate-env.mjs
+export APP_PORT="${APP_PORT:-$PORT}"
+export SITE_URL="${SITE_URL:-$APP_BASE_URL}"
+[[ "$APP_PORT" == "$PORT" ]] || { echo 'APP_PORT and PORT differ' >&2; exit 1; }
+npm ci --include=dev
+npm run prisma:generate --workspace server
+npm run build
+node deploy/scripts/stamp-release.mjs "$DEPLOY_COMMIT"
+export BACKUP_DIR="${BACKUP_DIR:-$RELEASES_DIR/backups}"
+bash deploy/backup/backup-db.sh
+npm run prisma:migrate --workspace server
+export PM2_NAME
+node deploy/scripts/write-pm2-config.mjs
+pm2 startOrRestart "$RELEASE_DIR/ecosystem.deploy.json" --only "$PM2_NAME" --update-env
+verified=false
+for attempt in {1..12}; do
+  if bash deploy/scripts/verify-cloudpanel-pm2.sh; then verified=true; break; fi
+  sleep 5
+done
+[[ "$verified" == true ]] || { echo 'Readiness failed; PM2 state was not saved. Inspect logs and migration compatibility before rollback.' >&2; exit 1; }
 pm2 save
-
-APP_DIR="$APP_DIR" APP_PORT="$APP_PORT" PM2_NAME="$PM2_NAME" SITE_URL="$SITE_URL" deploy/scripts/verify-cloudpanel-pm2.sh
+printf '%s\n' "$RELEASE_DIR" > "$RELEASES_DIR/last-successful-release"
+echo "Deployment verified: $DEPLOY_COMMIT at $RELEASE_DIR"
+}
+main "$@"

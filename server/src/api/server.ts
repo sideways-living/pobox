@@ -10,6 +10,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { appVersion, isReleaseVersion } from "../releases.js";
+import { deploymentCommit } from "../deployment.js";
 import { realtimeHub } from "../realtime/hub.js";
 import { MemoryStore } from "../store/memoryStore.js";
 import type { AppStore } from "../store/types.js";
@@ -153,9 +154,20 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     ok: true,
     service: "pobox-watch-api",
     version: appVersion,
+    commit: deploymentCommit,
     storage: process.env.POBOX_WATCH_STORAGE ?? process.env.MAILBOX_STORAGE ?? "memory",
     timestamp: new Date().toISOString()
   }));
+
+  app.get("/api/ready", async (_request, reply) => {
+    reply.header("Cache-Control", "no-store");
+    try {
+      await store.checkReadiness();
+      return { ok: true, service: "pobox-watch-api", version: appVersion, commit: deploymentCommit, storage: process.env.POBOX_WATCH_STORAGE ?? process.env.MAILBOX_STORAGE ?? "memory" };
+    } catch {
+      return reply.code(503).send({ ok: false, service: "pobox-watch-api" });
+    }
+  });
 
   app.post("/api/v1/auth/login", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = loginSchema.parse(request.body);

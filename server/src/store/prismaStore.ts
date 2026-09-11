@@ -88,6 +88,9 @@ interface ReviewMatchAuditRow {
 }
 
 export class PrismaStore implements AppStore {
+  async checkReadiness(): Promise<void> {
+    await this.prisma.workspace.count();
+  }
   constructor(private readonly prisma = new PrismaClient()) {}
 
   async seedDemo() {

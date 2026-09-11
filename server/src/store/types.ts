@@ -138,6 +138,7 @@ export interface AppChangesResult {
 }
 
 export interface AppStore {
+  checkReadiness(): Promise<void>;
   seedDemo(): Promise<void>;
   login(email: string, password: string): Promise<LoginResult>;
   verifySecondFactor(challengeId: string, code: string): Promise<Session>;

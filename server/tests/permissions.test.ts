@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryStore } from "../src/store/memoryStore.js";
 import { buildServer } from "../src/api/server.js";
 import { realtimeHub } from "../src/realtime/hub.js";
@@ -23,6 +23,16 @@ describe("workspace permissions and live updates", () => {
   });
   afterEach(async () => { await app.close(); });
   const request = (session: Session, method: "GET" | "POST" | "PATCH" | "DELETE", path: string, payload?: object) => app.inject({ method, url: `/api/v1/workspaces/${path}`, headers: { cookie: `pobox_watch_session=${session.id}` }, payload });
+
+  it("distinguishes database readiness from process liveness without exposing database errors", async () => {
+    expect((await app.inject({ url: "/api/ready" })).statusCode).toBe(200);
+    vi.spyOn(store, "checkReadiness").mockRejectedValueOnce(new Error("private database credential"));
+    const failed = await app.inject({ url: "/api/ready" });
+    expect(failed.statusCode).toBe(503);
+    expect(failed.headers["cache-control"]).toBe("no-store");
+    expect(failed.body).not.toContain("credential");
+    expect((await app.inject({ url: "/api/health" })).statusCode).toBe(200);
+  });
 
   it("permits MapKit WASM and CDN without enabling arbitrary script evaluation", async () => {
     const response = await request(admin, "GET", "ws_company/dashboard");

@@ -1,4 +1,4 @@
-export const appVersion = "0.13.8";
+export const appVersion = "0.13.9";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.9-safer-deployment",
+    version: "0.13.9",
+    releasedAt: "2026-09-12T03:00:00.000Z",
+    title: "Safer app updates",
+    summary: "App updates now check that the intended version, database connection and website files are ready before reporting success. New recovery checks help protect saved post offices and mail status if a restore is needed.",
+    audience: "ALL"
+  },
   {
     id: "0.13.8-maps-directory-updates",
     version: "0.13.8",

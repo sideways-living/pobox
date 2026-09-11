@@ -1,224 +1,80 @@
-# pobox.watch Production Deployment
+# pobox.watch: CloudPanel and PM2 deployment
 
-This project is deployed as one CloudPanel Node.js site backed by PM2. The Node server serves both `/api/...` and the built React app from `web/dist`.
+## Production layout
 
-## Current VPS Shape
+- SSH: `ssh -p 22022 -o IdentitiesOnly=yes -o PreferredAuthentications=password pobox@104.207.76.27`
+- Source checkout: `/home/pobox/htdocs/pobox.watch`, branch `main`, remote `origin`.
+- Configuration: `/home/pobox/htdocs/pobox.watch/.env`, mode `600`, never tracked by Git.
+- Built releases: `/home/pobox/releases/pobox.watch/<timestamp>-<commit>-<pid>`.
+- PM2: `pobox-watch-api`, one fork-mode instance, port `4175`.
+- CloudPanel: Node.js site proxying `https://pobox.watch` to port `4175`. PM2 runs the app; do not start a second copy in Terminal or a separate service. Nginx must not serve an older checkout's `web/dist`.
 
-- VPS user: `pobox`
-- App directory: `/home/pobox/htdocs/pobox.watch`
-- PM2 process: `pobox-watch-api`
-- App port: `4175`
-- Public URL: `https://pobox.watch`
-- Storage: PostgreSQL through Prisma
+## Configuration
 
-CloudPanel should be configured as a Node.js site, not a static HTML, PHP, or Python site.
+Use `.env.example` as the list of supported options. These values are required by the deploy validator:
 
-## Required CloudPanel Settings
-
-Set the site to:
-
-```text
-App port: 4175
-Working directory: /home/pobox/htdocs/pobox.watch
-Startup command: bash -lc 'set -a; source .env; set +a; npm run start --workspace server'
-```
-
-The app can also be kept running by PM2 directly. In either case, only one process should listen on port `4175`.
-
-## Required VPS `.env`
-
-The production `.env` lives at:
-
-```bash
-/home/pobox/htdocs/pobox.watch/.env
-```
-
-Required values:
-
-```bash
+```dotenv
 NODE_ENV=production
 PORT=4175
 APP_BASE_URL=https://pobox.watch
 API_BASE_URL=https://pobox.watch
 CORS_ORIGIN=https://pobox.watch
-DATABASE_URL=postgresql://mailboxapp:YOUR_DB_PASSWORD@localhost:5432/mailbox
-SESSION_SECRET=long-random-secret
-ENCRYPTION_KEY=long-random-key
+DATABASE_URL=postgresql://mailboxapp:REPLACE_WITH_URL_ENCODED_PASSWORD@localhost:5432/mailbox
+SESSION_SECRET=REPLACE_WITH_DISTINCT_RANDOM_SECRET_AT_LEAST_32_CHARACTERS
+ENCRYPTION_KEY=REPLACE_WITH_DISTINCT_RANDOM_SECRET_AT_LEAST_32_CHARACTERS
 WEBAUTHN_RP_ID=pobox.watch
 WEBAUTHN_RP_NAME=pobox.watch
 WEBAUTHN_ORIGIN=https://pobox.watch
 POBOX_WATCH_STORAGE=prisma
 POBOX_WATCH_SEED_DEMO=false
+MAIL_POLL_ENABLED=false
 ```
 
-Recommended when Apple MapKit is enabled:
+Replace placeholders; preserve existing real secrets during upgrades. Rotating `ENCRYPTION_KEY` without a migration makes encrypted authenticators unreadable. `.env` is trusted shell configuration and must use shell-safe quoting. Do not paste its values into logs or support chats. PM2's generated config and saved process dump contain environment secrets: protect those files and the release directory too.
 
-```bash
-VITE_MAPKIT_TOKEN=your-mapkit-js-token
-```
+For Gmail, enable polling only with `MAIL_PROVIDER=gmail`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `MAIL_POLL_WORKSPACE_ID` and an interval such as `MAIL_POLL_INTERVAL_MS=1800000`. OAuth authorization and inbox access require a separate live test.
 
-This token must allow the deployed website origin and be loaded before the web build; a PM2 restart alone cannot update it. See [maps, directory and release verification](docs/maps-directory-releases.md) for CSP requirements, safe directory refresh behavior, and browser checks. Version 0.13.8 adds no migration; rebuild native apps to receive native update notices.
+`VITE_MAPKIT_TOKEN` is optional. Set a restricted public Apple Maps token before building, not an Apple private key. See [map/directory/release checks](docs/maps-directory-releases.md). An absent token provides location links.
 
-Recommended when Gmail polling is enabled:
+## Repeatable deploy
 
-```bash
-MAIL_PROVIDER=gmail
-MAIL_POLL_ENABLED=true
-MAIL_POLL_WORKSPACE_ID=ws_company
-MAIL_POLL_INTERVAL_MS=1800000
-GMAIL_CLIENT_ID=...
-GMAIL_CLIENT_SECRET=...
-GMAIL_REFRESH_TOKEN=...
-GMAIL_USER_ID=me
-GMAIL_SEARCH_QUERY=is:unread
-```
+Prerequisites: Node 22+, npm, Git authentication to the intended repository, PM2, `tar`, and PostgreSQL client tools compatible with the server. `pg_dump` cannot dump a newer major server. Ensure adequate disk for a complete dependency tree, web/server build and database backup per release.
 
-## Normal Deploy
-
-From the VPS:
-
-```bash
-ssh -p 22022 -o IdentitiesOnly=yes -o PreferredAuthentications=password pobox@104.207.76.27
-cd /home/pobox/htdocs/pobox.watch
-bash deploy/scripts/deploy-cloudpanel-pm2.sh
-```
-
-The script performs the full production path:
-
-1. Checks the app directory and `.env`.
-2. Stashes local VPS drift before pulling.
-3. Pulls `origin/main` with `--ff-only`.
-4. Runs `npm install --include=dev`.
-5. Loads `.env`.
-6. Checks required environment variables.
-7. Runs `npm run prisma:generate --workspace server`.
-8. Runs `npm run prisma:migrate --workspace server`.
-9. Runs `npm run build`.
-10. Starts or restarts `pobox-watch-api` with PM2.
-11. Runs `pm2 save`.
-12. Verifies health, version, listening port, and public assets.
-
-By default the script stashes tracked and untracked files. If you only want tracked changes stashed:
-
-```bash
-STASH_UNTRACKED=false bash deploy/scripts/deploy-cloudpanel-pm2.sh
-```
-
-## Manual Deploy
-
-Use this if you need to step through each command:
+From the trusted, updated checkout on the VPS:
 
 ```bash
 cd /home/pobox/htdocs/pobox.watch
-
-git status --short
-git stash push --include-untracked -m "vps local changes before deploy"
-git fetch origin main
-git checkout main
-git pull --ff-only origin main
-
-npm install --include=dev
-
-set -a
-source .env
-set +a
-
-npm run prisma:generate --workspace server
-npm run prisma:migrate --workspace server
-npm run build
-
-pm2 restart pobox-watch-api --update-env || pm2 start npm --name pobox-watch-api -- run start --workspace server
-pm2 save
-
-bash deploy/scripts/verify-cloudpanel-pm2.sh
+chmod 600 .env
+DEPLOY_COMMIT=FULL_40_CHARACTER_COMMIT_SHA bash deploy/scripts/deploy-cloudpanel-pm2.sh
 ```
 
-## Verification Commands
+Replace the SHA with the full reviewed commit that has been pushed to `origin/main`. If omitted, the script explicitly selects the fetched branch tip and reports it. A supplied SHA must match that tip; this normal deploy path is not a rollback command. The current local implementation must be pushed before the VPS can fetch it.
 
-Quick checks:
+The script:
+
+1. Acquires a deployment lock and saves tracked/untracked drift in a Git stash. Ignored `.env` stays untouched. `last-drift-stash` records the stash ID; existing stashes remain intact.
+2. Fetches the branch once, checks the intended SHA, fast-forwards without reset and rejects local commits ahead of the selected commit.
+3. Exports that exact commit into a new release directory. Local PM2 config drift is preserved, not silently reused.
+4. Loads/validates `.env`, sets the release's `WEB_DIST_PATH`, runs `npm ci --include=dev`, generates Prisma and builds. The running release is not overwritten.
+5. Stamps the built commit/version and hashes HTML/assets. Creates a checked database archive before migration.
+6. Applies existing migrations. Migration errors stop before restart. Build deliberately precedes migration, reducing schema changes caused by a broken build.
+7. Starts/restarts the named PM2 process with the selected script/cwd/environment. Retries readiness a bounded number of times.
+8. Requires local and public database-backed readiness, exact commit/version/storage, matching built HTML and matching JS/CSS bytes. PM2 `online` alone is insufficient.
+9. Only then runs `pm2 save` and writes `last-successful-release`.
+
+Failure stops the script. Failed releases, backups and stashes remain for inspection. Never use `git reset --hard`, `stash pop`, or automatic database rollback to make an error disappear. A stale `.deploy-lock` after a machine crash must only be removed after confirming no deployment is running. No automatic release or backup pruning is performed.
+
+## Verification and reboot
 
 ```bash
-cd /home/pobox/htdocs/pobox.watch
-
-pm2 status
-ss -ltnp | grep ':4175' || echo "nothing listening on 4175"
-curl -sS http://127.0.0.1:4175/api/health
-curl -sS https://pobox.watch/api/health
-curl -sS https://pobox.watch/ | grep assets
+RELEASES_DIR=/home/pobox/releases/pobox.watch bash deploy/scripts/verify-cloudpanel-pm2.sh
+pm2 logs pobox-watch-api --lines 80 --nostream
 ```
 
-Full check:
+Override `RELEASE_DIR` and `DEPLOY_COMMIT` to verify a selected release independently of the last-successful pointer. Public TLS/DNS failure, HTML-as-JavaScript fallback, same-version wrong commit and stale asset contents all fail verification. `/api/health` is liveness; `/api/ready` queries the application database. Readiness does not prove Gmail OAuth, delivery, MapKit authorization or end-to-end sign-in.
 
-```bash
-cd /home/pobox/htdocs/pobox.watch
-bash deploy/scripts/verify-cloudpanel-pm2.sh
-```
+PM2 startup installation is a separate root/admin step: as `pobox`, run `pm2 startup`, then run its generated command using a permitted administrator account. Run `pm2 save` only after verification. Reboot recovery must be tested on the actual VPS in a maintenance window; a local PM2 test is not proof of systemd startup configuration.
 
-The full check fails when:
+## Backup, restore and rollback
 
-- `.env` is missing required production values.
-- `NODE_ENV` is not `production`.
-- `POBOX_WATCH_STORAGE` is not `prisma`.
-- PM2 does not have `pobox-watch-api` online.
-- Nothing is listening on port `4175`.
-- `/api/health` does not report the package version.
-- The public frontend asset differs from the local `127.0.0.1:4175` asset.
-- Public API health does not match the expected version.
-
-## Stale Public Assets
-
-If local and public assets do not match, Nginx or CloudPanel is probably serving an old static directory instead of proxying to the PM2 app.
-
-Run:
-
-```bash
-cd /home/pobox/htdocs/pobox.watch
-
-echo "Local app:"
-curl -sS http://127.0.0.1:4175/ | grep assets
-
-echo "Public app:"
-curl -sS https://pobox.watch/ | grep assets
-```
-
-The asset filenames should match. If they do not, check the CloudPanel site reverse proxy settings and any Nginx custom config for a stale `root` or `try_files` rule.
-
-## Wrong Version
-
-The expected version is read from `package.json`.
-
-```bash
-node -p "require('./package.json').version"
-curl -sS http://127.0.0.1:4175/api/health
-curl -sS https://pobox.watch/api/health
-```
-
-Both health responses must include the same `version`.
-
-## PM2 Not Listening
-
-If verification says PM2 is online but port `4175` is not listening:
-
-```bash
-cd /home/pobox/htdocs/pobox.watch
-pm2 logs pobox-watch-api --lines 100 --nostream
-pm2 describe pobox-watch-api
-pm2 delete pobox-watch-api
-set -a; source .env; set +a
-pm2 start npm --name pobox-watch-api -- run start --workspace server
-pm2 save
-```
-
-Then rerun:
-
-```bash
-bash deploy/scripts/verify-cloudpanel-pm2.sh
-```
-
-## Legacy Systemd/Nginx Files
-
-The files under `deploy/systemd` and the static Nginx example are retained as references for a non-CloudPanel deployment. The production VPS path for `pobox.watch` is the CloudPanel/PM2 path above.
-
-## Backups
-
-Use `deploy/backup/backup-db.sh` from cron or a systemd timer. Store backups outside the app directory, retain at least 30 days, and encrypt off-server copies.
+Follow [the recovery runbook](docs/deployment-recovery.md). A restore requires an explicitly confirmed empty destination. Do not point the recovery drill at production. Native applications are separate releases and are not updated by a VPS deploy.
