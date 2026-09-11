@@ -28,7 +28,7 @@ import { parseMailNotification } from "../parser/mailParser.js";
 import { mailText } from "../parser/mailText.js";
 import type { PostOfficeDirectoryStatus } from "../lctr/postOfficeDirectory.js";
 import { searchLctrPostOffices, type LctrPostOfficeLocation } from "../lctr/postOfficeLookup.js";
-import { appVersion, changesAfterVersion } from "../releases.js";
+import { appVersion, changesAfterVersion, compareVersions, isReleaseVersion } from "../releases.js";
 import type {
   AppStore,
   AppChangesResult,
@@ -781,6 +781,8 @@ export class MemoryStore implements AppStore {
     await this.requireMember(session, workspaceId);
     const user = this.users.get(session.userId);
     if (!user) throw new UnauthorizedError("Missing user.");
+    if (!isReleaseVersion(version)) throw new ConflictError("Unknown release version.");
+    if (user.lastSeenReleaseVersion && compareVersions(version, user.lastSeenReleaseVersion) <= 0) return this.appChanges(session, workspaceId);
     this.users.set(user.id, {
       ...user,
       lastSeenReleaseVersion: version,

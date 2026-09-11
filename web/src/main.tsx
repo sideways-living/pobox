@@ -72,6 +72,8 @@ function App() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [changeNotice, setChangeNotice] = useState<AppChangesResponse | null>(null);
+  const [changeNoticeError, setChangeNoticeError] = useState<string | null>(null);
+  const [dismissingNotice, setDismissingNotice] = useState(false);
   const [securityGate, setSecurityGate] = useState<{ previousLoginAt?: string } | null>(null);
   const [nativeReturnLink, setNativeReturnLink] = useState<string | null>(null);
   const refreshGeneration = useRef(0);
@@ -178,13 +180,17 @@ function App() {
   }
 
   async function dismissChangeNotice() {
-    if (!changeNotice) return;
+    if (!changeNotice || dismissingNotice) return;
+    setDismissingNotice(true);
+    setChangeNoticeError(null);
     try {
       await markAppChangesSeen(changeNotice.version);
       setChangeNotice(null);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save that you have seen these updates.");
+      setChangeNoticeError(err instanceof Error ? err.message : "Unable to save that you have seen these updates. Please try again.");
+    } finally {
+      setDismissingNotice(false);
     }
   }
 
@@ -292,7 +298,7 @@ function App() {
           setError={setError}
         />
         {nativeReturnLink && <NativeReturnModal returnLink={nativeReturnLink} />}
-        {changeNotice && <ChangeNoticeModal notice={changeNotice} onClose={dismissChangeNotice} />}
+        {changeNotice && <ChangeNoticeModal notice={changeNotice} onClose={dismissChangeNotice} error={changeNoticeError} busy={dismissingNotice} />}
       </section>
     </main>
   );
@@ -987,10 +993,12 @@ function AppleMapPanel({ offices, activeOffice, isAdmin }: { offices: PostOffice
   const mapRef = useRef<HTMLDivElement | null>(null);
   const [mapStatus, setMapStatus] = useState<"loading" | "ready" | "unconfigured" | "failed">("loading");
   const token = (import.meta.env.VITE_MAPKIT_TOKEN as string | undefined)?.trim();
+  const mapDataKey = JSON.stringify(offices.map(office => [office.id, office.name, office.latitude, office.longitude, office.mailboxes.filter(hasWaitingItem).length]));
 
   useEffect(() => {
     let cancelled = false;
     let map: AppleMap | undefined;
+    let removeErrorListener: (() => void) | undefined;
     if (!token) {
       setMapStatus("unconfigured");
       return undefined;
@@ -998,17 +1006,23 @@ function AppleMapPanel({ offices, activeOffice, isAdmin }: { offices: PostOffice
     if (!mapRef.current) return undefined;
 
     setMapStatus("loading");
+    const timeout = setTimeout(() => { cancelled = true; map?.destroy(); setMapStatus("failed"); }, 15000);
     void loadMapKit({
       token,
       language: "en-AU",
       libraries: ["map", "annotations"]
     }).then((mapkit) => {
       if (cancelled || !mapRef.current) return;
+      const onError = () => { if (!cancelled) setMapStatus("failed"); };
+      mapkit.addEventListener("configuration-error", onError);
+      removeErrorListener = () => mapkit.removeEventListener("configuration-error", onError);
+      if (!validMapCoordinate(activeOffice)) throw new Error("Invalid map coordinates");
       const center = new mapkit.Coordinate(activeOffice.latitude, activeOffice.longitude);
       const span = new mapkit.CoordinateSpan(0.08, 0.08);
       const nextMap = new mapkit.Map(mapRef.current);
       nextMap.region = new mapkit.CoordinateRegion(center, span);
-      const annotations: Annotation[] = offices.map((office) => {
+      map = nextMap;
+      const annotations: Annotation[] = offices.filter(validMapCoordinate).map((office) => {
         const waiting = office.mailboxes.filter(hasWaitingItem).length;
         return new mapkit.MarkerAnnotation(new mapkit.Coordinate(office.latitude, office.longitude), {
           title: office.name,
@@ -1020,15 +1034,19 @@ function AppleMapPanel({ offices, activeOffice, isAdmin }: { offices: PostOffice
       nextMap.addAnnotations(annotations);
       map = nextMap;
       setMapStatus("ready");
+      clearTimeout(timeout);
     }).catch(() => {
+      clearTimeout(timeout);
       if (!cancelled) setMapStatus("failed");
     });
 
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
+      removeErrorListener?.();
       map?.destroy?.();
     };
-  }, [activeOffice.id, activeOffice.latitude, activeOffice.longitude, offices, token]);
+  }, [activeOffice.id, activeOffice.latitude, activeOffice.longitude, mapDataKey, token]);
 
   if (!token) {
     return (
@@ -1038,8 +1056,8 @@ function AppleMapPanel({ offices, activeOffice, isAdmin }: { offices: PostOffice
       />
     );
   }
-  if (mapStatus === "failed" && !isAdmin) {
-    return <MapFallback offices={offices} />;
+  if (mapStatus === "failed") {
+    return <MapFallback offices={offices} message={isAdmin ? "Apple Maps could not load. Check the map token, allowed website origins, and network access. Location links remain available." : undefined} />;
   }
 
   return (
@@ -1047,10 +1065,8 @@ function AppleMapPanel({ offices, activeOffice, isAdmin }: { offices: PostOffice
       <div ref={mapRef} className="mapkit-canvas" aria-label="Interactive Apple map" />
       {mapStatus !== "ready" && (
         isAdmin || mapStatus === "loading" ? (
-          <div className={mapStatus === "failed" ? "mapkit-status mapkit-status-error" : "mapkit-status"}>
-            {mapStatus === "failed"
-              ? "Apple Maps could not load. Check VITE_MAPKIT_TOKEN and the Apple MapKit CSP allowances; Apple Maps links still work."
-              : "Loading Apple Maps..."}
+          <div className="mapkit-status">
+            Loading Apple Maps...
           </div>
         ) : (
           <MapFallback offices={offices} />
@@ -1066,18 +1082,15 @@ function MapFallback({ offices, message }: { offices: PostOffice[]; message?: st
       {message && <p>{message}</p>}
       {offices.map((office) => {
         const waiting = office.mailboxes.filter(hasWaitingItem).length;
-        const point = mapPoint(offices, office);
         return (
           <a
-            className={waiting > 0 ? "map-point waiting" : "map-point"}
             href={appleMapsUrl(office)}
             key={office.id}
-            style={{ left: `${point.x}%`, top: `${point.y}%` }}
             target="_blank"
             rel="noreferrer"
             aria-label={`${office.name}, ${waiting > 0 ? `${waiting} waiting` : "clear"}`}
           >
-            <span>{waiting}</span>
+            <MapPin size={18} /><span>{office.name}</span><span>{waiting > 0 ? `${waiting} waiting` : "Clear"}</span>
           </a>
         );
       })}
@@ -1608,7 +1621,7 @@ function SecurityPanel({ setError }: { setError: (value: string | null) => void 
   );
 }
 
-function ChangeNoticeModal({ notice, onClose }: { notice: AppChangesResponse; onClose: () => void | Promise<void> }) {
+function ChangeNoticeModal({ notice, onClose, error, busy }: { notice: AppChangesResponse; onClose: () => void | Promise<void>; error: string | null; busy: boolean }) {
   return (
     <div className="modal-backdrop" role="presentation">
       <section className="change-modal" role="dialog" aria-modal="true" aria-labelledby="change-title">
@@ -1627,7 +1640,8 @@ function ChangeNoticeModal({ notice, onClose }: { notice: AppChangesResponse; on
             </article>
           ))}
         </div>
-        <button className="primary" onClick={onClose}>Got It</button>
+        {error && <p role="alert">{error}</p>}
+        <button className="primary" disabled={busy} onClick={onClose}>Got It</button>
       </section>
     </div>
   );
@@ -1778,12 +1792,12 @@ function AddPostOfficeForm({ snapshot, refresh, setError }: { snapshot: Dashboar
 
 function directoryStatusLabel(status: PostOfficeDirectoryStatus | null) {
   if (!status) return "Status not loaded yet.";
+  if (status.status === "running") return `Refresh in progress. ${status.activeRowCount.toLocaleString()} saved locations remain available.`;
+  if (status.status === "failed") return `Refresh failed. ${status.activeRowCount.toLocaleString()} saved locations retained.${status.message ? ` ${status.message}` : ""}`;
   if (status.activeRowCount > 0) {
     const synced = status.syncedAt ? ` Last refreshed ${new Date(status.syncedAt).toLocaleString()}.` : "";
     return `${status.activeRowCount.toLocaleString()} imported active locations.${synced}`;
   }
-  if (status.status === "running") return "Import is currently running.";
-  if (status.status === "failed") return `Import failed${status.message ? `: ${status.message}` : "."}`;
   return "Not imported yet. Refresh the directory before searching.";
 }
 
@@ -2081,22 +2095,14 @@ function confidenceLabel(confidence?: number) {
 
 function appleMapsUrl(office: PostOffice) {
   const params = new URLSearchParams({
-    ll: `${office.latitude},${office.longitude}`,
-    q: office.name
+    ...(validMapCoordinate(office) ? { ll: `${office.latitude},${office.longitude}` } : {}),
+    q: validMapCoordinate(office) ? office.name : `${office.name} ${office.address}`
   });
   return `https://maps.apple.com/?${params.toString()}`;
 }
 
-function mapPoint(offices: PostOffice[], office: PostOffice) {
-  const latitudes = offices.map((item) => item.latitude);
-  const longitudes = offices.map((item) => item.longitude);
-  const minLat = Math.min(...latitudes);
-  const maxLat = Math.max(...latitudes);
-  const minLng = Math.min(...longitudes);
-  const maxLng = Math.max(...longitudes);
-  const x = maxLng === minLng ? 50 : 12 + ((office.longitude - minLng) / (maxLng - minLng)) * 76;
-  const y = maxLat === minLat ? 50 : 88 - ((office.latitude - minLat) / (maxLat - minLat)) * 76;
-  return { x, y };
+function validMapCoordinate(office: PostOffice) {
+  return Number.isFinite(office.latitude) && Number.isFinite(office.longitude) && Math.abs(office.latitude) <= 90 && Math.abs(office.longitude) <= 180;
 }
 
 createRoot(document.getElementById("root")!).render(<App />);

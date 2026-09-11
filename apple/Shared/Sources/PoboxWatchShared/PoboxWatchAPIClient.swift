@@ -78,6 +78,19 @@ public actor PoboxWatchAPIClient {
         return try decoder.decode(MailboxDashboardSnapshot.self, from: data)
     }
 
+    public func releaseNotes(workspaceId: String, dismissVersion: String? = nil) async throws -> ReleaseNotice {
+        let path = "/api/v1/workspaces/\(workspaceId)/app/changes" + (dismissVersion == nil ? "" : "/seen")
+        var request = URLRequest(url: baseURL.appending(path: path))
+        if let version = dismissVersion {
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try encoder.encode(["version": version])
+        }
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+        return try decoder.decode(ReleaseNotice.self, from: data)
+    }
+
     public func reviewItems(workspaceId: String) async throws -> [ReviewItem] {
         let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/review-items")
         let (data, response) = try await session.data(from: url)

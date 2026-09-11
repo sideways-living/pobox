@@ -9,7 +9,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import { appVersion } from "../releases.js";
+import { appVersion, isReleaseVersion } from "../releases.js";
 import { realtimeHub } from "../realtime/hub.js";
 import { MemoryStore } from "../store/memoryStore.js";
 import type { AppStore } from "../store/types.js";
@@ -70,8 +70,8 @@ const resolveReviewSchema = z.union([
   z.object({ newMailbox: z.object({ postOfficeId: z.string().min(1), boxNumber: z.string().trim().min(1).max(40).regex(/[a-z0-9]/i) }).strict() }).strict()
 ]);
 const releaseSeenSchema = z.object({
-  version: z.string().min(1).max(40).default(appVersion)
-}).refine((input) => input.version === appVersion, { message: "Release version does not match the current app version." });
+  version: z.string().min(1).max(40).refine(isReleaseVersion, "Unknown release version.")
+});
 const sessionCookieName = "pobox_watch_session";
 const legacySessionCookieName = "mailbox_session";
 
@@ -93,10 +93,10 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
         frameAncestors: ["'self'"],
         imgSrc: ["'self'", "data:", "blob:", "https:", "https://*.apple-mapkit.com", "https://cdn.apple-mapkit.com"],
         objectSrc: ["'none'"],
-        scriptSrc: ["'self'", "https://cdn.apple-mapkit.com"],
+        scriptSrc: ["'self'", "'wasm-unsafe-eval'", "https://cdn.apple-mapkit.com"],
         scriptSrcAttr: ["'none'"],
         styleSrc: ["'self'", "https:", "'unsafe-inline'", "https://cdn.apple-mapkit.com"],
-        connectSrc: ["'self'", "https://*.apple-mapkit.com", "https://cdn.apple-mapkit.com"],
+        connectSrc: ["'self'", "blob:", "https://*.apple-mapkit.com", "https://cdn.apple-mapkit.com"],
         workerSrc: ["'self'", "blob:", "https://*.apple-mapkit.com", "https://cdn.apple-mapkit.com"]
       }
     }

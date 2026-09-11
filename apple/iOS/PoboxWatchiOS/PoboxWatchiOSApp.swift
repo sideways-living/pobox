@@ -18,6 +18,7 @@ final class iPhoneMailboxViewModel: ObservableObject {
     @Published var twoFactorCode = ""
     @Published var twoFactorChallengeId: String?
     @Published var snapshot: MailboxDashboardSnapshot?
+    @Published var releaseNotice: ReleaseNotice?
     @Published var reviewItems: [ReviewItem] = []
     @Published var members: [TeamMember] = []
     @Published var postOfficeLocationResults: [PostOfficeLocationResult] = []
@@ -135,11 +136,22 @@ final class iPhoneMailboxViewModel: ObservableObject {
         async let dashboard = client.dashboard(workspaceId: workspaceId)
         async let reviews = client.reviewItems(workspaceId: workspaceId)
         async let team = client.teamMembers(workspaceId: workspaceId)
-        let values = try await (dashboard, reviews, team)
+        async let notice = client.releaseNotes(workspaceId: workspaceId)
+        let values = try await (dashboard, reviews, team, notice)
         guard generation == loadGeneration else { return }
         snapshot = values.0
         reviewItems = values.1
         members = values.2
+        releaseNotice = values.3.changes.isEmpty ? nil : values.3
+    }
+
+    func dismissReleaseNotes() async {
+        guard let version = releaseNotice?.version else { return }
+        loadGeneration += 1
+        await run {
+            let remaining = try await client.releaseNotes(workspaceId: workspaceId, dismissVersion: version)
+            releaseNotice = remaining.changes.isEmpty ? nil : remaining
+        }
     }
 
     func createUser(email: String, displayName: String, password: String, role: String) async {
@@ -290,7 +302,28 @@ struct iPhoneRootView: View {
             if model.snapshot == nil {
                 iPhoneLoginView(model: model)
             } else {
-                iPhoneDashboardView(model: model)
+               iPhoneDashboardView(model: model)
+                .sheet(item: $model.releaseNotice) { notice in
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("What's New").font(.title2.bold())
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 16) {
+                                ForEach(notice.changes) { change in
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(change.title).font(.headline)
+                                        Text(change.summary)
+                                    }
+                                }
+                            }
+                        }
+                        if let error = model.errorMessage { Text(error).foregroundStyle(.red) }
+                        Button("Got It") { Task { await model.dismissReleaseNotes() } }
+                            .disabled(model.isLoading)
+                    }
+                    .padding(24)
+                    .frame(minWidth: 280, idealWidth: 560, maxWidth: 640, minHeight: 360, idealHeight: 520)
+                    .interactiveDismissDisabled()
+                }
             }
         }
         .onOpenURL { url in
@@ -1446,12 +1479,7 @@ private func mailboxStatusLine(_ mailbox: Mailbox) -> String {
 }
 
 private func appleMapsURL(for office: PostOffice) -> URL {
-    var components = URLComponents(string: "https://maps.apple.com/")!
-    components.queryItems = [
-        URLQueryItem(name: "ll", value: "\(office.latitude),\(office.longitude)"),
-        URLQueryItem(name: "q", value: office.name)
-    ]
-    return components.url!
+    postOfficeMapsURL(name: office.name, address: office.address, latitude: office.latitude, longitude: office.longitude)
 }
 
 private func iPhoneNormalizeBoxNumber(_ value: String) -> String {

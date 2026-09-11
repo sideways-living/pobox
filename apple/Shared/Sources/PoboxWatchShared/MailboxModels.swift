@@ -1,5 +1,25 @@
 import Foundation
 
+public struct ReleaseNotice: Codable, Identifiable, Sendable {
+    public var id: String { version }
+    public let version: String
+    public let changes: [ReleaseChange]
+}
+
+public struct ReleaseChange: Codable, Identifiable, Sendable {
+    public let id: String
+    public let title: String
+    public let summary: String
+}
+
+public func postOfficeMapsURL(name: String, address: String, latitude: Double, longitude: Double) -> URL {
+    var components = URLComponents(string: "https://maps.apple.com/")!
+    let valid = latitude.isFinite && longitude.isFinite && abs(latitude) <= 90 && abs(longitude) <= 180
+    components.queryItems = [URLQueryItem(name: "q", value: valid ? name : "\(name) \(address)")]
+    if valid { components.queryItems?.append(URLQueryItem(name: "ll", value: "\(latitude),\(longitude)")) }
+    return components.url!
+}
+
 public enum MailboxCollectionSource: String, Codable, Sendable {
     case iPhone = "IPHONE"
     case macOS = "MACOS"

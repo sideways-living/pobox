@@ -1,4 +1,4 @@
-export const appVersion = "0.13.7";
+export const appVersion = "0.13.8";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,22 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.8-maps-directory-updates",
+    version: "0.13.8",
+    releasedAt: "2026-09-12T02:00:00.000Z",
+    title: "Better maps and update notices",
+    summary: "Maps keep useful location links available if the interactive map cannot load. Navigation is now available on smaller screens. iPhone and Mac show your unread app updates, and updates are only marked seen when you choose Got It.",
+    audience: "ALL"
+  },
+  {
+    id: "0.13.8-directory-refresh",
+    version: "0.13.8",
+    releasedAt: "2026-09-12T02:00:00.000Z",
+    title: "Safer post office directory refresh",
+    summary: "Directory refreshes keep the previous locations if an import fails. Refresh status is clearer, competing refreshes are prevented, and your saved post offices and custom details stay unchanged.",
+    audience: "ADMIN"
+  },
   {
     id: "0.13.7-shared-workspace-safety",
     version: "0.13.7",
@@ -469,7 +485,18 @@ export function changesSince(since?: string, role: "ADMIN" | "MEMBER" = "MEMBER"
 }
 
 export function changesAfterVersion(lastSeenVersion?: string, role: "ADMIN" | "MEMBER" = "MEMBER") {
-  const lastSeenIndex = lastSeenVersion ? appChanges.findIndex((change) => change.version === lastSeenVersion) : -1;
-  const unseenChanges = lastSeenIndex >= 0 ? appChanges.slice(0, lastSeenIndex) : appChanges;
+  const unseenChanges = appChanges.filter(change => !lastSeenVersion || compareVersions(change.version, lastSeenVersion) > 0);
   return unseenChanges.filter((change) => change.audience === "ALL" || role === "ADMIN");
+}
+
+export function compareVersions(a: string, b: string): number {
+  const left = a.split(".").map(Number), right = b.split(".").map(Number);
+  for (let index = 0; index < 3; index++) {
+    if (left[index] !== right[index]) return left[index] - right[index];
+  }
+  return 0;
+}
+
+export function isReleaseVersion(version: string): boolean {
+  return appChanges.some(change => change.version === version);
 }

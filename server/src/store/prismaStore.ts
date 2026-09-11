@@ -14,7 +14,7 @@ import { decryptSecret, encryptSecret, generateRecoveryCodes, generateTotpSecret
 import { challengeFromClientData, webAuthnConfig } from "../auth/webauthn.js";
 import { postOfficeDirectoryStatus, searchPostOfficeDirectory, syncPostOfficeDirectory, type PostOfficeDirectoryStatus } from "../lctr/postOfficeDirectory.js";
 import type { LctrPostOfficeLocation } from "../lctr/postOfficeLookup.js";
-import { appVersion, changesAfterVersion } from "../releases.js";
+import { appVersion, changesAfterVersion, compareVersions, isReleaseVersion } from "../releases.js";
 import type {
   AuditEvent,
   CollectionEvent,
@@ -253,12 +253,18 @@ export class PrismaStore implements AppStore {
 
   async markAppChangesSeen(session: Session, workspaceId: string, version: string): Promise<AppChangesResult> {
     await this.requireMember(session, workspaceId);
-    await this.prisma.user.update({
-      where: { id: session.userId },
-      data: {
-        lastSeenReleaseVersion: version,
-        lastSeenReleaseAt: new Date()
-      }
+    if (!isReleaseVersion(version)) throw new ConflictError("Unknown release version.");
+    await this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${session.userId} FOR UPDATE`;
+      const user = await tx.user.findUniqueOrThrow({ where: { id: session.userId } });
+      if (user.lastSeenReleaseVersion && compareVersions(version, user.lastSeenReleaseVersion) <= 0) return;
+      await tx.user.update({
+        where: { id: session.userId },
+        data: {
+          lastSeenReleaseVersion: version,
+          lastSeenReleaseAt: new Date()
+        }
+      });
     });
     return this.appChanges(session, workspaceId);
   }

@@ -388,6 +388,17 @@ describe("shared mailbox state", () => {
     expect(versions).not.toContain("0.12.3");
   });
 
+  it("reading notes does not acknowledge them and stale dismissals cannot move backwards", async () => {
+    const daniel = await loginSession("daniel@example.com");
+    const sarah = await loginSession("sarah@example.com");
+    await store.appChanges(daniel, "ws_company");
+    expect((await store.appChanges(daniel, "ws_company")).lastSeenVersion).toBeUndefined();
+    await store.markAppChangesSeen(daniel, "ws_company", appVersion);
+    expect((await store.markAppChangesSeen(daniel, "ws_company", "0.12.3")).changes).toHaveLength(0);
+    expect((await store.appChanges(sarah, "ws_company")).changes.length).toBeGreaterThan(0);
+    await expect(store.markAppChangesSeen(sarah, "ws_company", "99.0.0")).rejects.toThrow("Unknown release");
+  });
+
   it("rejects member-only admin operations", async () => {
     const sarah = await loginSession("sarah@example.com");
     await expect(store.inviteMember(sarah, "ws_company", "alex@example.com", "MEMBER")).rejects.toThrow("Admin role required.");

@@ -59,64 +59,78 @@ export async function refreshPostOfficeDirectoryIfStale(prisma: PrismaClient): P
   const state = await prisma.integrationSyncState.findUnique({ where: { key: syncKey } });
   if (state?.status === "running" && Date.now() - state.syncedAt.getTime() < 1000 * 60 * 30) return;
   if (state?.status === "ok" && Date.now() - state.syncedAt.getTime() < staleAfterMs) return;
+  if (state?.status === "failed" && Date.now() - state.syncedAt.getTime() < 15 * 60 * 1000) return;
   await syncPostOfficeDirectory(prisma);
 }
 
 export async function syncPostOfficeDirectory(prisma: PrismaClient): Promise<{ rowCount: number }> {
   const startedAt = new Date();
-  await prisma.integrationSyncState.upsert({
-    where: { key: syncKey },
-    update: { syncedAt: startedAt, status: "running", message: null },
-    create: { key: syncKey, syncedAt: startedAt, status: "running" }
+  await prisma.integrationSyncState.createMany({
+    data: [{ key: syncKey, syncedAt: new Date(0), status: "not_imported" }],
+    skipDuplicates: true
   });
+  // Claim a recoverable lease across workers; network I/O stays outside the transaction.
+  const claimed = await prisma.integrationSyncState.updateMany({
+    where: { key: syncKey, OR: [{ status: { not: "running" } }, { syncedAt: { lt: new Date(Date.now() - 30 * 60 * 1000) } }] },
+    data: { syncedAt: startedAt, status: "running", message: null }
+  });
+  if (!claimed.count) return { rowCount: (await postOfficeDirectoryStatus(prisma)).rowCount };
 
   try {
     const locations = await fetchAllLctrPostOffices();
-    for (const location of locations) {
-      await prisma.postOfficeDirectory.upsert({
-        where: { sourceId: location.sourceId },
-        update: {
-          name: location.name,
-          address: location.address,
-          phone: location.phone,
-          suburb: location.suburb,
-          postcode: location.postcode,
-          state: location.state,
-          latitude: location.latitude,
-          longitude: location.longitude,
-          hours: location.hours,
-          active: true,
-          lastSeenAt: startedAt
-        },
-        create: {
-          sourceId: location.sourceId,
-          name: location.name,
-          address: location.address,
-          phone: location.phone,
-          suburb: location.suburb,
-          postcode: location.postcode,
-          state: location.state,
-          latitude: location.latitude,
-          longitude: location.longitude,
-          hours: location.hours,
-          active: true,
-          lastSeenAt: startedAt
-        }
+    if (!locations.length) throw new Error("Directory returned no valid locations; the previous directory was retained.");
+    await prisma.$transaction(async (tx) => {
+      const lease = await tx.integrationSyncState.updateMany({
+        where: { key: syncKey, status: "running", syncedAt: startedAt },
+        data: { status: "running" }
       });
-    }
+      if (!lease.count) throw new Error("Directory refresh lease expired; newer refresh retained.");
+      for (const location of locations) {
+        await tx.postOfficeDirectory.upsert({
+          where: { sourceId: location.sourceId },
+          update: {
+            name: location.name,
+            address: location.address,
+            phone: location.phone ?? null,
+            suburb: location.suburb ?? null,
+            postcode: location.postcode ?? null,
+            state: location.state ?? null,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            hours: location.hours ?? null,
+            active: true,
+            lastSeenAt: startedAt
+          },
+          create: {
+            sourceId: location.sourceId,
+            name: location.name,
+            address: location.address,
+            phone: location.phone,
+            suburb: location.suburb,
+            postcode: location.postcode,
+            state: location.state,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            hours: location.hours,
+            active: true,
+            lastSeenAt: startedAt
+          }
+        });
+      }
 
-    await prisma.postOfficeDirectory.updateMany({
-      where: { lastSeenAt: { lt: startedAt } },
-      data: { active: false }
-    });
-    await prisma.integrationSyncState.update({
-      where: { key: syncKey },
-      data: { syncedAt: new Date(), status: "ok", message: null, rowCount: locations.length }
-    });
+      await tx.postOfficeDirectory.updateMany({
+        where: { lastSeenAt: { lt: startedAt } },
+        data: { active: false }
+      });
+      await tx.integrationSyncState.update({
+        where: { key: syncKey },
+        data: { syncedAt: new Date(), status: "ok", message: null, rowCount: locations.length }
+      });
+    }, { timeout: 120000 });
     return { rowCount: locations.length };
   } catch (error) {
-    await prisma.integrationSyncState.update({
-      where: { key: syncKey },
+    await prisma.integrationSyncState.updateMany({
+      where: { key: syncKey, status: "running", syncedAt: startedAt },
       data: {
         syncedAt: new Date(),
         status: "failed",

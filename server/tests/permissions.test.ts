@@ -24,6 +24,24 @@ describe("workspace permissions and live updates", () => {
   afterEach(async () => { await app.close(); });
   const request = (session: Session, method: "GET" | "POST" | "PATCH" | "DELETE", path: string, payload?: object) => app.inject({ method, url: `/api/v1/workspaces/${path}`, headers: { cookie: `pobox_watch_session=${session.id}` }, payload });
 
+  it("permits MapKit WASM and CDN without enabling arbitrary script evaluation", async () => {
+    const response = await request(admin, "GET", "ws_company/dashboard");
+    const policy = String(response.headers["content-security-policy"]);
+    expect(policy).toContain("'wasm-unsafe-eval'");
+    expect(policy).toContain("https://cdn.apple-mapkit.com");
+    expect(policy).toContain("worker-src 'self' blob:");
+    expect(policy).not.toContain("'unsafe-eval'");
+  });
+
+  it("only acknowledges an explicit known displayed version, including an older tab", async () => {
+    expect((await request(admin, "POST", "ws_company/app/changes/seen", {})).statusCode).toBe(400);
+    expect((await request(admin, "POST", "ws_company/app/changes/seen", { version: "99.0.0" })).statusCode).toBe(400);
+    const response = await request(admin, "POST", "ws_company/app/changes/seen", { version: "0.12.3" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().changes.length).toBeGreaterThan(0);
+    expect((await request(member, "GET", "ws_company/app/changes")).json().lastSeenVersion).toBeUndefined();
+  });
+
   it("denies foreign workspace reads and writes across the workspace route surface", async () => {
     for (const path of ["dashboard", "team/members", "review-items", "app/changes", "post-office-locations/status", "post-office-locations/search?query=south"]) {
       expect((await request(admin, "GET", `other/${path}`)).statusCode, path).toBe(403);

@@ -57,6 +57,8 @@ Recommended when Apple MapKit is enabled:
 VITE_MAPKIT_TOKEN=your-mapkit-js-token
 ```
 
+This token must allow the deployed website origin and be loaded before the web build; a PM2 restart alone cannot update it. See [maps, directory and release verification](docs/maps-directory-releases.md) for CSP requirements, safe directory refresh behavior, and browser checks. Version 0.13.8 adds no migration; rebuild native apps to receive native update notices.
+
 Recommended when Gmail polling is enabled:
 
 ```bash

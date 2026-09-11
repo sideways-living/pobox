@@ -112,15 +112,17 @@ async function fetchBrand(): Promise<LctrPostOfficeLocation[]> {
     url.searchParams.set("limit", String(pageSize));
     url.searchParams.set("offset", String(page * pageSize));
 
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(20000) });
     if (!response.ok) throw new Error("LCTR post office lookup failed.");
     const payload = await response.json() as LctrResponse;
-    const rows = payload.data ?? [];
-    locations.push(...rows.map(mapOutlet).filter((location): location is LctrPostOfficeLocation => location !== null));
-    if (rows.length < pageSize) break;
+    if (!Array.isArray(payload.data)) throw new Error("Invalid directory response; previous directory retained.");
+    const rows = payload.data;
+    const mapped = rows.map(mapOutlet);
+    if (mapped.some(location => location === null)) throw new Error("Directory contains invalid locations; previous directory retained.");
+    locations.push(...mapped as LctrPostOfficeLocation[]);
+    if (rows.length < pageSize) return dedupeLocations(locations);
   }
-
-  return dedupeLocations(locations);
+  throw new Error("Directory pagination limit reached; previous directory retained.");
 }
 
 async function fetchSuburbPostcodeLocations(query: string) {
@@ -217,7 +219,7 @@ function mapOutlet(row: LctrRetailOutlet): LctrPostOfficeLocation | null {
   const latitude = Number(row.latitude);
   const longitude = Number(row.longitude);
   const name = stringValue(row.name);
-  if (!name || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (!name || row.latitude == null || row.longitude == null || String(row.latitude).trim() === "" || String(row.longitude).trim() === "" || !Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
 
   const addressParts = [
     stringValue(row.address1),
