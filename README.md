@@ -64,6 +64,8 @@ Polling behavior is intentionally explicit:
 - Existing review decisions are checked before parsing again: unresolved items stay in review, and ignored/resolved items stay handled even if PO boxes change.
 - Gmail polling follows every unread-results page before marking messages read. `MAIL_POLL_MAX_RESULTS` is the page size (1–500, default 50), not a total inbox limit.
 - Reviewed or ignored Needs Review items are treated as handled on the next poll, so Gmail can mark the original source message read.
+- Processing and review decisions now commit with a durable Gmail acknowledgement queue. Multiple workers share per-message PostgreSQL locks; failed label updates are retried after restart without duplicating history.
+- See [Gmail processing and recovery](docs/gmail-processing-reliability.md) for state transitions, retry behavior, database tests, and the required migration.
 
 Set these in `.env` on the VPS:
 

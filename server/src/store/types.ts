@@ -153,6 +153,9 @@ export interface AppStore {
   dashboard(session: Session, workspaceId: string): Promise<DashboardSnapshot>;
   outstandingMailboxCount(workspaceId: string): Promise<number>;
   processIncomingMail(input: IncomingProviderMessage): Promise<IncomingMailResult>;
+  pendingMailAcknowledgements(workspaceId: string, provider: string): Promise<string[]>;
+  acknowledgeMail(workspaceId: string, provider: string, messageId: string): Promise<void>;
+  failMailAcknowledgement(workspaceId: string, provider: string, messageId: string, reason: string): Promise<void>;
   collectMailbox(session: Session, workspaceId: string, mailboxId: string, source: CollectionSource): Promise<CollectionEvent>;
   listMembers(session: Session, workspaceId: string): Promise<TeamMemberSummary[]>;
   listReviewItems(session: Session, workspaceId: string): Promise<ReviewItem[]>;

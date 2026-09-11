@@ -27,11 +27,12 @@ export interface MailPollSummary {
   duplicates: number;
   needsReview: number;
   markedRead: number;
+  failed: number;
 }
 
 export type MailProcessResult = IncomingMailResult["kind"];
 
 export interface MailPollerDependencies {
-  store: Pick<AppStore, "processIncomingMail">;
+  store: Pick<AppStore, "processIncomingMail" | "pendingMailAcknowledgements" | "acknowledgeMail" | "failMailAcknowledgement">;
   provider: MailProviderClient;
 }

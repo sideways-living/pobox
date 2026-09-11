@@ -58,6 +58,7 @@ export class MemoryStore implements AppStore {
   mailEvents = new Map<string, MailEvent>();
   collectionEvents = new Map<string, CollectionEvent>();
   auditEvents = new Map<string, AuditEvent>();
+  private mailAcknowledgements = new Map<string, { workspaceId: string; provider: string; messageId: string; acknowledged: boolean; nextAttemptAt: number }>();
   sessions = new Map<string, Session>();
   authChallenges = new Map<string, AuthChallenge>();
   recoveryCodes = new Map<string, { id: string; userId: string; codeHash: string; usedAt?: string }>();
@@ -427,6 +428,33 @@ export class MemoryStore implements AppStore {
   }
 
   async processIncomingMail(input: IncomingProviderMessage): Promise<IncomingMailResult> {
+    const result = await this.processMail(input);
+    if (result.kind !== "needs_review") this.queueMailAcknowledgement(input.workspaceId, input.provider, input.providerMessageId);
+    return result;
+  }
+
+  private queueMailAcknowledgement(workspaceId: string, provider: string, messageId: string) {
+    const key = JSON.stringify([workspaceId, provider, messageId]);
+    const existing = this.mailAcknowledgements.get(key);
+    if (!existing || existing.acknowledged) this.mailAcknowledgements.set(key, { workspaceId, provider, messageId, acknowledged: false, nextAttemptAt: Date.now() });
+  }
+
+  async pendingMailAcknowledgements(workspaceId: string, provider: string) {
+    return [...this.mailAcknowledgements.values()].filter((item) => item.workspaceId === workspaceId && item.provider === provider && !item.acknowledged && item.nextAttemptAt <= Date.now())
+      .sort((a, b) => a.nextAttemptAt - b.nextAttemptAt).slice(0, 100).map((item) => item.messageId);
+  }
+
+  async acknowledgeMail(workspaceId: string, provider: string, messageId: string) {
+    const item = this.mailAcknowledgements.get(JSON.stringify([workspaceId, provider, messageId]));
+    if (item) item.acknowledged = true;
+  }
+
+  async failMailAcknowledgement(workspaceId: string, provider: string, messageId: string, _reason: string) {
+    const item = this.mailAcknowledgements.get(JSON.stringify([workspaceId, provider, messageId]));
+    if (item && !item.acknowledged) item.nextAttemptAt = Date.now() + 60000;
+  }
+
+  private async processMail(input: IncomingProviderMessage): Promise<IncomingMailResult> {
     const duplicateKey = `${input.provider}:${input.providerMessageId}`;
     const duplicate = [...this.mailEvents.values()].find(
       (event) => `${event.provider}:${event.providerMessageId}` === duplicateKey && event.workspaceId === input.workspaceId
@@ -602,6 +630,7 @@ export class MemoryStore implements AppStore {
     await this.requireMember(session, workspaceId, "ADMIN");
     const review = this.auditEvents.get(reviewItemId);
     if (!review || review.workspaceId !== workspaceId || review.eventType !== "mail.needs_review") throw new NotFoundError("Review item not found.");
+    if (this.reviewAlreadyHandled(review, "mail.review_resolved", mailboxId)) return { kind: "duplicate", mailboxId };
     const mailbox = this.mailboxes.get(mailboxId);
     if (!mailbox || mailbox.workspaceId !== workspaceId || !mailbox.active) throw new NotFoundError("PO box not found.");
 
@@ -641,6 +670,7 @@ export class MemoryStore implements AppStore {
       provider: review.metadata.provider,
       providerThreadId: review.metadata.providerThreadId
     });
+    this.queueMailAcknowledgement(workspaceId, String(review.metadata.provider ?? "review"), review.entityId);
     return { kind: duplicate ? "duplicate" : "processed", mailboxId, notificationType: review.metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL" };
   }
 
@@ -648,24 +678,38 @@ export class MemoryStore implements AppStore {
     await this.requireMember(session, workspaceId, "ADMIN");
     const review = this.auditEvents.get(reviewItemId);
     if (!review || review.workspaceId !== workspaceId || review.eventType !== "mail.needs_review") throw new NotFoundError("Review item not found.");
+    if (this.reviewAlreadyHandled(review, "mail.review_resolved")) return;
     this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, {
       reviewItemId,
       action: "resolved_without_box_change",
       provider: review.metadata.provider,
       providerThreadId: review.metadata.providerThreadId
     });
+    this.queueMailAcknowledgement(workspaceId, String(review.metadata.provider ?? "review"), review.entityId);
   }
 
   async dismissReviewItem(session: Session, workspaceId: string, reviewItemId: string): Promise<void> {
     await this.requireMember(session, workspaceId, "ADMIN");
     const review = this.auditEvents.get(reviewItemId);
     if (!review || review.workspaceId !== workspaceId || review.eventType !== "mail.needs_review") throw new NotFoundError("Review item not found.");
+    if (this.reviewAlreadyHandled(review, "mail.review_ignored")) return;
     this.audit(session.userId, workspaceId, "mail.review_ignored", "mail_message", review.entityId, {
       reviewItemId,
       action: "ignored",
       provider: review.metadata.provider,
       providerThreadId: review.metadata.providerThreadId
     });
+    this.queueMailAcknowledgement(workspaceId, String(review.metadata.provider ?? "review"), review.entityId);
+  }
+
+  private reviewAlreadyHandled(review: AuditEvent, eventType: string, mailboxId?: string) {
+    const prior = [...this.auditEvents.values()].find((event) => isReviewResolutionEvent(event.eventType)
+      && event.workspaceId === review.workspaceId && event.entityId === review.entityId
+      && event.metadata.provider === review.metadata.provider);
+    if (!prior) return false;
+    if (prior.eventType !== eventType || prior.metadata.mailboxId !== mailboxId) throw new ConflictError("This review item was already handled.");
+    this.queueMailAcknowledgement(review.workspaceId, String(review.metadata.provider ?? "review"), review.entityId);
+    return true;
   }
 
   async searchPostOfficeLocations(session: Session, workspaceId: string, query: string): Promise<LctrPostOfficeLocation[]> {

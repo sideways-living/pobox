@@ -248,6 +248,20 @@ model MailEvent {
   @@index([workspaceId, mailboxId])
 }
 
+model MailAcknowledgement {
+  workspaceId       String
+  provider          String
+  providerMessageId String
+  acknowledgedAt    DateTime?
+  attempts          Int       @default(0)
+  nextAttemptAt     DateTime  @default(now())
+  lastError         String?
+  createdAt         DateTime  @default(now())
+
+  @@id([workspaceId, provider, providerMessageId])
+  @@index([workspaceId, provider, acknowledgedAt, nextAttemptAt], map: "MailAcknowledgement_pending_idx")
+}
+
 model CollectionEvent {
   id          String           @id @default(uuid())
   workspaceId String

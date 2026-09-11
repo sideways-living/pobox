@@ -15,8 +15,10 @@ function fixture(events: Array<{ entityId: string; eventType: string; provider?:
     create: vi.fn(async ({ data }) => ({ ...data, id: "review-new", createdAt: new Date() }))
   };
   const mailbox = { findMany: vi.fn(async () => []) };
-  const prisma = { mailEvent: { findUnique: vi.fn(async () => null) }, auditEvent, mailbox, postOffice: { findMany: vi.fn(async () => []) } };
-  return { store: new PrismaStore(prisma as unknown as PrismaClient), auditEvent, mailbox };
+  const prisma = { mailEvent: { findUnique: vi.fn(async () => null) }, auditEvent, mailbox, postOffice: { findMany: vi.fn(async () => []) },
+    $queryRaw: vi.fn(async () => []), mailAcknowledgement: { upsert: vi.fn(), updateMany: vi.fn() } };
+  const client = { ...prisma, $transaction: async (operation: (tx: typeof prisma) => Promise<unknown>) => operation(prisma) };
+  return { store: new PrismaStore(client as unknown as PrismaClient), auditEvent, mailbox };
 }
 
 describe("Prisma incoming message review identity", () => {

@@ -29,7 +29,7 @@ describe("Gmail unread pagination", () => {
     const messages = await new GmailProviderClient(config).listUnreadMessages();
     expect(messages.map((message) => message.providerMessageId)).toEqual(["review-1", "review-2", "new-mail", "new-parcel"]);
     expect(api.list.mock.calls.map(([request]) => request.pageToken)).toEqual([undefined, "page-2", "page-3"]);
-    expect(api.list).toHaveBeenLastCalledWith({ userId: "me", q: "is:unread", maxResults: 2, pageToken: "page-3" });
+    expect(api.list).toHaveBeenLastCalledWith({ userId: "me", q: "is:unread", maxResults: 2, pageToken: "page-3" }, { timeout: 15000, retry: false });
     expect(api.get).toHaveBeenCalledTimes(4);
     expect(api.modify).not.toHaveBeenCalled();
     expect(messages.every((message) => message.providerThreadId === "shared-thread")).toBe(true);
@@ -51,8 +51,8 @@ describe("Gmail unread pagination", () => {
     const store = new MemoryStore();
     await store.seedDemo();
     const poller = new MailPoller({ store, provider: new GmailProviderClient(config) }, { workspaceId: "ws_company", intervalMs: 1800000 });
-    await expect(poller.pollOnce()).resolves.toEqual({ scanned: 2, processed: 1, duplicates: 0, needsReview: 1, markedRead: 1 });
-    expect(api.modify).toHaveBeenCalledExactlyOnceWith({ userId: "me", id: "mail", requestBody: { removeLabelIds: ["UNREAD"] } });
+    await expect(poller.pollOnce()).resolves.toEqual({ scanned: 2, processed: 1, duplicates: 0, needsReview: 1, markedRead: 1, failed: 0 });
+    expect(api.modify).toHaveBeenCalledExactlyOnceWith({ userId: "me", id: "mail", requestBody: { removeLabelIds: ["UNREAD"] } }, { timeout: 15000, retry: false });
   });
 
   it("fails on a later page without acknowledging any source mail", async () => {
@@ -66,6 +66,25 @@ describe("Gmail unread pagination", () => {
     api.list.mockResolvedValue({ data: { nextPageToken: "same" } });
     await expect(new GmailProviderClient(config).listUnreadMessages()).rejects.toThrow("repeated page token");
     expect(api.list).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps fetching later messages when one full-message fetch fails", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    api.list.mockResolvedValue({ data: { messages: [{ id: "bad" }, { id: "good" }] } });
+    api.get.mockRejectedValueOnce({ response: { status: 404 }, message: "sensitive request" });
+    const result = await new GmailProviderClient(config).listUnreadMessages();
+    expect(result.map((item) => item.providerMessageId)).toEqual(["good"]);
+    expect(logged).toHaveBeenCalledWith("Mail operation failed (HTTP 404); it will be retried.");
+    expect(api.modify).not.toHaveBeenCalled();
+    logged.mockRestore();
+  });
+
+  it("stops on revoked credentials without marking partially fetched messages read", async () => {
+    api.list.mockResolvedValue({ data: { messages: [{ id: "first" }, { id: "second" }] } });
+    api.get.mockRejectedValueOnce({ response: { status: 401 } });
+    await expect(new GmailProviderClient(config).listUnreadMessages()).rejects.toThrow("Reconnect the Gmail account");
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(api.modify).not.toHaveBeenCalled();
   });
 
   it.each([0, -1, 501, 1.5, Number.NaN])("rejects invalid page size %s", (maxResults) => {

@@ -22,14 +22,20 @@ class FakeProvider implements MailProviderClient {
 
 function fakeStore(results: Array<"processed" | "duplicate" | "needs_review">) {
   const inputs: IncomingProviderMessage[] = [];
+  const pending = new Set<string>();
   return {
     inputs,
     store: {
       async processIncomingMail(input: IncomingProviderMessage) {
         inputs.push(input);
-        return { kind: results.shift() ?? "needs_review" };
-      }
-    } as Pick<AppStore, "processIncomingMail">
+        const kind = results.shift() ?? "needs_review";
+        if (kind !== "needs_review") pending.add(input.providerMessageId);
+        return { kind };
+      },
+      async pendingMailAcknowledgements() { return [...pending]; },
+      async acknowledgeMail(_workspace: string, _provider: string, id: string) { pending.delete(id); },
+      async failMailAcknowledgement() {}
+    } as Pick<AppStore, "processIncomingMail" | "pendingMailAcknowledgements" | "acknowledgeMail" | "failMailAcknowledgement">
   };
 }
 
@@ -47,7 +53,7 @@ describe("mail poller", () => {
 
     const summary = await poller.pollOnce();
 
-    expect(summary).toEqual({ scanned: 3, processed: 1, duplicates: 1, needsReview: 1, markedRead: 2 });
+    expect(summary).toEqual({ scanned: 3, processed: 1, duplicates: 1, needsReview: 1, markedRead: 2, failed: 0 });
     expect(provider.markedRead).toEqual(["gmail-1", "gmail-2"]);
     expect(inputs.map((input) => input.workspaceId)).toEqual(["ws_company", "ws_company", "ws_company"]);
     expect(inputs.map((input) => input.provider)).toEqual(["fake-mail", "fake-mail", "fake-mail"]);
@@ -123,7 +129,7 @@ describe("mail poller", () => {
     await expect(resolvedPoller.pollOnce()).resolves.toMatchObject({ scanned: 1, needsReview: 1, markedRead: 0 });
     const [resolvedItem] = await store.listReviewItems(daniel, "ws_company");
     await store.resolveReviewItem(daniel, "ws_company", resolvedItem.id, "box_1234");
-    await expect(resolvedPoller.pollOnce()).resolves.toEqual({ scanned: 1, processed: 0, duplicates: 1, needsReview: 0, markedRead: 1 });
+    await expect(resolvedPoller.pollOnce()).resolves.toEqual({ scanned: 1, processed: 0, duplicates: 1, needsReview: 0, markedRead: 1, failed: 0 });
     expect(resolvedProvider.markedRead).toEqual(["gmail-review-resolved"]);
 
     const ignoredProvider = new FakeProvider([
@@ -134,7 +140,7 @@ describe("mail poller", () => {
     await expect(ignoredPoller.pollOnce()).resolves.toMatchObject({ scanned: 1, needsReview: 1, markedRead: 0 });
     const [ignoredItem] = await store.listReviewItems(daniel, "ws_company");
     await store.dismissReviewItem(daniel, "ws_company", ignoredItem.id);
-    await expect(ignoredPoller.pollOnce()).resolves.toEqual({ scanned: 1, processed: 0, duplicates: 1, needsReview: 0, markedRead: 1 });
+    await expect(ignoredPoller.pollOnce()).resolves.toEqual({ scanned: 1, processed: 0, duplicates: 1, needsReview: 0, markedRead: 1, failed: 0 });
     expect(ignoredProvider.markedRead).toEqual(["gmail-review-ignored"]);
   });
 });

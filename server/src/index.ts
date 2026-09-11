@@ -6,5 +6,6 @@ const port = Number(process.env.PORT || 4175);
 const host = process.env.HOST || "0.0.0.0";
 const store = createStore();
 const app = await buildServer(store);
-startConfiguredMailPoller(store);
+const mailPoller = startConfiguredMailPoller(store);
+app.addHook("onClose", async () => { mailPoller?.stop(); });
 await app.listen({ port, host });

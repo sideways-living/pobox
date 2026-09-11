@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import type { gmail_v1 } from "googleapis";
 import type { MailProviderClient, ProviderUnreadMessage } from "./types.js";
+import { MailAuthenticationError, safeMailError, withMailRetry } from "./retry.js";
 
 function headerValue(message: gmail_v1.Schema$Message, name: string) {
   return message.payload?.headers?.find((header) => header.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
@@ -86,12 +87,12 @@ export class GmailProviderClient implements MailProviderClient {
     // Finish listing before the poller removes UNREAD, so pagination is not
     // shifted by our own acknowledgements. Review items may remain unread.
     do {
-      const list = await this.gmail.users.messages.list({
+      const list = await withMailRetry(() => this.gmail.users.messages.list({
         userId: this.userId,
         q: this.query,
         maxResults: this.maxResults,
         pageToken
-      });
+      }, { timeout: 15000, retry: false }));
       for (const item of list.data.messages ?? []) {
         if (item.id) messages.set(item.id, item);
       }
@@ -103,30 +104,37 @@ export class GmailProviderClient implements MailProviderClient {
     const results: ProviderUnreadMessage[] = [];
     for (const item of messages.values()) {
       if (!item.id) continue;
-      const message = await this.gmail.users.messages.get({
-        userId: this.userId,
-        id: item.id,
-        format: "full"
-      });
-      const data = message.data;
-      const receivedAt = data.internalDate ? new Date(Number(data.internalDate)).toISOString() : undefined;
-      results.push({
-        providerMessageId: item.id,
-        providerThreadId: data.threadId ?? item.threadId ?? undefined,
-        sender: headerValue(data, "from"),
-        subject: headerValue(data, "subject"),
-        bodyPreview: plainTextBody(data.payload) ?? htmlTextBody(data.payload) ?? data.snippet ?? undefined,
-        receivedAt
-      });
+      const messageId = item.id;
+      try {
+        const message = await withMailRetry(() => this.gmail.users.messages.get({
+          userId: this.userId,
+          id: messageId,
+          format: "full"
+        }, { timeout: 15000, retry: false }));
+        const data = message.data;
+        const receivedAt = data.internalDate ? new Date(Number(data.internalDate)).toISOString() : undefined;
+        results.push({
+          providerMessageId: item.id,
+          providerThreadId: data.threadId ?? item.threadId ?? undefined,
+          sender: headerValue(data, "from"),
+          subject: headerValue(data, "subject"),
+          bodyPreview: plainTextBody(data.payload) ?? htmlTextBody(data.payload) ?? data.snippet ?? undefined,
+          receivedAt
+        });
+      } catch (error) {
+        if (error instanceof MailAuthenticationError) throw error;
+        console.error(safeMailError(error));
+        // Leave this message unread and continue fetching the rest of the page.
+      }
     }
     return results;
   }
 
   async markMessageRead(providerMessageId: string): Promise<void> {
-    await this.gmail.users.messages.modify({
+    await withMailRetry(() => this.gmail.users.messages.modify({
       userId: this.userId,
       id: providerMessageId,
       requestBody: { removeLabelIds: ["UNREAD"] }
-    });
+    }, { timeout: 15000, retry: false }));
   }
 }
