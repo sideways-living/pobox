@@ -51,4 +51,19 @@ describe("review API workflow", () => {
     expect((await request(`${base}/${review.id}/resolve`, { mailboxId: "box_1234" })).statusCode).toBe(200);
     expect((await request(`${base}/${review.id}/dismiss`, {})).statusCode).toBe(409);
   });
+
+  it("enforces management validation and permissions", async () => {
+    const offices = "/api/v1/workspaces/ws_company/post-offices";
+    const valid = { name: "Test Office", address: "1 Test Street", latitude: -37.8, longitude: 144.9, geofenceRadius: 200 };
+    expect((await request(offices, { ...valid, name: "   " })).statusCode).toBe(400);
+    expect((await request(offices, { ...valid, latitude: 91 })).statusCode).toBe(400);
+    expect((await request(offices, { ...valid, longitude: 181 })).statusCode).toBe(400);
+    const office = [...store.postOffices.values()][0];
+    expect((await request("/api/v1/workspaces/ws_company/mailboxes", { postOfficeId: office.id, boxNumber: " " })).statusCode).toBe(400);
+    const member = [...store.members.values()].find((item) => item.userId === "usr_daniel")!;
+    member.role = "MEMBER";
+    expect((await request(offices, valid)).statusCode).toBe(403);
+    expect((await app.inject({ method: "DELETE", url: `${offices}/${office.id}`, headers: { cookie } })).statusCode).toBe(403);
+    expect(store.postOffices.get(office.id)?.active).toBe(true);
+  });
 });

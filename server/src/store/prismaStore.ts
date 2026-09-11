@@ -992,140 +992,102 @@ export class PrismaStore implements AppStore {
 
   async createPostOffice(session: Session, workspaceId: string, input: CreatePostOfficeInput): Promise<PostOffice> {
     await this.requireMember(session, workspaceId, "ADMIN");
-    const office = await this.prisma.postOffice.create({
-      data: {
-        workspaceId,
-        name: input.name,
-        address: input.address,
-        phone: input.phone,
-        latitude: input.latitude,
-        longitude: input.longitude,
-        geofenceRadius: input.geofenceRadius,
-        active: true
-      }
+    return this.prisma.$transaction(async (tx) => {
+      const office = await tx.postOffice.create({
+        data: {
+          workspaceId,
+          name: input.name,
+          address: input.address,
+          phone: input.phone,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          geofenceRadius: input.geofenceRadius,
+          active: true
+        }
+      });
+      await this.audit(session.userId, workspaceId, "post_office.created", "post_office", office.id, { name: office.name }, tx);
+      return this.toPostOffice(office);
     });
-    await this.audit(session.userId, workspaceId, "post_office.created", "post_office", office.id, { name: office.name });
-    return this.toPostOffice(office);
   }
 
   async updatePostOffice(session: Session, workspaceId: string, postOfficeId: string, input: UpdatePostOfficeInput): Promise<PostOffice> {
     await this.requireMember(session, workspaceId, "ADMIN");
-    const office = await this.prisma.postOffice.findFirst({ where: { id: postOfficeId, workspaceId, active: true } });
-    if (!office) throw new NotFoundError("Post office not found.");
-    const updated = await this.prisma.postOffice.update({
-      where: { id: postOfficeId },
-      data: {
-        name: input.name,
-        address: input.address,
-        phone: input.phone,
-        latitude: input.latitude,
-        longitude: input.longitude,
-        geofenceRadius: input.geofenceRadius
-      }
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockManagement(tx, workspaceId);
+      const office = await tx.postOffice.findFirst({ where: { id: postOfficeId, workspaceId, active: true } });
+      if (!office) throw new NotFoundError("Post office not found.");
+      const updated = await tx.postOffice.update({
+        where: { id: postOfficeId },
+        data: {
+          name: input.name,
+          address: input.address,
+          phone: input.phone,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          geofenceRadius: input.geofenceRadius
+        }
+      });
+      await this.audit(session.userId, workspaceId, "post_office.updated", "post_office", postOfficeId, { name: updated.name }, tx);
+      return this.toPostOffice(updated);
     });
-    await this.audit(session.userId, workspaceId, "post_office.updated", "post_office", postOfficeId, { name: updated.name });
-    return this.toPostOffice(updated);
   }
 
   async deletePostOffice(session: Session, workspaceId: string, postOfficeId: string): Promise<void> {
     await this.requireMember(session, workspaceId, "ADMIN");
-    const office = await this.prisma.postOffice.findFirst({ where: { id: postOfficeId, workspaceId, active: true } });
-    if (!office) throw new NotFoundError("Post office not found.");
-    await this.prisma.$transaction([
-      this.prisma.mailbox.updateMany({ where: { workspaceId, postOfficeId }, data: { active: false, mailWaiting: false, parcelWaiting: false } }),
-      this.prisma.postOffice.update({ where: { id: postOfficeId }, data: { active: false } })
-    ]);
-    await this.audit(session.userId, workspaceId, "post_office.deleted", "post_office", postOfficeId, { name: office.name });
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockManagement(tx, workspaceId);
+      const offices = await tx.$queryRaw<Array<{ id: string; name: string }>>`SELECT id, name FROM "PostOffice" WHERE id = ${postOfficeId} AND "workspaceId" = ${workspaceId} AND active = true FOR UPDATE`;
+      if (!offices.length) throw new NotFoundError("Post office not found.");
+      await tx.mailbox.updateMany({ where: { workspaceId, postOfficeId }, data: { active: false } });
+      await tx.postOffice.update({ where: { id: postOfficeId }, data: { active: false } });
+      await this.audit(session.userId, workspaceId, "post_office.deleted", "post_office", postOfficeId, { name: offices[0].name, action: "archived_history_and_pending_review_preserved" }, tx);
+    });
   }
 
   async createMailbox(session: Session, workspaceId: string, input: CreateMailboxInput): Promise<Mailbox> {
     await this.requireMember(session, workspaceId, "ADMIN");
-    const office = await this.prisma.postOffice.findFirst({ where: { id: input.postOfficeId, workspaceId, active: true } });
-    if (!office) throw new NotFoundError("Post office not found.");
-    const boxNumber = input.boxNumber.trim();
-    const existingMailboxes = await this.prisma.mailbox.findMany({
-      where: {
-        workspaceId,
-        postOfficeId: input.postOfficeId,
-        active: true
-      },
-      select: { boxNumber: true }
-    });
-    if (existingMailboxes.some((mailbox: { boxNumber: string }) => normalizeMailboxNumber(mailbox.boxNumber) === normalizeMailboxNumber(boxNumber))) {
-      throw new ConflictError("This post office already has that PO box number.");
-    }
-    const name = input.name?.trim() || `PO Box ${boxNumber}`;
-    try {
-      const mailbox = await this.prisma.mailbox.create({
-        data: {
-          workspaceId,
-          postOfficeId: input.postOfficeId,
-          name,
-          boxNumber,
-          active: true,
-          mailWaiting: false,
-          parcelWaiting: false
-        }
-      });
-      await this.audit(session.userId, workspaceId, "mailbox.created", "mailbox", mailbox.id, { boxNumber: mailbox.boxNumber });
-      return this.toMailbox(mailbox);
-    } catch (error) {
-      if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new ConflictError("This post office already has that PO box number.");
-      }
-      throw error;
-    }
+    return this.saveManagedMailbox(session, workspaceId, input);
   }
 
   async updateMailbox(session: Session, workspaceId: string, mailboxId: string, input: UpdateMailboxInput): Promise<Mailbox> {
     await this.requireMember(session, workspaceId, "ADMIN");
-    const mailbox = await this.prisma.mailbox.findFirst({ where: { id: mailboxId, workspaceId, active: true } });
-    if (!mailbox) throw new NotFoundError("PO box not found.");
-    if (input.postOfficeId) {
-      const office = await this.prisma.postOffice.findFirst({ where: { id: input.postOfficeId, workspaceId, active: true } });
-      if (!office) throw new NotFoundError("Post office not found.");
-    }
-    const nextPostOfficeId = input.postOfficeId ?? mailbox.postOfficeId;
-    const boxNumber = input.boxNumber?.trim();
-    if (boxNumber) {
-      const existingMailboxes = await this.prisma.mailbox.findMany({
-        where: {
-          id: { not: mailboxId },
-          workspaceId,
-          postOfficeId: nextPostOfficeId,
-          active: true
-        },
-        select: { boxNumber: true }
-      });
-      if (existingMailboxes.some((box: { boxNumber: string }) => normalizeMailboxNumber(box.boxNumber) === normalizeMailboxNumber(boxNumber))) {
-        throw new ConflictError("This post office already has that PO box number.");
-      }
-    }
-    try {
-      const updated = await this.prisma.mailbox.update({
-        where: { id: mailboxId },
-        data: {
-          postOfficeId: input.postOfficeId,
-          boxNumber,
-          name: boxNumber ? `PO Box ${boxNumber}` : undefined
-        }
-      });
-      await this.audit(session.userId, workspaceId, "mailbox.updated", "mailbox", mailboxId, { boxNumber: updated.boxNumber });
-      return this.toMailbox(updated);
-    } catch (error) {
-      if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new ConflictError("This post office already has that PO box number.");
-      }
-      throw error;
-    }
+    return this.saveManagedMailbox(session, workspaceId, input, mailboxId);
+  }
+
+  private async lockManagement(tx: Prisma.TransactionClient, workspaceId: string) {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`management:${workspaceId}`}, 0))::text`;
+  }
+
+  private async saveManagedMailbox(session: Session, workspaceId: string, input: UpdateMailboxInput, mailboxId?: string): Promise<Mailbox> {
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockManagement(tx, workspaceId);
+      const existing = mailboxId ? await tx.mailbox.findFirst({ where: { id: mailboxId, workspaceId, active: true } }) : null;
+      if (mailboxId && !existing) throw new NotFoundError("PO box not found.");
+      const postOfficeId = input.postOfficeId ?? existing?.postOfficeId ?? "";
+      const boxNumber = normalizeMailboxNumber(input.boxNumber ?? existing?.boxNumber ?? "");
+      if (!boxNumber) throw new ConflictError("Enter a PO box number.");
+      // Share the destination lock with review-driven creation and archiving.
+      const offices = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "PostOffice" WHERE id = ${postOfficeId} AND "workspaceId" = ${workspaceId} AND active = true FOR UPDATE`;
+      if (!offices.length) throw new NotFoundError("Post office not found.");
+      const boxes = await tx.mailbox.findMany({ where: { workspaceId, postOfficeId } });
+      const duplicate = boxes.find((box) => box.id !== mailboxId && normalizeMailboxNumber(box.boxNumber) === boxNumber);
+      if (duplicate) throw new ConflictError(duplicate.active ? "This post office already has that PO box number." : "This PO box number belongs to an archived record. Contact an administrator to restore it.");
+      const data = { postOfficeId, boxNumber, name: `PO Box ${boxNumber}` };
+      const saved = mailboxId ? await tx.mailbox.update({ where: { id: mailboxId }, data }) : await tx.mailbox.create({ data: { ...data, workspaceId } });
+      await this.audit(session.userId, workspaceId, mailboxId ? "mailbox.updated" : "mailbox.created", "mailbox", saved.id, { boxNumber, previousPostOfficeId: existing?.postOfficeId, previousBoxNumber: existing?.boxNumber }, tx);
+      return this.toMailbox(saved);
+    });
   }
 
   async deleteMailbox(session: Session, workspaceId: string, mailboxId: string): Promise<void> {
     await this.requireMember(session, workspaceId, "ADMIN");
-    const mailbox = await this.prisma.mailbox.findFirst({ where: { id: mailboxId, workspaceId, active: true } });
-    if (!mailbox) throw new NotFoundError("PO box not found.");
-    await this.prisma.mailbox.update({ where: { id: mailboxId }, data: { active: false, mailWaiting: false, parcelWaiting: false } });
-    await this.audit(session.userId, workspaceId, "mailbox.deleted", "mailbox", mailboxId, { boxNumber: mailbox.boxNumber });
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockManagement(tx, workspaceId);
+      const mailbox = await tx.mailbox.findFirst({ where: { id: mailboxId, workspaceId, active: true } });
+      if (!mailbox) throw new NotFoundError("PO box not found.");
+      await tx.mailbox.update({ where: { id: mailboxId }, data: { active: false } });
+      await this.audit(session.userId, workspaceId, "mailbox.deleted", "mailbox", mailboxId, { boxNumber: mailbox.boxNumber, action: "archived_history_and_pending_review_preserved" }, tx);
+    });
   }
 
   async inviteMember(session: Session, workspaceId: string, email: string, role: "ADMIN" | "MEMBER") {

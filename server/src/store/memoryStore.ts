@@ -882,7 +882,7 @@ export class MemoryStore implements AppStore {
     if (!office || office.workspaceId !== workspaceId || !office.active) throw new NotFoundError("Post office not found.");
     this.postOffices.set(postOfficeId, { ...office, active: false });
     for (const mailbox of [...this.mailboxes.values()].filter((box) => box.workspaceId === workspaceId && box.postOfficeId === postOfficeId)) {
-      this.mailboxes.set(mailbox.id, { ...mailbox, active: false, mailWaiting: false, parcelWaiting: false });
+      this.mailboxes.set(mailbox.id, { ...mailbox, active: false });
     }
     this.audit(session.userId, workspaceId, "post_office.deleted", "post_office", postOfficeId, { name: office.name });
   }
@@ -895,11 +895,11 @@ export class MemoryStore implements AppStore {
   private createMailboxRecord(session: Session, workspaceId: string, input: CreateMailboxInput): Mailbox {
     const office = this.postOffices.get(input.postOfficeId);
     if (!office || office.workspaceId !== workspaceId || !office.active) throw new NotFoundError("Post office not found.");
-    const boxNumber = input.boxNumber.trim();
+    const boxNumber = normalizeMailboxNumber(input.boxNumber);
+    if (!boxNumber) throw new ConflictError("Enter a PO box number.");
     if ([...this.mailboxes.values()].some((mailbox) =>
       mailbox.workspaceId === workspaceId &&
       mailbox.postOfficeId === input.postOfficeId &&
-      mailbox.active &&
       normalizeMailboxNumber(mailbox.boxNumber) === normalizeMailboxNumber(boxNumber)
     )) {
       throw new ConflictError("This post office already has that PO box number.");
@@ -931,12 +931,12 @@ export class MemoryStore implements AppStore {
       if (!office || office.workspaceId !== workspaceId || !office.active) throw new NotFoundError("Post office not found.");
     }
     const nextPostOfficeId = input.postOfficeId ?? mailbox.postOfficeId;
-    const boxNumber = input.boxNumber?.trim();
+    const boxNumber = normalizeMailboxNumber(input.boxNumber ?? mailbox.boxNumber);
+    if (!boxNumber) throw new ConflictError("Enter a PO box number.");
     if (boxNumber && [...this.mailboxes.values()].some((box) =>
       box.id !== mailboxId &&
       box.workspaceId === workspaceId &&
       box.postOfficeId === nextPostOfficeId &&
-      box.active &&
       normalizeMailboxNumber(box.boxNumber) === normalizeMailboxNumber(boxNumber)
     )) {
       throw new ConflictError("This post office already has that PO box number.");
@@ -957,7 +957,7 @@ export class MemoryStore implements AppStore {
     await this.requireMember(session, workspaceId, "ADMIN");
     const mailbox = this.mailboxes.get(mailboxId);
     if (!mailbox || mailbox.workspaceId !== workspaceId || !mailbox.active) throw new NotFoundError("PO box not found.");
-    this.mailboxes.set(mailboxId, { ...mailbox, active: false, mailWaiting: false, parcelWaiting: false, updatedAt: new Date().toISOString() });
+    this.mailboxes.set(mailboxId, { ...mailbox, active: false, updatedAt: new Date().toISOString() });
     this.audit(session.userId, workspaceId, "mailbox.deleted", "mailbox", mailboxId, { boxNumber: mailbox.boxNumber });
   }
 

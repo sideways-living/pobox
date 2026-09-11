@@ -38,16 +38,16 @@ const updateUserSchema = z.object({
   status: z.enum(["INVITED", "ACTIVE", "DISABLED"]).optional()
 }).refine((input) => Object.keys(input).length > 0, { message: "At least one field is required." });
 const createPostOfficeSchema = z.object({
-  name: z.string().min(1).max(160),
-  address: z.string().min(1).max(240),
+  name: z.string().trim().min(1).max(160),
+  address: z.string().trim().min(1).max(240),
   phone: z.string().max(80).optional(),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   geofenceRadius: z.number().int().min(25).max(5000).default(200)
 });
 const updatePostOfficeSchema = z.object({
-  name: z.string().min(1).max(160).optional(),
-  address: z.string().min(1).max(240).optional(),
+  name: z.string().trim().min(1).max(160).optional(),
+  address: z.string().trim().min(1).max(240).optional(),
   phone: z.string().max(80).optional(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
@@ -56,11 +56,11 @@ const updatePostOfficeSchema = z.object({
 const createMailboxSchema = z.object({
   postOfficeId: z.string().min(1),
   name: z.string().min(1).max(160).optional(),
-  boxNumber: z.string().min(1).max(40)
+  boxNumber: z.string().trim().min(1).max(40)
 });
 const updateMailboxSchema = z.object({
   postOfficeId: z.string().min(1).optional(),
-  boxNumber: z.string().min(1).max(40).optional()
+  boxNumber: z.string().trim().min(1).max(40).optional()
 }).refine((input) => Object.keys(input).length > 0, { message: "At least one field is required." });
 const resolveReviewSchema = z.union([
   z.object({ mailboxId: z.string().min(1) }).strict(),

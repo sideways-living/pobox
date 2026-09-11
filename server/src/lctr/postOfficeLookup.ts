@@ -69,6 +69,7 @@ export async function searchLctrPostOffices(query: string, state?: string): Prom
 
 export function rankedLocations(locations: LctrPostOfficeLocation[], normalizedQuery: string) {
   const query = normalizeSearchText(normalizedQuery);
+  if (query.length < 2) return [];
   const suburbAnchors = locations.filter((location) => normalizeSearchText(location.suburb) === query);
 
   return locations
@@ -283,7 +284,7 @@ function scoreLocation(location: LctrPostOfficeLocation, query: string, suburbAn
 }
 
 function startsWithWord(value: string, query: string) {
-  return words(value).some((part) => part.startsWith(query));
+  return value.startsWith(query) || value.includes(` ${query}`);
 }
 
 function nearestDistanceKm(location: LctrPostOfficeLocation, anchors: LctrPostOfficeLocation[]) {
@@ -311,10 +312,6 @@ function normalize(value?: string) {
 
 function normalizeSearchText(value?: string) {
   return normalize(value).replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function words(value: string) {
-  return value.split(/\s+/).filter(Boolean);
 }
 
 function stringValue(value: unknown) {

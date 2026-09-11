@@ -618,19 +618,21 @@ function MailboxSection({
   const parcelWaitingCount = snapshot.postOffices.flatMap((office) => office.mailboxes).filter((box) => box.parcelWaiting).length;
 
   async function saveOffice(officeId: string, input: { name: string; address: string; phone?: string; latitude: number; longitude: number; geofenceRadius: number }) {
-    if (!refresh || !setError) return;
+    if (!refresh || !setError) return false;
     try {
       await updatePostOffice(officeId, input);
       await refresh();
       setError(null);
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update post office.");
+      return false;
     }
   }
 
   async function removeOffice(office: PostOffice) {
     if (!refresh || !setError) return;
-    if (!window.confirm(`Delete ${office.name}? This will also remove its boxes from the active app.`)) return;
+    if (!window.confirm(`Remove ${office.name} and its boxes from the active app? History and waiting flags are retained in archived records. Pending review emails stay in Needs Review and remain unread until reviewed.`)) return;
     try {
       await deletePostOffice(office.id);
       await refresh();
@@ -641,19 +643,21 @@ function MailboxSection({
   }
 
   async function saveMailbox(mailboxId: string, input: { postOfficeId: string; boxNumber: string }) {
-    if (!refresh || !setError) return;
+    if (!refresh || !setError) return false;
     try {
       await updateMailbox(mailboxId, input);
       await refresh();
       setError(null);
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update PO box.");
+      return false;
     }
   }
 
   async function removeMailbox(mailbox: Mailbox) {
     if (!refresh || !setError) return;
-    if (!window.confirm(`Delete PO Box ${mailbox.boxNumber}? This will remove it from the active app.`)) return;
+    if (!window.confirm(`Remove PO Box ${mailbox.boxNumber} from the active app? History and waiting flags are retained in its archived record. Pending review emails are not resolved or marked read.`)) return;
     try {
       await deleteMailbox(mailbox.id);
       await refresh();
@@ -752,9 +756,9 @@ function OfficeSection({
   busyId: string | null;
   mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>;
   canManage: boolean;
-  onSaveOffice: (officeId: string, input: { name: string; address: string; phone?: string; latitude: number; longitude: number; geofenceRadius: number }) => Promise<void>;
+  onSaveOffice: (officeId: string, input: { name: string; address: string; phone?: string; latitude: number; longitude: number; geofenceRadius: number }) => Promise<boolean>;
   onDeleteOffice: (office: PostOffice) => Promise<void>;
-  onSaveMailbox: (mailboxId: string, input: { postOfficeId: string; boxNumber: string }) => Promise<void>;
+  onSaveMailbox: (mailboxId: string, input: { postOfficeId: string; boxNumber: string }) => Promise<boolean>;
   onDeleteMailbox: (mailbox: Mailbox) => Promise<void>;
 }) {
   const [editingOffice, setEditingOffice] = useState(false);
@@ -775,19 +779,19 @@ function OfficeSection({
   const parcelWaiting = office.mailboxes.filter((box) => box.parcelWaiting).length;
   const latestEvent = latestOfficeEvent(office);
   return (
-    <article className="office">
+    <article className="office" aria-label={office.name}>
       {editingOffice ? (
         <form className="editable-row office-edit" onSubmit={async (event) => {
           event.preventDefault();
-          await onSaveOffice(office.id, {
+          const saved = await onSaveOffice(office.id, {
             name,
             address,
-            phone: phone || undefined,
+            phone,
             latitude: Number(latitude),
             longitude: Number(longitude),
             geofenceRadius: Number(geofenceRadius)
           });
-          setEditingOffice(false);
+          if (saved) setEditingOffice(false);
         }}>
           <div className="edit-fields">
             <label>Name<input value={name} onChange={(event) => setName(event.target.value)} required /></label>
@@ -1581,6 +1585,8 @@ function ChangeNoticeModal({ notice, onClose }: { notice: AppChangesResponse; on
 
 function AddPostOfficeForm({ snapshot, refresh, setError }: { snapshot: DashboardSnapshot; refresh: () => Promise<void>; setError: (value: string | null) => void }) {
   const [query, setQuery] = useState("");
+  const currentQuery = useRef("");
+  currentQuery.current = query.trim();
   const [results, setResults] = useState<PostOfficeLocationResult[]>([]);
   const [directoryStatus, setDirectoryStatus] = useState<PostOfficeDirectoryStatus | null>(null);
   const [name, setName] = useState("");
@@ -1605,6 +1611,7 @@ function AddPostOfficeForm({ snapshot, refresh, setError }: { snapshot: Dashboar
     if (snapshot.currentUser.role !== "ADMIN") return;
     if (trimmed.length < 2) {
       setResults([]);
+      setBusy(false);
       setSearchedQuery("");
       return;
     }
@@ -1626,14 +1633,16 @@ function AddPostOfficeForm({ snapshot, refresh, setError }: { snapshot: Dashboar
     if (searchQuery.length < 2) return;
     try {
       setBusy(true);
-      setResults(await searchPostOfficeLocations(searchQuery));
+      const locations = await searchPostOfficeLocations(searchQuery);
+      if (currentQuery.current !== searchQuery) return;
+      setResults(locations);
       setSearchedQuery(searchQuery);
       setDirectoryStatus(await loadPostOfficeDirectoryStatus());
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to search post office locations.");
+      if (currentQuery.current === searchQuery) setError(err instanceof Error ? err.message : "Unable to search post office locations.");
     } finally {
-      setBusy(false);
+      if (currentQuery.current === searchQuery) setBusy(false);
     }
   }
 
@@ -1817,7 +1826,7 @@ function MailboxRow({
   table?: boolean;
   postOffices?: PostOffice[];
   canManage?: boolean;
-  onSave?: (mailboxId: string, input: { postOfficeId: string; boxNumber: string }) => Promise<void>;
+  onSave?: (mailboxId: string, input: { postOfficeId: string; boxNumber: string }) => Promise<boolean>;
   onDelete?: (mailbox: Mailbox) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -1825,15 +1834,15 @@ function MailboxRow({
   const [officeQuery, setOfficeQuery] = useState("");
   const [boxNumber, setBoxNumber] = useState(box.boxNumber);
   const status = mailboxStatus(box);
-  const latestWaitingAt = latestMailboxNotificationAt(box);
   const visiblePostOffices = filteredPostOffices(postOffices, officeQuery);
   const visiblePostOfficeIds = visiblePostOffices.map((office) => office.id).join(",");
   const duplicate = Boolean(postOfficeId && boxNumber.trim() && duplicateMailboxAtOffice(postOffices, postOfficeId, boxNumber, box.id));
-  const lastEvent = latestWaitingAt
-    ? `${box.parcelWaiting && !box.mailWaiting ? "Parcel" : "Mail"} Detected ${new Date(latestWaitingAt).toLocaleString()}`
-    : box.lastCollectedAt
-      ? `Collected ${new Date(box.lastCollectedAt).toLocaleString()}`
-      : "No events yet";
+  const lastEvent = [
+    { label: "Mail Detected", date: box.latestNotificationAt },
+    { label: "Parcel Detected", date: box.latestParcelNotificationAt },
+    { label: "Collected", date: box.lastCollectedAt }
+  ].filter((event) => event.date).sort((a, b) => Date.parse(b.date!) - Date.parse(a.date!))[0];
+  const lastEventText = lastEvent ? `${lastEvent.label} ${new Date(lastEvent.date!).toLocaleString()}` : "No events yet";
 
   useEffect(() => {
     if (visiblePostOffices.length > 0 && !visiblePostOffices.some((office) => office.id === postOfficeId)) {
@@ -1849,8 +1858,7 @@ function MailboxRow({
         <form className="mailbox-row editable-row" onSubmit={async (event) => {
           event.preventDefault();
           if (!onSave || duplicate) return;
-          await onSave(box.id, { postOfficeId, boxNumber: boxNumber.trim() });
-          setEditing(false);
+          if (await onSave(box.id, { postOfficeId, boxNumber: boxNumber.trim() })) setEditing(false);
         }}>
           <div className="edit-fields">
             <label>Find post office<input value={officeQuery} onChange={(event) => setOfficeQuery(event.target.value)} placeholder="Search saved post offices" autoComplete="off" /></label>
@@ -1859,7 +1867,7 @@ function MailboxRow({
             {duplicate && <p className="field-note warning">This post office already has PO Box {boxNumber.trim()}.</p>}
           </div>
           <span>{status}</span>
-          <span>{lastEvent}</span>
+          <span>{lastEventText}</span>
           <div className="row-actions">
             <button className="primary" type="submit" disabled={!postOfficeId || !boxNumber.trim() || duplicate}><Save size={16} />Save</button>
             <button className="secondary" type="button" onClick={() => setEditing(false)}><X size={16} />Cancel</button>
@@ -1873,7 +1881,7 @@ function MailboxRow({
           <strong>{box.name}</strong>
         </div>
         <StatusPill tone={hasWaitingItem(box) ? "warning" : "ok"}>{status}</StatusPill>
-        <span>{lastEvent}</span>
+        <span>{lastEventText}</span>
         <div className="row-actions">
           {hasWaitingItem(box) && <button disabled={busy} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button>}
           {canManage && (
@@ -1892,7 +1900,7 @@ function MailboxRow({
       <div>
         <strong>{box.name}</strong>
         <span>{status}</span>
-        <small>{lastEvent}</small>
+        <small>{lastEventText}</small>
       </div>
       {hasWaitingItem(box) && <button disabled={busy} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button>}
     </div>

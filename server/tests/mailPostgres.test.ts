@@ -170,4 +170,49 @@ describe.skipIf(!url)("PostgreSQL mail durability and worker concurrency", () =>
     expect(remaining).toHaveLength(106);
     expect(remaining.some((item) => item.provider === "imap" && item.providerMessageId === "same")).toBe(true);
   });
+
+  it("serializes normalized duplicate creates and permits different numbers at one office", async () => {
+    const office = await prisma.postOffice.findFirstOrThrow({ where: { workspaceId } });
+    const outcomes = await Promise.allSettled([
+      first.createMailbox(session, workspaceId, { postOfficeId: office.id, boxNumber: "PO Box AB-12" }),
+      second.createMailbox(session, workspaceId, { postOfficeId: office.id, boxNumber: "ab12" })
+    ]);
+    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+    await first.createMailbox(session, workspaceId, { postOfficeId: office.id, boxNumber: "3020" });
+    expect(await prisma.mailbox.count({ where: { workspaceId } })).toBe(3);
+  });
+
+  it("rejects duplicate office-only moves and persists office details across clients", async () => {
+    const office = await first.createPostOffice(session, workspaceId, { name: "South Melbourne LPO", address: "181 Clarendon Street, South Melbourne VIC 3205", phone: "+61 3 9000 0000", latitude: -37.832, longitude: 144.96, geofenceRadius: 200 });
+    await first.createMailbox(session, workspaceId, { postOfficeId: office.id, boxNumber: "1234" });
+    await expect(second.updateMailbox(session, workspaceId, mailboxId, { postOfficeId: office.id })).rejects.toThrow("already has");
+    await first.updatePostOffice(session, workspaceId, office.id, { phone: "+61 3 9000 1111" });
+    const snapshot = await second.dashboard(session, workspaceId);
+    expect(snapshot.postOffices.find((item) => item.id === office.id)).toMatchObject({ address: "181 Clarendon Street, South Melbourne VIC 3205", phone: "+61 3 9000 1111", latitude: -37.832, longitude: 144.96 });
+  });
+
+  it("archives boxes without deleting history, clearing flags or resolving pending reviews", async () => {
+    await first.processIncomingMail(mail("history"));
+    await first.processIncomingMail(mail("pending-review", "Unknown destination"));
+    await first.deleteMailbox(session, workspaceId, mailboxId);
+    expect(await prisma.mailbox.findUniqueOrThrow({ where: { id: mailboxId } })).toMatchObject({ active: false, mailWaiting: true });
+    expect(await prisma.mailEvent.count({ where: { workspaceId } })).toBe(1);
+    expect(await second.listReviewItems(session, workspaceId)).toHaveLength(1);
+    expect(await second.pendingMailAcknowledgements(workspaceId, "gmail")).toEqual(["history"]);
+    expect(await second.outstandingMailboxCount(workspaceId)).toBe(0);
+    const office = await prisma.postOffice.findFirstOrThrow({ where: { workspaceId } });
+    await expect(first.createMailbox(session, workspaceId, { postOfficeId: office.id, boxNumber: "1234" })).rejects.toThrow("archived record");
+  });
+
+  it("archives the entire office atomically and rejects future additions", async () => {
+    const office = await prisma.postOffice.findFirstOrThrow({ where: { workspaceId } });
+    await first.createMailbox(session, workspaceId, { postOfficeId: office.id, boxNumber: "3020" });
+    await first.processIncomingMail(mail("history"));
+    await first.deletePostOffice(session, workspaceId, office.id);
+    expect(await second.dashboard(session, workspaceId)).toMatchObject({ postOffices: [] });
+    expect(await prisma.mailbox.count({ where: { workspaceId, active: true } })).toBe(0);
+    expect(await prisma.mailEvent.count({ where: { workspaceId } })).toBe(1);
+    await expect(second.createMailbox(session, workspaceId, { postOfficeId: office.id, boxNumber: "999" })).rejects.toThrow("Post office not found");
+    expect(await prisma.auditEvent.count({ where: { workspaceId, eventType: "post_office.deleted" } })).toBe(1);
+  });
 });

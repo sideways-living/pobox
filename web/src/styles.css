@@ -402,12 +402,13 @@ h3 {
 }
 
 .post-offices-page {
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 390px);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .post-offices-page .side-panels {
-  position: sticky;
-  top: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  position: static;
+  align-items: start;
 }
 
 .map-location {
@@ -721,13 +722,7 @@ input, select {
 }
 
 .office-edit .edit-fields {
-  grid-template-columns:
-    minmax(220px, 1.15fr)
-    minmax(320px, 1.7fr)
-    minmax(150px, 0.8fr)
-    minmax(150px, 0.9fr)
-    minmax(150px, 0.9fr)
-    minmax(110px, 0.55fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
 }
 
 .mailbox-row.editable-row {
@@ -736,7 +731,7 @@ input, select {
 }
 
 .mailbox-row.editable-row .edit-fields {
-  grid-template-columns: minmax(190px, 0.9fr) minmax(240px, 1.25fr) minmax(150px, 0.55fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
 }
 
 .security-list span {

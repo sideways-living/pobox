@@ -2,6 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { rankedLocations, searchLctrPostOffices } from "../src/lctr/postOfficeLookup.js";
 
 describe("LCTR post office lookup", () => {
+  it("ranks multiword word-start before contains and ignores empty searches", () => {
+    const locations = ["XSOUTH MELBOURNE", "FITZROY SOUTH MELBOURNE", "SOUTH MELBOURNE"].map((name, index) => ({ sourceId: String(index), name, address: "Example Street", latitude: -37.8, longitude: 144.9 }));
+    expect(rankedLocations(locations, "south melb").map((item) => item.sourceId)).toEqual(["2", "1", "0"]);
+    expect(rankedLocations(locations, "  ")).toEqual([]);
+  });
   afterEach(() => {
     vi.restoreAllMocks();
   });
