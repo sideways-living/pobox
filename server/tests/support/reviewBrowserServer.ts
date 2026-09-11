@@ -10,6 +10,7 @@ const app = await buildServer(store);
 await app.register(fastifyStatic, { root: fileURLToPath(new URL("../../../web/dist", import.meta.url)) });
 const session = await store.login("daniel@example.com", "Password123!");
 if (session.kind !== "session") throw new Error("Expected fixture session");
+store.sessions.get(session.id)!.secondFactorVerified = true;
 store.users.get("usr_daniel")!.totpEnabled = true;
 store.passkeyCredentials.set("fixture", { id: "fixture", userId: "usr_daniel", credentialId: "fixture", publicKey: Buffer.from("fixture"), counter: 0, transports: [], friendlyName: "Fixture" });
 await store.processIncomingMail({ workspaceId: "ws_company", provider: "gmail", providerMessageId: "fixture-letter", sender: "notice@example.test", subject: "Mail2Day: PO Box 1234 has mail", receivedAt: "2026-09-10T01:00:00Z" });

@@ -202,17 +202,26 @@ export class PrismaStore implements AppStore {
     });
     const recovery = (availableRecoveryCodes as RecoveryCodeRow[]).find((candidate) => recoveryCodeMatches(code, candidate.codeHash));
     if (!validTotp && !recovery) throw new UnauthorizedError("Invalid two-factor code.");
-    await this.prisma.$transaction([
-      ...(recovery ? [this.prisma.recoveryCode.update({ where: { id: recovery.id }, data: { usedAt: new Date() } })] : []),
-      this.prisma.authChallenge.delete({ where: { id: challenge.id } })
-    ]);
-    return this.createSession(challenge.userId, challenge.user.lastLoginAt?.toISOString());
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${challenge.userId} FOR UPDATE`;
+      const current = await tx.user.findUnique({ where: { id: challenge.userId } });
+      if (!current?.active || !current.totpEnabled || current.totpSecretEncrypted !== challenge.user.totpSecretEncrypted) throw new UnauthorizedError("Security settings changed. Please sign in again.");
+      if (recovery) {
+        const consumed = await tx.recoveryCode.updateMany({ where: { id: recovery.id, usedAt: null }, data: { usedAt: new Date() } });
+        if (consumed.count !== 1) throw new UnauthorizedError("Recovery code already used.");
+      }
+      const consumed = await tx.authChallenge.deleteMany({ where: { id: challenge.id, expiresAt: { gt: new Date() } } });
+      if (consumed.count !== 1) throw new UnauthorizedError("Two-factor challenge expired or already used.");
+      const session = await tx.session.create({ data: { id: randomBytes(32).toString("base64url"), userId: challenge.userId, expiresAt: new Date(Date.now() + 14 * 86400000), secondFactorVerified: true } });
+      await tx.user.update({ where: { id: challenge.userId }, data: { lastLoginAt: new Date() } });
+      return { ...this.toSession(session), previousLoginAt: challenge.user.lastLoginAt?.toISOString() };
+    });
   }
 
   async createSessionForUser(userId: string): Promise<Session> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user?.active) throw new UnauthorizedError("Missing user.");
-    return this.createSession(user.id, user.lastLoginAt?.toISOString());
+    return this.createSession(user.id, user.lastLoginAt?.toISOString(), true);
   }
 
   async securityStatus(session: Session): Promise<SecurityStatus> {
@@ -253,35 +262,53 @@ export class PrismaStore implements AppStore {
     return this.appChanges(session, workspaceId);
   }
 
-  async beginTotpSetup(session: Session) {
+  async beginTotpSetup(session: Session, proof?: string) {
     const user = await this.prisma.user.findUnique({ where: { id: session.userId } });
     if (!user) throw new UnauthorizedError("Missing user.");
     const secret = generateTotpSecret();
-    await this.prisma.user.update({ where: { id: user.id }, data: { totpPendingSecretEncrypted: encryptSecret(secret) } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${user.id} FOR UPDATE`;
+      if (user.totpEnabled) {
+        const codes = await tx.recoveryCode.findMany({ where: { userId: user.id, usedAt: null } });
+        const recovery = codes.find(candidate => recoveryCodeMatches(proof ?? "", candidate.codeHash));
+        if (!proof || (!recovery && !verifyTotp(decryptSecret(user.totpSecretEncrypted!), proof))) throw new UnauthorizedError("Enter a current authenticator or unused recovery code.");
+        if (recovery) {
+          const consumed = await tx.recoveryCode.updateMany({ where: { id: recovery.id, usedAt: null }, data: { usedAt: new Date() } });
+          if (consumed.count !== 1) throw new UnauthorizedError("Recovery code already used.");
+        }
+      }
+      const updated = await tx.user.updateMany({ where: { id: user.id, active: true, totpSecretEncrypted: user.totpSecretEncrypted }, data: { totpPendingSecretEncrypted: encryptSecret(secret), totpPendingSessionId: session.id, totpPendingExpiresAt: new Date(Date.now() + 600000) } });
+      if (updated.count !== 1) throw new ConflictError("Security settings changed. Please sign in again.");
+    });
     return { secret, otpauthUrl: totpUri(secret, user.email) };
   }
 
   async confirmTotpSetup(session: Session, code: string): Promise<ConfirmTotpResult> {
     const user = await this.prisma.user.findUnique({ where: { id: session.userId } });
     if (!user?.totpPendingSecretEncrypted) throw new ConflictError("Start 2FA setup before confirming.");
+    if (user.totpPendingSessionId !== session.id || !user.totpPendingExpiresAt || user.totpPendingExpiresAt.getTime() <= Date.now()) throw new UnauthorizedError("Authenticator setup expired. Start again in this session.");
     const secret = decryptSecret(user.totpPendingSecretEncrypted);
     if (!verifyTotp(secret, code)) throw new UnauthorizedError("Invalid two-factor code.");
     const recoveryCodes = generateRecoveryCodes();
-    await this.prisma.$transaction([
-      this.prisma.recoveryCode.deleteMany({ where: { userId: user.id } }),
-      this.prisma.user.update({
-        where: { id: user.id },
+    await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.user.updateMany({
+        where: { id: user.id, active: true, totpPendingSecretEncrypted: user.totpPendingSecretEncrypted, totpPendingSessionId: session.id, totpPendingExpiresAt: { gt: new Date() } },
         data: {
           totpSecretEncrypted: user.totpPendingSecretEncrypted,
           totpPendingSecretEncrypted: null,
+          totpPendingSessionId: null,
+          totpPendingExpiresAt: null,
           totpEnabled: true,
           totpConfirmedAt: new Date()
         }
-      }),
-      ...recoveryCodes.map((recoveryCode) =>
-        this.prisma.recoveryCode.create({ data: { userId: user.id, codeHash: hashRecoveryCode(recoveryCode) } })
-      )
-    ]);
+      });
+      if (updated.count !== 1) throw new ConflictError("Authenticator setup already completed or replaced.");
+      await tx.recoveryCode.deleteMany({ where: { userId: user.id } });
+      await tx.recoveryCode.createMany({ data: recoveryCodes.map(code => ({ userId: user.id, codeHash: hashRecoveryCode(code) })) });
+      await tx.session.deleteMany({ where: { userId: user.id, id: { not: session.id } } });
+      await tx.session.update({ where: { id: session.id }, data: { secondFactorVerified: true } });
+      await tx.authChallenge.deleteMany({ where: { userId: user.id } });
+    });
     return { recoveryCodes };
   }
 
@@ -341,6 +368,7 @@ export class PrismaStore implements AppStore {
     if (!user || !challenge) throw new UnauthorizedError("Passkey registration expired.");
     const config = webAuthnConfig();
     const verification = await verifyRegistrationResponse({
+      requireUserVerification: true,
       response,
       expectedChallenge: challenge.challenge,
       expectedOrigin: config.origin,
@@ -404,6 +432,7 @@ export class PrismaStore implements AppStore {
     if (!challenge) throw new UnauthorizedError("Passkey sign-in expired.");
     const config = webAuthnConfig();
     const verification = await verifyAuthenticationResponse({
+      requireUserVerification: true,
       response,
       expectedChallenge: challenge.challenge,
       expectedOrigin: config.origin,
@@ -416,13 +445,15 @@ export class PrismaStore implements AppStore {
       }
     });
     if (!verification.verified) throw new UnauthorizedError("Passkey sign-in could not be verified.");
-    await this.prisma.$transaction([
-      this.prisma.passkeyCredential.update({
-        where: { id: credential.id },
+    await this.prisma.$transaction(async (tx) => {
+      const consumed = await tx.webAuthnChallenge.deleteMany({ where: { id: challenge.id, expiresAt: { gt: new Date() } } });
+      if (consumed.count !== 1) throw new UnauthorizedError("Passkey sign-in expired or already used.");
+      const updated = await tx.passkeyCredential.updateMany({
+        where: { id: credential.id, counter: credential.counter },
         data: { counter: verification.authenticationInfo.newCounter, lastUsedAt: new Date() }
-      }),
-      this.prisma.webAuthnChallenge.delete({ where: { id: challenge.id } })
-    ]);
+      });
+      if (updated.count !== 1) throw new UnauthorizedError("Passkey changed. Please try again.");
+    });
     if (credential.user.totpEnabled) {
       const expiresAt = new Date(Date.now() + 1000 * 60 * 10);
       const authChallenge = await this.prisma.authChallenge.create({
@@ -438,10 +469,10 @@ export class PrismaStore implements AppStore {
     return { kind: "session", ...(await this.createSession(credential.userId, credential.user.lastLoginAt?.toISOString())) };
   }
 
-  private async createSession(userId: string, previousLoginAt?: string): Promise<Session> {
+  private async createSession(userId: string, previousLoginAt?: string, secondFactorVerified = false): Promise<Session> {
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
     const session = await this.prisma.session.create({
-      data: { id: randomBytes(32).toString("base64url"), userId, expiresAt }
+      data: { id: randomBytes(32).toString("base64url"), userId, expiresAt, secondFactorVerified }
     });
     await this.prisma.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } });
     return { ...this.toSession(session), previousLoginAt };
@@ -458,9 +489,14 @@ export class PrismaStore implements AppStore {
 
   async getSession(sessionId?: string): Promise<Session> {
     if (!sessionId) throw new UnauthorizedError("Missing session.");
-    const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
-    if (!session || session.expiresAt.getTime() < Date.now()) throw new UnauthorizedError("Session expired.");
+    const session = await this.prisma.session.findUnique({ where: { id: sessionId }, include: { user: { select: { active: true, totpEnabled: true } } } });
+    if (!session || session.expiresAt.getTime() <= Date.now() || !session.user.active) throw new UnauthorizedError("Session expired.");
+    if (session.user.totpEnabled && !session.secondFactorVerified) throw new UnauthorizedError("Please sign in again with two-factor authentication.");
     return this.toSession(session);
+  }
+
+  async revokeSession(sessionId?: string): Promise<void> {
+    if (sessionId) await this.prisma.session.deleteMany({ where: { id: sessionId } });
   }
 
   async requireMember(session: Session, workspaceId: string, role?: "ADMIN"): Promise<WorkspaceMember> {
@@ -1123,8 +1159,8 @@ export class PrismaStore implements AppStore {
     };
   }
 
-  private toSession(session: { id: string; userId: string; expiresAt: Date }): Session {
-    return { id: session.id, userId: session.userId, expiresAt: session.expiresAt.toISOString() };
+  private toSession(session: { id: string; userId: string; expiresAt: Date; secondFactorVerified: boolean }): Session {
+    return { id: session.id, userId: session.userId, expiresAt: session.expiresAt.toISOString(), secondFactorVerified: session.secondFactorVerified };
   }
 
   private toPostOffice(office: {

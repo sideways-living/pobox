@@ -139,8 +139,9 @@ export interface AppStore {
   verifySecondFactor(challengeId: string, code: string): Promise<Session>;
   createSessionForUser(userId: string): Promise<Session>;
   getSession(sessionId?: string): Promise<Session>;
+  revokeSession(sessionId?: string): Promise<void>;
   securityStatus(session: Session): Promise<SecurityStatus>;
-  beginTotpSetup(session: Session): Promise<TotpSetup>;
+  beginTotpSetup(session: Session, proof?: string): Promise<TotpSetup>;
   confirmTotpSetup(session: Session, code: string): Promise<ConfirmTotpResult>;
   disableTotp(session: Session, code: string): Promise<void>;
   beginPasskeyRegistration(session: Session): Promise<PasskeyRegistrationOptions>;

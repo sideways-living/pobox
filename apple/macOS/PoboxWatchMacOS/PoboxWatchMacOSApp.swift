@@ -73,12 +73,16 @@ final class MacMailboxViewModel: ObservableObject {
 
     private let client = PoboxWatchAPIClient.live
     private let workspaceId = "ws_company"
+    private var nativeSignInProof: NativeSignInProof?
 
     func openPasskeySignIn() {
         guard let loginEmail = validatedLoginEmail() else { return }
+        let proof = NativeSignInProof()
+        nativeSignInProof = proof
         guard var components = URLComponents(string: "https://pobox.watch") else { return }
         components.queryItems = [
             URLQueryItem(name: "nativeReturn", value: "poboxwatch://auth"),
+            URLQueryItem(name: "nativeChallenge", value: proof.challenge),
             URLQueryItem(name: "email", value: loginEmail)
         ]
         guard let url = components.url else { return }
@@ -99,15 +103,16 @@ final class MacMailboxViewModel: ObservableObject {
     }
 
     func consumeNativeHandoff(from url: URL) async {
-        guard url.scheme == "poboxwatch",
+        guard let proof = nativeSignInProof, url.scheme == "poboxwatch",
               url.host == "auth",
               let code = URLComponents(url: url, resolvingAgainstBaseURL: false)?
                 .queryItems?
                 .first(where: { $0.name == "code" })?
                 .value
         else { return }
+        nativeSignInProof = nil
         await run {
-            _ = try await client.consumeNativeHandoff(code: code)
+            _ = try await client.consumeNativeHandoff(code: code, verifier: proof.verifier)
             passwordMode = false
             password = ""
             twoFactorChallengeId = nil
@@ -305,6 +310,11 @@ final class MacMailboxViewModel: ObservableObject {
         do {
             try await operation()
         } catch {
+            if case PoboxWatchAPIError.authenticationRequired = error {
+                snapshot = nil
+                members = []
+                reviewItems = []
+            }
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "Load failed. Check your connection and login details."
         }
         isLoading = false

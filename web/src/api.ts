@@ -93,10 +93,12 @@ export async function authenticatePasskey(responseJson: unknown): Promise<LoginR
   return response.json();
 }
 
-export async function beginNativeHandoff(): Promise<NativeHandoffResponse> {
+export async function beginNativeHandoff(challenge: string): Promise<NativeHandoffResponse> {
   const response = await fetch(`${apiBase}/api/v1/auth/native-handoff`, {
     method: "POST",
-    credentials: "include"
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challenge })
   });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
@@ -110,10 +112,12 @@ export async function logout(): Promise<void> {
   if (!response.ok) throw new Error(await errorMessage(response));
 }
 
-export async function beginTotpSetup(): Promise<TotpSetup> {
+export async function beginTotpSetup(proof?: string): Promise<TotpSetup> {
   const response = await fetch(`${apiBase}/api/v1/auth/2fa/setup`, {
     method: "POST",
-    credentials: "include"
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ proof })
   });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
@@ -343,6 +347,7 @@ export function realtimeUrl() {
 }
 
 async function errorMessage(response: Response) {
+  if (response.status === 401 && !response.url.includes("/auth/")) window.dispatchEvent(new Event("pobox-session-expired"));
   try {
     const body = await response.json();
     return body.error ?? response.statusText;

@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { appVersion } from "../src/releases.js";
 import { buildServer } from "../src/api/server.js";
 import { MemoryStore } from "../src/store/memoryStore.js";
+import { createHash } from "node:crypto";
 
 describe("release notices", () => {
   let app: FastifyInstance;
@@ -43,6 +44,7 @@ describe("release notices", () => {
   }
 
   function markSecurityComplete(userId: string) {
+    for (const session of store.sessions.values()) if (session.userId === userId) session.secondFactorVerified = true;
     const user = store.users.get(userId);
     if (!user) throw new Error(`Missing fixture user ${userId}.`);
     store.users.set(userId, {
@@ -104,14 +106,14 @@ describe("release notices", () => {
     expect(blocked.statusCode).toBe(403);
 
     const cookie = await loginCookie();
-    const handoff = await app.inject({ method: "POST", url: "/api/v1/auth/native-handoff", headers: { cookie } });
+    const handoff = await app.inject({ method: "POST", url: "/api/v1/auth/native-handoff", headers: { cookie }, payload: { challenge: createHash("sha256").update("a".repeat(43)).digest("base64url") } });
     expect(handoff.statusCode).toBe(200);
     expect(handoff.json().code).toBeTruthy();
 
     const consumed = await app.inject({
       method: "POST",
       url: "/api/v1/auth/native-handoff/consume",
-      payload: { code: handoff.json().code }
+      payload: { code: handoff.json().code, verifier: "a".repeat(43) }
     });
     expect(consumed.statusCode).toBe(200);
     const nativeCookie = consumed.cookies.find((item) => item.name === "pobox_watch_session");
@@ -127,7 +129,7 @@ describe("release notices", () => {
     const reused = await app.inject({
       method: "POST",
       url: "/api/v1/auth/native-handoff/consume",
-      payload: { code: handoff.json().code }
+      payload: { code: handoff.json().code, verifier: "a".repeat(43) }
     });
     expect(reused.statusCode).toBe(401);
   });

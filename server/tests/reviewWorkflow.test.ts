@@ -13,6 +13,7 @@ describe("review API workflow", () => {
     app = await buildServer(store);
     const login = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email: "daniel@example.com", password: "Password123!" } });
     cookie = `pobox_watch_session=${login.cookies[0].value}`;
+    store.sessions.get(login.cookies[0].value)!.secondFactorVerified = true;
     store.users.get("usr_daniel")!.totpEnabled = true;
     store.passkeyCredentials.set("fixture", { id: "fixture", userId: "usr_daniel", credentialId: "fixture", publicKey: Buffer.from("fixture"), counter: 0, transports: [], friendlyName: "Fixture" });
     await store.processIncomingMail({ workspaceId: "ws_company", provider: "gmail", providerMessageId: "missing", sender: "sender@example.test", subject: "Mail2Day: PO Box 3020 has mail", receivedAt: "2026-09-12T01:23:00Z", bodyPreview: "<p>Mail is waiting.</p><script>alert('bad')</script>" });

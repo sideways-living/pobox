@@ -1,4 +1,21 @@
 import Foundation
+import CryptoKit
+
+public struct NativeSignInProof: Sendable {
+    public let verifier: String
+    public var challenge: String {
+        Data(SHA256.hash(data: Data(verifier.utf8))).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+    public init() {
+        var generator = SystemRandomNumberGenerator()
+        verifier = Data((0..<32).map { _ in UInt8.random(in: .min ... .max, using: &generator) })
+            .base64EncodedString().replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+    }
+}
 
 public actor PoboxWatchAPIClient {
     private let baseURL: URL
@@ -35,12 +52,12 @@ public actor PoboxWatchAPIClient {
         return try decoder.decode(LoginResult.self, from: data)
     }
 
-    public func consumeNativeHandoff(code: String) async throws -> LoginResult {
+    public func consumeNativeHandoff(code: String, verifier: String) async throws -> LoginResult {
         let url = baseURL.appending(path: "/api/v1/auth/native-handoff/consume")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try encoder.encode(NativeHandoffRequest(code: code))
+        request.httpBody = try encoder.encode(NativeHandoffRequest(code: code, verifier: verifier))
         let (data, response) = try await session.data(for: request)
         try validate(response, data: data)
         return try decoder.decode(LoginResult.self, from: data)
@@ -210,6 +227,9 @@ public actor PoboxWatchAPIClient {
     }
 
     private func validate(_ response: URLResponse, data: Data) throws {
+        if let http = response as? HTTPURLResponse, http.statusCode == 401 {
+            throw PoboxWatchAPIError.authenticationRequired
+        }
         guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
             if let errorResponse = try? decoder.decode(ErrorResponse.self, from: data) {
                 throw PoboxWatchAPIError.requestFailed(errorResponse.error)
@@ -221,10 +241,12 @@ public actor PoboxWatchAPIClient {
 
 public enum PoboxWatchAPIError: LocalizedError {
     case requestFailed(String)
+    case authenticationRequired
 
     public var errorDescription: String? {
         switch self {
         case .requestFailed(let message): message
+        case .authenticationRequired: "Please sign in again. Your session or security code is no longer valid."
         }
     }
 }
@@ -245,6 +267,7 @@ private struct TwoFactorRequest: Encodable {
 
 private struct NativeHandoffRequest: Encodable {
     let code: String
+    let verifier: String
 }
 
 public struct LoginResult: Codable, Sendable {

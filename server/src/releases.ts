@@ -1,4 +1,4 @@
-export const appVersion = "0.13.5";
+export const appVersion = "0.13.6";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.6-security-recovery",
+    version: "0.13.6",
+    releasedAt: "2026-09-12T00:00:00.000Z",
+    title: "Safer sign-in and account recovery",
+    summary: "Logging out now ends that session on the server. In Settings, you can replace a lost authenticator using a recovery code. Replacing it signs out other sessions and gives you new recovery codes. Update the iPhone or Mac app before signing in again.",
+    audience: "ALL"
+  },
   {
     id: "0.13.5-native-email-prefill",
     version: "0.13.5",

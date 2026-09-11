@@ -16,6 +16,8 @@ export interface User {
   totpEnabled?: boolean;
   totpSecretEncrypted?: string;
   totpPendingSecretEncrypted?: string;
+  totpPendingSessionId?: string;
+  totpPendingExpiresAt?: string;
   totpConfirmedAt?: string;
 }
 
@@ -98,6 +100,7 @@ export interface AuditEvent {
 
 export interface Session {
   id: string;
+  secondFactorVerified?: boolean;
   userId: string;
   expiresAt: string;
   previousLoginAt?: string;

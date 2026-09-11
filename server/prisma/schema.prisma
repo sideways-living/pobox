@@ -39,6 +39,8 @@ model User {
   lastSeenReleaseAt DateTime?
   totpSecretEncrypted        String?
   totpPendingSecretEncrypted String?
+  totpPendingSessionId       String?
+  totpPendingExpiresAt       DateTime?
   totpEnabled                Boolean             @default(false)
   totpConfirmedAt            DateTime?
   profile           UserProfile?
@@ -54,6 +56,7 @@ model User {
 
 model Session {
   id        String   @id
+  secondFactorVerified Boolean @default(false)
   userId    String
   expiresAt DateTime
   createdAt DateTime @default(now())

@@ -176,7 +176,7 @@ export class MemoryStore implements AppStore {
     const challenge = this.authChallenges.get(challengeId);
     if (!challenge || new Date(challenge.expiresAt).getTime() < Date.now()) throw new UnauthorizedError("Two-factor challenge expired.");
     const user = this.users.get(challenge.userId);
-    if (!user?.totpEnabled || !user.totpSecretEncrypted) throw new UnauthorizedError("Two-factor authentication is not enabled.");
+    if (!user?.active || !user.totpEnabled || !user.totpSecretEncrypted) throw new UnauthorizedError("Two-factor authentication is not enabled.");
     const validTotp = verifyTotp(decryptSecret(user.totpSecretEncrypted), code);
     const recovery = [...this.recoveryCodes.values()].find(
       (candidate) => candidate.userId === user.id && !candidate.usedAt && recoveryCodeMatches(code, candidate.codeHash)
@@ -184,13 +184,13 @@ export class MemoryStore implements AppStore {
     if (!validTotp && !recovery) throw new UnauthorizedError("Invalid two-factor code.");
     if (recovery) this.recoveryCodes.set(recovery.id, { ...recovery, usedAt: new Date().toISOString() });
     this.authChallenges.delete(challengeId);
-    return this.createSession(user);
+    return this.createSession(user, true);
   }
 
   async createSessionForUser(userId: string): Promise<Session> {
     const user = this.users.get(userId);
     if (!user?.active) throw new UnauthorizedError("Missing user.");
-    return this.createSession(user);
+    return this.createSession(user, true);
   }
 
   async securityStatus(session: Session): Promise<SecurityStatus> {
@@ -204,17 +204,23 @@ export class MemoryStore implements AppStore {
     };
   }
 
-  async beginTotpSetup(session: Session) {
+  async beginTotpSetup(session: Session, proof?: string) {
     const user = this.users.get(session.userId);
     if (!user) throw new UnauthorizedError("Missing user.");
+    if (user.totpEnabled) {
+      const recovery = [...this.recoveryCodes.values()].find(candidate => candidate.userId === user.id && !candidate.usedAt && recoveryCodeMatches(proof ?? "", candidate.codeHash));
+      if (!proof || (!recovery && !verifyTotp(decryptSecret(user.totpSecretEncrypted!), proof))) throw new UnauthorizedError("Enter a current authenticator or unused recovery code.");
+      if (recovery) this.recoveryCodes.set(recovery.id, { ...recovery, usedAt: new Date().toISOString() });
+    }
     const secret = generateTotpSecret();
-    this.users.set(user.id, { ...user, totpPendingSecretEncrypted: encryptSecret(secret) });
+    this.users.set(user.id, { ...user, totpPendingSecretEncrypted: encryptSecret(secret), totpPendingSessionId: session.id, totpPendingExpiresAt: new Date(Date.now() + 600000).toISOString() });
     return { secret, otpauthUrl: totpUri(secret, user.email) };
   }
 
   async confirmTotpSetup(session: Session, code: string): Promise<ConfirmTotpResult> {
     const user = this.users.get(session.userId);
     if (!user?.totpPendingSecretEncrypted) throw new ConflictError("Start 2FA setup before confirming.");
+    if (user.totpPendingSessionId !== session.id || !user.totpPendingExpiresAt || new Date(user.totpPendingExpiresAt).getTime() <= Date.now()) throw new UnauthorizedError("Authenticator setup expired. Start again in this session.");
     const secret = decryptSecret(user.totpPendingSecretEncrypted);
     if (!verifyTotp(secret, code)) throw new UnauthorizedError("Invalid two-factor code.");
     const recoveryCodes = generateRecoveryCodes();
@@ -229,9 +235,18 @@ export class MemoryStore implements AppStore {
       ...user,
       totpSecretEncrypted: user.totpPendingSecretEncrypted,
       totpPendingSecretEncrypted: undefined,
+      totpPendingSessionId: undefined,
+      totpPendingExpiresAt: undefined,
       totpEnabled: true,
       totpConfirmedAt: new Date().toISOString()
     });
+    for (const existing of this.sessions.values()) {
+      if (existing.userId === user.id && existing.id !== session.id) this.sessions.delete(existing.id);
+    }
+    this.sessions.set(session.id, { ...session, secondFactorVerified: true });
+    for (const challenge of this.authChallenges.values()) {
+      if (challenge.userId === user.id) this.authChallenges.delete(challenge.id);
+    }
     return { recoveryCodes };
   }
 
@@ -276,12 +291,14 @@ export class MemoryStore implements AppStore {
     if (!user || !challenge) throw new UnauthorizedError("Passkey registration expired.");
     const config = webAuthnConfig();
     const verification = await verifyRegistrationResponse({
+      requireUserVerification: true,
       response,
       expectedChallenge: challenge.challenge,
       expectedOrigin: config.origin,
       expectedRPID: config.rpID
     });
     if (!verification.verified) throw new UnauthorizedError("Passkey registration could not be verified.");
+    if (!this.webAuthnChallenges.delete(challenge.id) || new Date(challenge.expiresAt).getTime() <= Date.now()) throw new UnauthorizedError("Passkey registration expired or already used.");
     const credential = verification.registrationInfo.credential;
     this.passkeyCredentials.set(credential.id, {
       id: nanoid(),
@@ -326,6 +343,7 @@ export class MemoryStore implements AppStore {
     if (!challenge) throw new UnauthorizedError("Passkey sign-in expired.");
     const config = webAuthnConfig();
     const verification = await verifyAuthenticationResponse({
+      requireUserVerification: true,
       response,
       expectedChallenge: challenge.challenge,
       expectedOrigin: config.origin,
@@ -338,6 +356,7 @@ export class MemoryStore implements AppStore {
       }
     });
     if (!verification.verified) throw new UnauthorizedError("Passkey sign-in could not be verified.");
+    if (!this.webAuthnChallenges.delete(challenge.id) || new Date(challenge.expiresAt).getTime() <= Date.now()) throw new UnauthorizedError("Passkey sign-in expired or already used.");
     this.passkeyCredentials.set(credential.credentialId, { ...credential, counter: verification.authenticationInfo.newCounter, lastUsedAt: new Date().toISOString() });
     this.webAuthnChallenges.delete(challenge.id);
     if (user.totpEnabled) {
@@ -352,11 +371,12 @@ export class MemoryStore implements AppStore {
     return { kind: "session", ...(await this.createSession(user)) };
   }
 
-  private async createSession(user: User): Promise<Session> {
+  private async createSession(user: User, secondFactorVerified = false): Promise<Session> {
     const previousLoginAt = user.lastLoginAt;
     const now = new Date().toISOString();
     const session: Session = {
       id: nanoid(32),
+      secondFactorVerified,
       userId: user.id,
       expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString(),
       previousLoginAt
@@ -378,10 +398,15 @@ export class MemoryStore implements AppStore {
   async getSession(sessionId?: string): Promise<Session> {
     if (!sessionId) throw new UnauthorizedError("Missing session.");
     const session = this.sessions.get(sessionId);
-    if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
+    if (!session || new Date(session.expiresAt).getTime() <= Date.now() || !this.users.get(session.userId)?.active) {
       throw new UnauthorizedError("Session expired.");
     }
+    if (this.users.get(session.userId)?.totpEnabled && !session.secondFactorVerified) throw new UnauthorizedError("Please sign in again with two-factor authentication.");
     return session;
+  }
+
+  async revokeSession(sessionId?: string): Promise<void> {
+    if (sessionId) this.sessions.delete(sessionId);
   }
 
   async requireMember(session: Session, workspaceId: string, role?: "ADMIN"): Promise<WorkspaceMember> {

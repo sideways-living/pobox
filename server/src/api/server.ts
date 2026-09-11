@@ -5,7 +5,7 @@ import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
 import Fastify, { type FastifyReply } from "fastify";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
@@ -21,7 +21,7 @@ const totpConfirmSchema = z.object({ code: z.string().min(6).max(32) });
 const passkeyRegistrationSchema = z.object({ response: z.any(), friendlyName: z.string().min(1).max(80).optional() });
 const passkeyAuthenticationOptionsSchema = z.object({ email: z.string().email().optional() });
 const passkeyAuthenticationSchema = z.object({ response: z.any() });
-const nativeHandoffConsumeSchema = z.object({ code: z.string().min(32).max(128) });
+const nativeHandoffConsumeSchema = z.object({ code: z.string().min(32).max(128), verifier: z.string().regex(/^[A-Za-z0-9_-]{43,128}$/) });
 const postOfficeLookupSchema = z.object({ query: z.string().min(2).max(80), state: z.string().length(3).optional() });
 const collectSchema = z.object({ source: z.enum(["IPHONE", "MACOS", "WEB", "ADMIN", "NOTIFICATION"]).default("WEB") });
 const inviteSchema = z.object({ email: z.string().email(), role: z.enum(["ADMIN", "MEMBER"]) });
@@ -79,7 +79,7 @@ function sessionCookie(cookies: Record<string, string | undefined>) {
 export async function buildServer(store: AppStore = new MemoryStore()) {
   await store.seedDemo();
   const app = Fastify({ logger: true });
-  const nativeHandoffCodes = new Map<string, { userId: string; expiresAt: number }>();
+  const nativeHandoffCodes = new Map<string, { sessionId: string; expiresAt: number; challenge: string }>();
   await app.register(helmet, {
     contentSecurityPolicy: {
       directives: {
@@ -119,7 +119,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
   async function securedSession(request: { cookies: Record<string, string | undefined> }, workspaceId: string) {
     const session = await store.getSession(sessionCookie(request.cookies));
     const status = await store.securityStatus(session);
-    if (status.passkeyCount < 1 || !status.totpEnabled) {
+    if (status.passkeyCount < 1 || !status.totpEnabled || !session.secondFactorVerified) {
       throw new ForbiddenError("Passkey and authenticator 2FA setup are required before using pobox.watch.");
     }
     await store.requireMember(session, workspaceId);
@@ -139,7 +139,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
   async function securedNativeSession(request: { cookies: Record<string, string | undefined> }) {
     const session = await store.getSession(sessionCookie(request.cookies));
     const status = await store.securityStatus(session);
-    if (status.passkeyCount < 1 || !status.totpEnabled) {
+    if (status.passkeyCount < 1 || !status.totpEnabled || !session.secondFactorVerified) {
       throw new ForbiddenError("Passkey and authenticator 2FA setup are required before returning to the pobox.watch app.");
     }
     await store.requireMember(session, "ws_company");
@@ -172,7 +172,9 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     return { ok: true, expiresAt: session.expiresAt, previousLoginAt: session.previousLoginAt };
   });
 
-  app.post("/api/v1/auth/logout", async (_request, reply) => {
+  app.post("/api/v1/auth/logout", async (request, reply) => {
+    await store.revokeSession(request.cookies[sessionCookieName]);
+    await store.revokeSession(request.cookies[legacySessionCookieName]);
     reply.clearCookie(sessionCookieName, { path: "/" });
     reply.clearCookie(legacySessionCookieName, { path: "/" });
     return { ok: true };
@@ -207,9 +209,11 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
 
   app.post("/api/v1/auth/native-handoff", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request) => {
     const session = await securedNativeSession(request);
+    const { challenge } = z.object({ challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).parse(request.body);
     const code = randomBytes(32).toString("base64url");
     const expiresAt = Date.now() + 1000 * 60 * 2;
-    nativeHandoffCodes.set(code, { userId: session.userId, expiresAt });
+    for (const [key, value] of nativeHandoffCodes) if (value.expiresAt <= Date.now()) nativeHandoffCodes.delete(key);
+    nativeHandoffCodes.set(code, { sessionId: session.id, expiresAt, challenge });
     return { code, expiresAt: new Date(expiresAt).toISOString() };
   });
 
@@ -218,7 +222,9 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const handoff = nativeHandoffCodes.get(body.code);
     nativeHandoffCodes.delete(body.code);
     if (!handoff || handoff.expiresAt < Date.now()) throw new UnauthorizedError("Native app sign-in link expired. Please try again.");
-    const session = await store.createSessionForUser(handoff.userId);
+    if (createHash("sha256").update(body.verifier).digest("base64url") !== handoff.challenge) throw new UnauthorizedError("Native app sign-in proof does not match. Please try again.");
+    const parent = await securedNativeSession({ cookies: { [sessionCookieName]: handoff.sessionId } });
+    const session = await store.createSessionForUser(parent.userId);
     setSessionCookie(reply, session);
     return { ok: true, expiresAt: session.expiresAt, previousLoginAt: session.previousLoginAt };
   });
@@ -228,12 +234,13 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     return store.securityStatus(session);
   });
 
-  app.post("/api/v1/auth/2fa/setup", async (request) => {
+  app.post("/api/v1/auth/2fa/setup", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request) => {
     const session = await store.getSession(sessionCookie(request.cookies));
-    return store.beginTotpSetup(session);
+    const body = z.object({ proof: z.string().max(128).optional() }).parse(request.body ?? {});
+    return store.beginTotpSetup(session, body.proof);
   });
 
-  app.post("/api/v1/auth/2fa/confirm", async (request) => {
+  app.post("/api/v1/auth/2fa/confirm", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request) => {
     const body = totpConfirmSchema.parse(request.body);
     const session = await store.getSession(sessionCookie(request.cookies));
     return store.confirmTotpSetup(session, body.code);
@@ -417,7 +424,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
   app.get("/api/v1/workspaces/:workspaceId/realtime", { websocket: true }, async (socket, request) => {
     const { workspaceId } = request.params as { workspaceId: string };
     await securedSession(request, workspaceId);
-    realtimeHub.add(workspaceId, socket);
+    realtimeHub.add(workspaceId, socket, async () => { await securedSession(request, workspaceId); });
     socket.send(JSON.stringify({ type: "connected", workspaceId }));
   });
 

@@ -52,7 +52,7 @@ function nativeReturnUrlFromLocation() {
   if (!value) return null;
   try {
     const url = new URL(value);
-    return allowedNativeReturnSchemes.has(url.protocol) ? value : null;
+    return allowedNativeReturnSchemes.has(url.protocol) && url.hostname === "auth" && !url.username && !url.password && !url.search && !url.hash && !url.pathname ? value : null;
   } catch {
     return null;
   }
@@ -60,7 +60,7 @@ function nativeReturnUrlFromLocation() {
 
 function loginEmailFromLocation() {
   const value = new URLSearchParams(window.location.search).get("email")?.trim().toLowerCase();
-  return value && value.includes("@") ? value : "";
+  return value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? value : "";
 }
 
 function App() {
@@ -75,6 +75,19 @@ function App() {
   const [securityGate, setSecurityGate] = useState<{ previousLoginAt?: string } | null>(null);
   const [nativeReturnLink, setNativeReturnLink] = useState<string | null>(null);
   const nativeReturnUrl = useMemo(nativeReturnUrlFromLocation, []);
+  useEffect(() => {
+    const expired = () => {
+      setSnapshot(null);
+      setMembers([]);
+      setReviewItems([]);
+      setChangeNotice(null);
+      setSecurityGate(null);
+      setNativeReturnLink(null);
+      setError("Your session ended. Please sign in again.");
+    };
+    window.addEventListener("pobox-session-expired", expired);
+    return () => window.removeEventListener("pobox-session-expired", expired);
+  }, []);
 
   async function refresh() {
     const nextSnapshot = await loadDashboard();
@@ -90,7 +103,7 @@ function App() {
     if (!snapshot) return;
     const socket = new WebSocket(realtimeUrl());
     socket.onopen = () => setConnected(true);
-    socket.onclose = () => setConnected(false);
+    socket.onclose = event => { setConnected(false); if (event.code === 1008) window.dispatchEvent(new Event("pobox-session-expired")); };
     socket.onerror = () => setConnected(false);
     socket.onmessage = (event) => {
       const message = JSON.parse(event.data);
@@ -106,7 +119,9 @@ function App() {
     await refresh();
     if (nativeReturnUrl) {
       try {
-        const handoff = await beginNativeHandoff();
+        const challenge = new URLSearchParams(window.location.search).get("nativeChallenge");
+        if (!challenge || !/^[A-Za-z0-9_-]{43}$/.test(challenge)) throw new Error("Update the native app and start sign-in from there again.");
+        const handoff = await beginNativeHandoff(challenge);
         const returnUrl = new URL(nativeReturnUrl);
         returnUrl.searchParams.set("code", handoff.code);
         returnUrl.searchParams.set("expiresAt", handoff.expiresAt);
@@ -375,7 +390,7 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
         {challengeId && (
           <label>
             Authenticator or recovery code
-            <input inputMode="numeric" autoComplete="one-time-code" value={twoFactorCode} onChange={(event) => setTwoFactorCode(event.target.value)} autoFocus />
+            <input autoComplete="one-time-code" value={twoFactorCode} onChange={(event) => setTwoFactorCode(event.target.value)} autoFocus />
           </label>
         )}
         {error && <div className="alert">{error}</div>}
@@ -386,7 +401,7 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
         {challengeId && <button type="button" className="secondary" disabled={busy} onClick={usePasskeyMode}>Cancel Verification</button>}
         {!challengeId && !passwordMode && <button type="button" className="secondary" disabled={busy} onClick={usePasswordFallback}>Use Password to Set Up Security</button>}
         {!challengeId && passwordMode && <button type="button" className="secondary" disabled={busy} onClick={usePasskeyMode}><KeyRound size={18} />Back to Passkey</button>}
-        <button type="button" className="link-button">Forgot Password?</button>
+        <details className="small"><summary>Lost a passkey or authenticator?</summary><p>Use your password if your passkey is unavailable. Use an unused recovery code instead of your authenticator code, then replace the authenticator in Settings. If you have neither an authenticator nor recovery codes, access cannot be restored from this screen. Contact your administrator; security checks cannot be skipped.</p></details>
       </form>
     </main>
   );
@@ -1483,7 +1498,8 @@ function SecurityPanel({ setError }: { setError: (value: string | null) => void 
     try {
       setBusy(true);
       setRecoveryCodes([]);
-      setSetup(await beginTotpSetup());
+      setSetup(await beginTotpSetup(status?.totpEnabled ? code : undefined));
+      setCode("");
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to start 2FA setup.");
@@ -1534,6 +1550,7 @@ function SecurityPanel({ setError }: { setError: (value: string | null) => void 
       <button className="primary security-action" disabled={busy || !status?.passkeysAvailable} onClick={addPasskey}><KeyRound size={17} />Add Passkey</button>
 
       {!status?.totpEnabled && !setup && <button className="primary security-action" disabled={busy} onClick={startSetup}><Shield size={17} />Set Up Authenticator App</button>}
+      {status?.totpEnabled && !setup && <div className="security-setup"><label>Current authenticator or unused recovery code<input autoComplete="one-time-code" value={code} onChange={event => setCode(event.target.value)} /></label><button disabled={busy || !code.trim()} onClick={startSetup}><Shield size={17} />Replace Authenticator</button><p className="small">Your existing authenticator stays active until confirmation. Confirmation replaces all recovery codes and signs out other sessions.</p></div>}
 
       {setup && (
         <form className="form-grid security-setup" onSubmit={confirmSetup}>
