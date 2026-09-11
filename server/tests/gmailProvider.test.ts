@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GmailProviderClient } from "../src/mail/gmailProvider.js";
 import { MailPoller } from "../src/mail/poller.js";
 import { MemoryStore } from "../src/store/memoryStore.js";
+import { readFileSync } from "node:fs";
 
 const api = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), modify: vi.fn() }));
 vi.mock("googleapis", () => ({
@@ -53,6 +54,25 @@ describe("Gmail unread pagination", () => {
     const poller = new MailPoller({ store, provider: new GmailProviderClient(config) }, { workspaceId: "ws_company", intervalMs: 1800000 });
     await expect(poller.pollOnce()).resolves.toEqual({ scanned: 2, processed: 1, duplicates: 0, needsReview: 1, markedRead: 1, failed: 0 });
     expect(api.modify).toHaveBeenCalledExactlyOnceWith({ userId: "me", id: "mail", requestBody: { removeLabelIds: ["UNREAD"] } }, { timeout: 15000, retry: false });
+  });
+
+  it("decodes an HTML-only MIME parcel through polling, matching and acknowledgement", async () => {
+    const html = readFileSync(new URL("./fixtures/parcel-collection.html", import.meta.url), "utf8");
+    api.list.mockResolvedValue({ data: { messages: [{ id: "html-parcel" }] } });
+    api.get.mockResolvedValue({ data: { internalDate: "1788307200000", payload: {
+      mimeType: "multipart/alternative",
+      headers: [{ name: "Subject", value: "Your PO Box item is ready to collect." }],
+      parts: [{ mimeType: "text/html", body: { data: Buffer.from(html).toString("base64url") } }]
+    } } });
+    const store = new MemoryStore();
+    await store.seedDemo();
+    const session = await store.login("daniel@example.com", "Password123!");
+    if (session.kind !== "session") throw new Error("Expected session");
+    await store.deleteMailbox(session, "ws_company", "box_5678");
+    const poller = new MailPoller({ store, provider: new GmailProviderClient(config) }, { workspaceId: "ws_company", intervalMs: 1800000 });
+    expect(await poller.pollOnce()).toMatchObject({ processed: 1, needsReview: 0, markedRead: 1 });
+    expect(store.mailboxes.get("box_882")).toMatchObject({ parcelWaiting: true, mailWaiting: false });
+    expect(api.modify).toHaveBeenCalledTimes(1);
   });
 
   it("fails on a later page without acknowledging any source mail", async () => {

@@ -61,6 +61,18 @@ describe.skipIf(!url)("PostgreSQL mail durability and worker concurrency", () =>
     expect(await first.pendingMailAcknowledgements(workspaceId, "gmail")).toEqual([]);
   });
 
+  it("preserves independent flags when mail and parcel arrive on different workers", async () => {
+    const box = await prisma.mailbox.findUniqueOrThrow({ where: { id: mailboxId } });
+    await prisma.postOffice.update({ where: { id: box.postOfficeId }, data: { name: "South Melbourne Local Post Office" } });
+    await Promise.all([
+      first.processIncomingMail({ ...mail("letter"), receivedAt: "2026-09-12T01:00:00.000Z" }),
+      second.processIncomingMail({ ...mail("parcel", "Your PO Box item is ready to collect!"), bodyPreview: "Collect from:\nSOUTH MELBOURNE\nAddress: Example Street", receivedAt: "2026-09-12T02:00:00.000Z" })
+    ]);
+    expect(await prisma.mailbox.findUniqueOrThrow({ where: { id: mailboxId } })).toMatchObject({ mailWaiting: true, parcelWaiting: true, latestNotificationAt: new Date("2026-09-12T01:00:00.000Z"), latestParcelNotificationAt: new Date("2026-09-12T02:00:00.000Z") });
+    expect(await prisma.mailEvent.count({ where: { workspaceId } })).toBe(2);
+    expect(await first.outstandingMailboxCount(workspaceId)).toBe(1);
+  });
+
   it("rolls back the event, flag and audit if queuing acknowledgement fails", async () => {
     const failing = prisma.$extends({ query: { mailAcknowledgement: { async upsert() { throw new Error("simulated crash before commit"); } } } });
     await expect(new PrismaStore(failing as unknown as PrismaClient).processIncomingMail(mail("crash"))).rejects.toThrow("simulated crash");

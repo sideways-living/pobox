@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import type { Mailbox } from "../src/domain.js";
 import { parseMailNotification } from "../src/parser/mailParser.js";
 
@@ -159,7 +160,7 @@ describe("mail parser", () => {
     });
   });
 
-  it("matches parcel pickup notices across duplicate normalized post office names when only one box is active", () => {
+  it("reviews duplicate normalized post office names even when only one has a box", () => {
     const secondOffice = { ...postOffice, id: "po_2", name: "SOUTH MELBOURNE POST OFFICE" };
     const parsed = parseMailNotification(
       {
@@ -172,11 +173,54 @@ describe("mail parser", () => {
     );
 
     expect(parsed).toMatchObject({
-      requiresReview: false,
-      mailboxId: "box_1234",
+      requiresReview: true,
       notificationType: "PARCEL",
       postOfficeName: "SOUTH MELBOURNE"
     });
+  });
+
+  it.each(["parcel-collection.html", "parcel-collection.txt"])("extracts the destination without swallowing address/footer in %s", (file) => {
+    const bodyPreview = readFileSync(new URL(`./fixtures/${file}`, import.meta.url), "utf8");
+    const parsed = parseMailNotification({ sender: "noreply@example.test", subject: "YOUR P.O. BOX ITEM IS READY TO COLLECT!", bodyPreview }, [mailbox], [{ ...postOffice, name: "Australia Post - South Melbourne Local Post Office" }]);
+    expect(parsed).toMatchObject({ mailboxId: mailbox.id, notificationType: "PARCEL", requiresReview: false });
+  });
+
+  it.each(["South Melbourne LPO", "South Melbourne Licensed Post Office", "South Melbourne P.O.", "SOUTH-MELBOURNE POST OFFICE", "Australia Post South Melbourne"])("matches conservative office name variation %s", (name) => {
+    expect(parseMailNotification({ sender: "parcel@example.test", subject: "Your PO Box item is ready to collect.", bodyPreview: "Collect from: SOUTH MELBOURNE\nOpening hours: 9am" }, [mailbox], [{ ...postOffice, name }])).toMatchObject({ requiresReview: false, mailboxId: mailbox.id });
+  });
+
+  it.each([" Mail2Day : P.O. Box #1234 has mail! ", "MAIL2DAY:\tPO BOX 1234\nHAS MAIL.", "Mail2Day - PO Box 1234 has mail", "Mail2Day: PO Box&#160;1234 has mail"])("normalizes subject %s", (subject) => {
+    expect(parseMailNotification({ sender: "mail@example.test", subject }, [mailbox])).toMatchObject({ confidence: 1, mailboxId: mailbox.id });
+  });
+
+  it("supports single-digit and alphanumeric boxes without truncating long numbers", () => {
+    for (const boxNumber of ["1", "A-12"]) {
+      expect(parseMailNotification({ sender: "mail@example.test", subject: `Mail2Day: PO Box ${boxNumber} has mail.` }, [{ ...mailbox, boxNumber }]).requiresReview).toBe(false);
+    }
+    expect(parseMailNotification({ sender: "mail@example.test", subject: "PO Box 1234567890123" }, [{ ...mailbox, boxNumber: "123456789012" }]).requiresReview).toBe(true);
+  });
+
+  it.each([
+    "Collect from: SOUTH MELBOURNE\nCollect from: SOUTH YARRA",
+    "Collect from: SOUTH MELBOURNE NORTH",
+    "Collect from: MELBOURNE",
+    "No collection location supplied"
+  ])("does not guess a parcel destination: %s", (bodyPreview) => {
+    const result = parseMailNotification({ sender: "parcel@example.test", subject: "Your PO Box item is ready to collect", bodyPreview }, [mailbox], [postOffice]);
+    expect(result.requiresReview).toBe(true);
+    expect(result.mailboxId).toBeUndefined();
+    expect(result.notificationType).toBe("PARCEL");
+  });
+
+  it("does not choose the first box in a generic message mentioning multiple numbers", () => {
+    expect(parseMailNotification({ sender: "mail@example.test", subject: "Mail for PO Box 1234 and PO Box 5678" }, [mailbox]).requiresReview).toBe(true);
+  });
+
+  it("ignores inactive boxes and offices", () => {
+    const input = { sender: "mail@example.test", subject: "Mail2Day: PO Box 1234 has mail" };
+    expect(parseMailNotification(input, [{ ...mailbox, active: false }], [postOffice]).requiresReview).toBe(true);
+    expect(parseMailNotification(input, [mailbox], [{ ...postOffice, active: false }]).requiresReview).toBe(true);
+    expect(parseMailNotification(input, [mailbox, { ...mailbox, id: "inactive", active: false }], [postOffice]).mailboxId).toBe(mailbox.id);
   });
 
   it("requires review for parcel pickup notices when a post office has multiple active boxes", () => {

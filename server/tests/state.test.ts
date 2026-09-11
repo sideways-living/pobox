@@ -105,6 +105,36 @@ describe("shared mailbox state", () => {
     expect(cleared?.parcelWaiting).toBe(false);
   });
 
+  it.each([false, true])("preserves both flags and timestamps with parcel first=%s", async (parcelFirst) => {
+    const admin = await loginSession("daniel@example.com");
+    const office = await store.createPostOffice(admin, "ws_company", { name: "Carlton North LPO", address: "Carlton North VIC", latitude: -37.78, longitude: 144.97, geofenceRadius: 100 });
+    const box = await store.createMailbox(admin, "ws_company", { postOfficeId: office.id, boxNumber: "3020" });
+    const base = { workspaceId: "ws_company", provider: "gmail", sender: "notice@example.test" };
+    const mail = { ...base, providerMessageId: "letter", subject: "Mail2Day: PO Box 3020 has mail.", receivedAt: "2026-09-12T01:00:00.000Z" };
+    const parcel = { ...base, providerMessageId: "parcel", subject: "Your PO Box item is ready to collect!", bodyPreview: "<table><tr><td>Collect from:</td><td>CARLTON NORTH</td></tr><tr><td>Address:</td><td>Example Street</td></tr></table>", receivedAt: "2026-09-12T02:00:00.000Z" };
+    for (const message of parcelFirst ? [parcel, mail] : [mail, parcel]) {
+      expect((await store.processIncomingMail(message)).kind).toBe("processed");
+    }
+    await store.processIncomingMail({ ...mail, providerMessageId: "letter-next-day", receivedAt: "2026-09-13T01:00:00.000Z" });
+    const snapshot = await store.dashboard(admin, "ws_company");
+    expect(snapshot.postOffices.flatMap((item) => item.mailboxes).find((item) => item.id === box.id)).toMatchObject({ mailWaiting: true, parcelWaiting: true, latestNotificationAt: "2026-09-13T01:00:00.000Z", latestParcelNotificationAt: parcel.receivedAt });
+    expect([...store.mailEvents.values()].filter((event) => event.mailboxId === box.id)).toHaveLength(3);
+    expect(await store.outstandingMailboxCount("ws_company")).toBe(1);
+    expect(await store.listReviewItems(admin, "ws_company")).toHaveLength(0);
+  });
+
+  it("keeps ambiguous parcels in review and preserves their type on manual matching", async () => {
+    const admin = await loginSession("daniel@example.com");
+    const result = await store.processIncomingMail({ workspaceId: "ws_company", provider: "gmail", providerMessageId: "ambiguous-parcel", sender: "notice@example.test", subject: "Your PO Box item is ready to collect.", bodyPreview: "Collect from: SOUTH MELBOURNE" });
+    expect(result.kind).toBe("needs_review");
+    expect(await store.pendingMailAcknowledgements("ws_company", "gmail")).toEqual([]);
+    const [review] = await store.listReviewItems(admin, "ws_company");
+    expect(review.notificationType).toBe("PARCEL");
+    await store.resolveReviewItem(admin, "ws_company", review.id, "box_882");
+    expect(store.mailboxes.get("box_882")).toMatchObject({ mailWaiting: false, parcelWaiting: true });
+    expect(await store.pendingMailAcknowledgements("ws_company", "gmail")).toEqual(["ambiguous-parcel"]);
+  });
+
   it("processes exact Mail2Day subjects without review and flags mail waiting", async () => {
     const daniel = await loginSession("daniel@example.com");
     const office = await store.createPostOffice(daniel, "ws_company", {

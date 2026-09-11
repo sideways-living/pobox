@@ -2,6 +2,7 @@ import { google } from "googleapis";
 import type { gmail_v1 } from "googleapis";
 import type { MailProviderClient, ProviderUnreadMessage } from "./types.js";
 import { MailAuthenticationError, safeMailError, withMailRetry } from "./retry.js";
+import { mailText } from "../parser/mailText.js";
 
 function headerValue(message: gmail_v1.Schema$Message, name: string) {
   return message.payload?.headers?.find((header) => header.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
@@ -27,29 +28,13 @@ function htmlTextBody(part?: gmail_v1.Schema$MessagePart): string | undefined {
   if (!part) return undefined;
   if (part.mimeType === "text/html") {
     const html = decodeBase64Url(part.body?.data);
-    return html ? htmlToSearchableText(html) : undefined;
+    return html ? mailText(html) : undefined;
   }
   for (const child of part.parts ?? []) {
     const text = htmlTextBody(child);
     if (text) return text;
   }
   return undefined;
-}
-
-function htmlToSearchableText(html: string) {
-  return html
-    .replace(/<\s*br\s*\/?>/gi, "\n")
-    .replace(/<\s*\/(?:p|div|tr|td|th|table)\s*>/gi, "\n")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/gi, "\"")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n\s+/g, "\n")
-    .trim();
 }
 
 export interface GmailProviderConfig {

@@ -1,10 +1,10 @@
 import type { Mailbox, PostOffice, ParsedMailNotification } from "../domain.js";
+import { mailText } from "./mailText.js";
 
 const mailboxPattern =
-  /\b(?:p\.?\s*o\.?\s*box|pobox|post\s*box|postbox|box)\s*([a-z0-9-]{2,12})\b/i;
-const mail2DaySubjectPattern = /^mail2day:\s*p\.?\s*o\.?\s*box\s*([a-z0-9-]{2,12})\s+has\s+mail\.?$/i;
-const parcelSubjectPattern = /^your po box item is ready to collect$/i;
-const collectFromPattern = /collect\s+from:\s*(?:\|)?\s*\*{0,2}\s*([a-z][a-z\s'.-]{2,80}?)(?:\s*\*{0,2}\s*(?:\||<|\n|\r|$))/i;
+  /\b(?:p\.?\s*o\.?\s*box|pobox|post\s*box|postbox|box)\s*#?\s*([a-z0-9-]{1,12})(?![a-z0-9-])/gi;
+const mail2DaySubjectPattern = /^mail2day\s*[:\-]\s*p\.?\s*o\.?\s*box\s*#?\s*([a-z0-9-]{1,12})\s+has\s+mail[.!]?$/i;
+const parcelSubjectPattern = /^your\s+p\.?\s*o\.?\s*box\s+item\s+is\s+ready\s+to\s+collect[.!]?$/i;
 
 export interface IncomingMailInput {
   sender: string;
@@ -13,19 +13,25 @@ export interface IncomingMailInput {
 }
 
 export function parseMailNotification(input: IncomingMailInput, mailboxes: Mailbox[], postOffices: PostOffice[] = []): ParsedMailNotification {
-  const haystack = `${input.subject}\n${input.bodyPreview ?? ""}`;
-  if (parcelSubjectPattern.test(input.subject.trim())) {
+  const subject = mailText(input.subject).replace(/\s+/g, " ");
+  const haystack = `${subject}\n${mailText(input.bodyPreview ?? "")}`;
+  if (parcelSubjectPattern.test(subject)) {
     return parseParcelNotification(input, mailboxes, postOffices);
   }
 
-  const mail2DayMatch = input.subject.trim().match(mail2DaySubjectPattern);
-  const match = mail2DayMatch ?? haystack.match(mailboxPattern);
+  const mail2DayMatch = subject.match(mail2DaySubjectPattern);
+  const candidates = [...haystack.matchAll(mailboxPattern)];
+  const match = mail2DayMatch ?? candidates[0];
+  if (!mail2DayMatch && new Set(candidates.map((candidate) => normalizeBoxNumber(candidate[1]))).size > 1) {
+    return { notificationType: "MAIL", confidence: 0, requiresReview: true };
+  }
   if (!match) {
     return { notificationType: "MAIL", confidence: 0, requiresReview: true };
   }
 
   const mailboxNumber = normalizeBoxNumber(match[1]);
-  const matchingMailboxes = mailboxes.filter((box) => normalizeBoxNumber(box.boxNumber) === mailboxNumber && box.active);
+  const matchingMailboxes = mailboxes.filter((box) => normalizeBoxNumber(box.boxNumber) === mailboxNumber && box.active &&
+    (!postOffices.length || postOffices.some((office) => office.id === box.postOfficeId && office.active)));
   if (matchingMailboxes.length === 0) {
     return { mailboxNumber, notificationType: "MAIL", confidence: 0.55, requiresReview: true };
   }
@@ -48,13 +54,14 @@ export function normalizeBoxNumber(value: string): string {
 }
 
 function parseParcelNotification(input: IncomingMailInput, mailboxes: Mailbox[], postOffices: PostOffice[]): ParsedMailNotification {
-  const collectFrom = extractCollectFrom(input.bodyPreview ?? "");
+  const destinations = extractCollectFrom(input.bodyPreview ?? "");
+  const collectFrom = destinations[0];
   if (!collectFrom) {
     return { notificationType: "PARCEL", confidence: 0.35, requiresReview: true };
   }
 
   const matchingPostOffices = postOffices.filter((office) => normalizeLocationName(office.name) === normalizeLocationName(collectFrom) && office.active);
-  if (matchingPostOffices.length === 0) {
+  if (new Set(destinations.map(normalizeLocationName)).size !== 1 || matchingPostOffices.length !== 1) {
     return { postOfficeName: collectFrom, notificationType: "PARCEL", confidence: 0.55, requiresReview: true };
   }
 
@@ -75,16 +82,17 @@ function parseParcelNotification(input: IncomingMailInput, mailboxes: Mailbox[],
   };
 }
 
-function extractCollectFrom(bodyPreview: string): string | undefined {
-  const normalizedBody = bodyPreview
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  const match = normalizedBody.match(collectFromPattern);
-  return match?.[1]?.replace(/\s+/g, " ").trim();
+function extractCollectFrom(bodyPreview: string): string[] {
+  const text = mailText(bodyPreview);
+  return [...text.matchAll(/\bcollect\s+from\s*:\s*[|*\s]*([^\n|]+)/gi)]
+    .map((match) => match[1].replace(/\*+/g, "").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
 }
 
 function normalizeLocationName(value: string): string {
-  return value.replace(/\b(?:post\s+office|po)\b/gi, "").replace(/[^a-z0-9]/gi, "").toUpperCase();
+  return value.normalize("NFKC").toUpperCase()
+    .replace(/[.'\u2019]/g, "").replace(/[^A-Z0-9]+/g, " ").trim()
+    .replace(/^AUSTRALIA POST\s+/, "")
+    .replace(/\s+(?:(?:LOCAL|LICENSED|LICENCED)\s+)?POST OFFICE$/, "")
+    .replace(/\s+(?:LPO|GPO|PO)$/, "").trim();
 }
