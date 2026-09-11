@@ -60,7 +60,9 @@ Polling behavior is intentionally explicit:
 - Matched parcel notifications create one parcel history event, flag `parcelWaiting`, and are marked read in Gmail.
 - Already imported Gmail message IDs are treated as duplicates and marked read without adding another history event.
 - Unclear messages create one Needs Review item and stay unread until a user resolves or ignores the item.
-- Repeated unread messages with the same Gmail message ID or same Gmail thread ID do not create more Needs Review rows.
+- Repeated unread messages with the same provider and message ID do not create more Needs Review rows. Different messages in the same Gmail thread are processed independently.
+- Existing review decisions are checked before parsing again: unresolved items stay in review, and ignored/resolved items stay handled even if PO boxes change.
+- Gmail polling follows every unread-results page before marking messages read. `MAIL_POLL_MAX_RESULTS` is the page size (1–500, default 50), not a total inbox limit.
 - Reviewed or ignored Needs Review items are treated as handled on the next poll, so Gmail can mark the original source message read.
 
 Set these in `.env` on the VPS:

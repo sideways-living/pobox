@@ -533,31 +533,31 @@ export class PrismaStore implements AppStore {
     });
     if (existing) return { kind: "duplicate", mailboxId: existing.mailboxId, notificationType: existing.notificationType === "PARCEL" ? "PARCEL" : "MAIL" };
 
+    // A thread can contain notifications from different days. Only the message
+    // identity owns a review decision, which must survive later box changes.
+    const reviewMatches = await this.prisma.auditEvent.findMany({
+      where: {
+        workspaceId: input.workspaceId,
+        entityId: input.providerMessageId,
+        eventType: { in: ["mail.needs_review", "mail.review_resolved", "mail.review_ignored", "mail.review_dismissed"] }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    const reviewEvents = (reviewMatches as ReviewMatchAuditRow[]).filter((event) => reviewMatchesProviderMessage(event, input));
+    const existingReview = reviewEvents.find((event) => event.eventType === "mail.needs_review");
+    if (existingReview) {
+      const notificationType = notificationTypeFromMetadata(metadataRecord(existingReview.metadata), "MAIL");
+      return reviewEvents.some((event) => isReviewResolutionEvent(event.eventType))
+        ? { kind: "duplicate", notificationType }
+        : { kind: "needs_review", notificationType };
+    }
+
     const [boxes, postOffices] = await Promise.all([
       this.prisma.mailbox.findMany({ where: { workspaceId: input.workspaceId } }),
       this.prisma.postOffice.findMany({ where: { workspaceId: input.workspaceId } })
     ]);
     const parsed = parseMailNotification(input, boxes.map(this.toMailbox), postOffices.map(this.toPostOffice));
     if (!parsed.mailboxId || parsed.requiresReview) {
-      const reviewMatches = await this.prisma.auditEvent.findMany({
-        where: {
-          workspaceId: input.workspaceId,
-          OR: [
-            { entityId: input.providerMessageId },
-            ...(input.providerThreadId ? [{ metadata: { path: ["providerThreadId"], equals: input.providerThreadId } }] : [])
-          ]
-        },
-        orderBy: { createdAt: "desc" },
-        take: 20
-      });
-      const matchedReviewEvents = reviewMatches as ReviewMatchAuditRow[];
-      const existingReview = matchedReviewEvents.find((event: ReviewMatchAuditRow) => event.eventType === "mail.needs_review" && reviewMatchesProviderMessage(event, input));
-      if (existingReview) {
-        const resolvedReview = matchedReviewEvents.find((event: ReviewMatchAuditRow) => isReviewResolutionEvent(event.eventType) && reviewMatchesProviderMessage(event, input));
-        const metadata = metadataRecord(existingReview.metadata);
-        const notificationType = notificationTypeFromMetadata(metadata, parsed.notificationType);
-        return resolvedReview ? { kind: "duplicate", notificationType } : { kind: "needs_review", notificationType };
-      }
       await this.audit("system", input.workspaceId, "mail.needs_review", "mail_message", input.providerMessageId, {
         provider: input.provider,
         providerThreadId: input.providerThreadId,
@@ -1275,8 +1275,7 @@ function reviewMatchesProviderMessage(event: { workspaceId: string; entityId: st
   if (event.workspaceId !== input.workspaceId) return false;
   const metadata = metadataRecord(event.metadata);
   if (typeof metadata.provider === "string" && metadata.provider !== input.provider) return false;
-  if (event.entityId === input.providerMessageId) return true;
-  return Boolean(input.providerThreadId && metadata.providerThreadId === input.providerThreadId);
+  return event.entityId === input.providerMessageId;
 }
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {

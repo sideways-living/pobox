@@ -433,20 +433,19 @@ export class MemoryStore implements AppStore {
     );
     if (duplicate) return { kind: "duplicate", mailboxId: duplicate.mailboxId, notificationType: duplicate.notificationType };
 
+    const reviewEvents = [...this.auditEvents.values()].filter((event) => reviewMatchesProviderMessage(event, input));
+    const existingReview = reviewEvents.find((event) => event.eventType === "mail.needs_review");
+    if (existingReview) {
+      const notificationType = notificationTypeFromMetadata(existingReview.metadata, "MAIL");
+      return reviewEvents.some((event) => isReviewResolutionEvent(event.eventType))
+        ? { kind: "duplicate", notificationType }
+        : { kind: "needs_review", notificationType };
+    }
+
     const workspaceBoxes = [...this.mailboxes.values()].filter((box) => box.workspaceId === input.workspaceId);
     const workspacePostOffices = [...this.postOffices.values()].filter((office) => office.workspaceId === input.workspaceId);
     const parsed = parseMailNotification(input, workspaceBoxes, workspacePostOffices);
     if (!parsed.mailboxId || parsed.requiresReview) {
-      const existingReview = [...this.auditEvents.values()].find((event) => reviewMatchesProviderMessage(event, input));
-      if (existingReview) {
-        const resolvedReview = [...this.auditEvents.values()].find(
-          (event) => event.workspaceId === input.workspaceId
-            && isReviewResolutionEvent(event.eventType)
-            && reviewMatchesProviderMessage(event, input)
-        );
-        const notificationType = notificationTypeFromMetadata(existingReview.metadata, parsed.notificationType);
-        return resolvedReview ? { kind: "duplicate", notificationType } : { kind: "needs_review", notificationType };
-      }
       this.audit("system", input.workspaceId, "mail.needs_review", "mail_message", input.providerMessageId, {
         provider: input.provider,
         providerThreadId: input.providerThreadId,
@@ -964,8 +963,7 @@ function reviewMatchesProviderMessage(event: AuditEvent, input: IncomingProvider
   if (event.workspaceId !== input.workspaceId) return false;
   const metadata = event.metadata;
   if (typeof metadata.provider === "string" && metadata.provider !== input.provider) return false;
-  if (event.entityId === input.providerMessageId) return true;
-  return Boolean(input.providerThreadId && metadata.providerThreadId === input.providerThreadId);
+  return event.entityId === input.providerMessageId;
 }
 
 function notificationTypeFromMetadata(metadata: Record<string, unknown>, fallback: "MAIL" | "PARCEL") {

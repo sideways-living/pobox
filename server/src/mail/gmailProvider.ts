@@ -74,18 +74,34 @@ export class GmailProviderClient implements MailProviderClient {
     this.userId = config.userId ?? "me";
     this.query = config.query ?? "is:unread";
     this.maxResults = config.maxResults ?? 50;
+    if (!Number.isInteger(this.maxResults) || this.maxResults < 1 || this.maxResults > 500) {
+      throw new Error("MAIL_POLL_MAX_RESULTS must be an integer between 1 and 500 (Gmail page size).");
+    }
   }
 
   async listUnreadMessages(): Promise<ProviderUnreadMessage[]> {
-    const list = await this.gmail.users.messages.list({
-      userId: this.userId,
-      q: this.query,
-      maxResults: this.maxResults
-    });
+    const messages = new Map<string, gmail_v1.Schema$Message>();
+    const seenPageTokens = new Set<string>();
+    let pageToken: string | undefined;
+    // Finish listing before the poller removes UNREAD, so pagination is not
+    // shifted by our own acknowledgements. Review items may remain unread.
+    do {
+      const list = await this.gmail.users.messages.list({
+        userId: this.userId,
+        q: this.query,
+        maxResults: this.maxResults,
+        pageToken
+      });
+      for (const item of list.data.messages ?? []) {
+        if (item.id) messages.set(item.id, item);
+      }
+      pageToken = list.data.nextPageToken || undefined;
+      if (pageToken && seenPageTokens.has(pageToken)) throw new Error("Gmail returned a repeated page token.");
+      if (pageToken) seenPageTokens.add(pageToken);
+    } while (pageToken);
 
-    const messages = list.data.messages ?? [];
     const results: ProviderUnreadMessage[] = [];
-    for (const item of messages) {
+    for (const item of messages.values()) {
       if (!item.id) continue;
       const message = await this.gmail.users.messages.get({
         userId: this.userId,
