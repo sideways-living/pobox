@@ -29,6 +29,7 @@ import type {
   WorkspaceMember
 } from "../domain.js";
 import { parseMailNotification } from "../parser/mailParser.js";
+import { mailText } from "../parser/mailText.js";
 import type {
   AppStore,
   AppChangesResult,
@@ -69,10 +70,6 @@ interface MemberWithUserRow {
   };
   role: TeamMemberSummary["role"];
   status: TeamMemberSummary["status"];
-}
-
-interface AuditEntityRow {
-  entityId: string;
 }
 
 interface ReviewAuditRow {
@@ -738,15 +735,15 @@ export class PrismaStore implements AppStore {
       this.prisma.auditEvent.findMany({
         where: { workspaceId, eventType: "mail.needs_review" },
         orderBy: { createdAt: "desc" },
-        take: 100
       }),
       this.prisma.auditEvent.findMany({
         where: { workspaceId, eventType: { in: ["mail.review_resolved", "mail.review_ignored", "mail.review_dismissed"] } },
-        select: { entityId: true }
+        select: { entityId: true, metadata: true }
       })
     ]);
-    const resolvedProviderMessages = new Set((resolutions as AuditEntityRow[]).map((event) => event.entityId));
-    return (events as ReviewAuditRow[]).filter((event) => !resolvedProviderMessages.has(event.entityId)).slice(0, 50).map((event) => {
+    const key = (event: { entityId: string; metadata: unknown }) => JSON.stringify([metadataRecord(event.metadata).provider ?? "review", event.entityId]);
+    const resolvedProviderMessages = new Set(resolutions.map(key));
+    return (events as ReviewAuditRow[]).filter((event) => !resolvedProviderMessages.has(key(event))).map((event) => {
       const metadata = event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
         ? event.metadata as Record<string, unknown>
         : {};
@@ -756,7 +753,7 @@ export class PrismaStore implements AppStore {
         provider: typeof metadata.provider === "string" ? metadata.provider : undefined,
         sender: typeof metadata.sender === "string" ? metadata.sender : undefined,
         subject: typeof metadata.subject === "string" ? metadata.subject : undefined,
-        bodyPreview: typeof metadata.bodyPreview === "string" ? metadata.bodyPreview : undefined,
+        bodyPreview: typeof metadata.bodyPreview === "string" ? mailText(metadata.bodyPreview) : undefined,
         mailboxNumber: typeof metadata.mailboxNumber === "string" ? metadata.mailboxNumber : undefined,
         postOfficeName: typeof metadata.postOfficeName === "string" ? metadata.postOfficeName : undefined,
         notificationType: metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL",
@@ -768,11 +765,11 @@ export class PrismaStore implements AppStore {
     });
   }
 
-  async resolveReviewItem(session: Session, workspaceId: string, reviewItemId: string, mailboxId: string): Promise<IncomingMailResult> {
-    return this.completeReview(session, workspaceId, reviewItemId, "mail.review_resolved", mailboxId);
+  async resolveReviewItem(session: Session, workspaceId: string, reviewItemId: string, mailboxId: string, newMailbox?: { postOfficeId: string; boxNumber: string }): Promise<IncomingMailResult> {
+    return this.completeReview(session, workspaceId, reviewItemId, "mail.review_resolved", mailboxId || undefined, newMailbox);
   }
 
-  private async completeReview(session: Session, workspaceId: string, reviewItemId: string, eventType: "mail.review_resolved" | "mail.review_ignored", mailboxId?: string): Promise<IncomingMailResult> {
+  private async completeReview(session: Session, workspaceId: string, reviewItemId: string, eventType: "mail.review_resolved" | "mail.review_ignored", mailboxId?: string, newMailbox?: { postOfficeId: string; boxNumber: string }): Promise<IncomingMailResult> {
     await this.requireMember(session, workspaceId, "ADMIN");
     return this.prisma.$transaction(async (tx) => {
       const review = await tx.auditEvent.findFirst({ where: { id: reviewItemId, workspaceId, eventType: "mail.needs_review" } });
@@ -792,9 +789,24 @@ export class PrismaStore implements AppStore {
       });
       if (prior) {
         const record = metadataRecord(prior.metadata);
+        if (newMailbox) {
+          if (record.postOfficeId !== newMailbox.postOfficeId || record.boxNumber !== normalizeMailboxNumber(newMailbox.boxNumber)) throw new ConflictError("This review item was already handled.");
+          mailboxId = typeof record.mailboxId === "string" ? record.mailboxId : undefined;
+        }
         if (prior.eventType !== eventType || record.mailboxId !== mailboxId) throw new ConflictError("This review item was already handled.");
         await this.queueMailAcknowledgement(tx, workspaceId, provider, review.entityId);
         return { kind: "duplicate", mailboxId, notificationType: metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL" };
+      }
+      if (newMailbox) {
+        const boxNumber = normalizeMailboxNumber(newMailbox.boxNumber);
+        if (!boxNumber) throw new ConflictError("Enter a PO box number.");
+        const offices = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "PostOffice" WHERE id = ${newMailbox.postOfficeId} AND "workspaceId" = ${workspaceId} AND active = true FOR UPDATE`;
+        if (!offices.length) throw new NotFoundError("Post office not found.");
+        const boxes = await tx.mailbox.findMany({ where: { workspaceId, postOfficeId: newMailbox.postOfficeId } });
+        if (boxes.some((box) => normalizeMailboxNumber(box.boxNumber) === boxNumber)) throw new ConflictError("This post office already has that PO box number. Select the existing box or restore it first.");
+        const created = await tx.mailbox.create({ data: { workspaceId, postOfficeId: newMailbox.postOfficeId, boxNumber, name: `PO Box ${boxNumber}` } });
+        mailboxId = created.id;
+        await this.audit(session.userId, workspaceId, "mailbox.created", "mailbox", mailboxId, { boxNumber, reviewItemId }, tx);
       }
       if (mailboxId && !await tx.mailbox.findFirst({ where: { id: mailboxId, workspaceId, active: true } })) throw new NotFoundError("PO box not found.");
       const notificationType = metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL";
@@ -838,6 +850,8 @@ export class PrismaStore implements AppStore {
       await this.audit(session.userId, workspaceId, eventType, "mail_message", review.entityId, {
         reviewItemId,
         mailboxId,
+        postOfficeId: newMailbox?.postOfficeId,
+        boxNumber: newMailbox ? normalizeMailboxNumber(newMailbox.boxNumber) : undefined,
         provider,
         providerThreadId: typeof metadata.providerThreadId === "string" ? metadata.providerThreadId : undefined
       }, tx);

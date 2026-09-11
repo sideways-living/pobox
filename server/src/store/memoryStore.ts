@@ -25,6 +25,7 @@ import type {
   WorkspaceMember
 } from "../domain.js";
 import { parseMailNotification } from "../parser/mailParser.js";
+import { mailText } from "../parser/mailText.js";
 import type { PostOfficeDirectoryStatus } from "../lctr/postOfficeDirectory.js";
 import { searchLctrPostOffices, type LctrPostOfficeLocation } from "../lctr/postOfficeLookup.js";
 import { appVersion, changesAfterVersion } from "../releases.js";
@@ -603,19 +604,18 @@ export class MemoryStore implements AppStore {
     const resolvedProviderMessages = new Set(
       [...this.auditEvents.values()]
         .filter((event) => event.workspaceId === workspaceId && (event.eventType === "mail.review_resolved" || event.eventType === "mail.review_ignored" || event.eventType === "mail.review_dismissed"))
-        .map((event) => event.entityId)
+        .map((event) => JSON.stringify([event.metadata.provider ?? "review", event.entityId]))
     );
     return [...this.auditEvents.values()]
-      .filter((event) => event.workspaceId === workspaceId && event.eventType === "mail.needs_review" && !resolvedProviderMessages.has(event.entityId))
+      .filter((event) => event.workspaceId === workspaceId && event.eventType === "mail.needs_review" && !resolvedProviderMessages.has(JSON.stringify([event.metadata.provider ?? "review", event.entityId])))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, 50)
       .map((event) => ({
         id: event.id,
         providerMessageId: event.entityId,
         provider: typeof event.metadata.provider === "string" ? event.metadata.provider : undefined,
         sender: typeof event.metadata.sender === "string" ? event.metadata.sender : undefined,
         subject: typeof event.metadata.subject === "string" ? event.metadata.subject : undefined,
-        bodyPreview: typeof event.metadata.bodyPreview === "string" ? event.metadata.bodyPreview : undefined,
+        bodyPreview: typeof event.metadata.bodyPreview === "string" ? mailText(event.metadata.bodyPreview) : undefined,
         mailboxNumber: typeof event.metadata.mailboxNumber === "string" ? event.metadata.mailboxNumber : undefined,
         postOfficeName: typeof event.metadata.postOfficeName === "string" ? event.metadata.postOfficeName : undefined,
         notificationType: event.metadata.notificationType === "PARCEL" ? "PARCEL" : "MAIL",
@@ -626,11 +626,20 @@ export class MemoryStore implements AppStore {
       }));
   }
 
-  async resolveReviewItem(session: Session, workspaceId: string, reviewItemId: string, mailboxId: string): Promise<IncomingMailResult> {
+  async resolveReviewItem(session: Session, workspaceId: string, reviewItemId: string, mailboxId: string, newMailbox?: { postOfficeId: string; boxNumber: string }): Promise<IncomingMailResult> {
     await this.requireMember(session, workspaceId, "ADMIN");
     const review = this.auditEvents.get(reviewItemId);
     if (!review || review.workspaceId !== workspaceId || review.eventType !== "mail.needs_review") throw new NotFoundError("Review item not found.");
+    if (newMailbox) {
+      const prior = [...this.auditEvents.values()].find((event) => event.workspaceId === workspaceId && event.metadata.reviewItemId === reviewItemId && event.metadata.postOfficeId === newMailbox.postOfficeId && event.metadata.boxNumber === normalizeMailboxNumber(newMailbox.boxNumber));
+      mailboxId = typeof prior?.metadata.mailboxId === "string" ? prior.metadata.mailboxId : "";
+    }
     if (this.reviewAlreadyHandled(review, "mail.review_resolved", mailboxId)) return { kind: "duplicate", mailboxId };
+    if (newMailbox) {
+      const boxNumber = normalizeMailboxNumber(newMailbox.boxNumber);
+      if (!boxNumber) throw new ConflictError("Enter a PO box number.");
+      mailboxId = this.createMailboxRecord(session, workspaceId, { ...newMailbox, boxNumber }).id;
+    }
     const mailbox = this.mailboxes.get(mailboxId);
     if (!mailbox || mailbox.workspaceId !== workspaceId || !mailbox.active) throw new NotFoundError("PO box not found.");
 
@@ -667,6 +676,8 @@ export class MemoryStore implements AppStore {
     this.audit(session.userId, workspaceId, "mail.review_resolved", "mail_message", review.entityId, {
       reviewItemId,
       mailboxId,
+      postOfficeId: newMailbox?.postOfficeId,
+      boxNumber: newMailbox ? normalizeMailboxNumber(newMailbox.boxNumber) : undefined,
       provider: review.metadata.provider,
       providerThreadId: review.metadata.providerThreadId
     });
@@ -878,8 +889,12 @@ export class MemoryStore implements AppStore {
 
   async createMailbox(session: Session, workspaceId: string, input: CreateMailboxInput): Promise<Mailbox> {
     await this.requireMember(session, workspaceId, "ADMIN");
+    return this.createMailboxRecord(session, workspaceId, input);
+  }
+
+  private createMailboxRecord(session: Session, workspaceId: string, input: CreateMailboxInput): Mailbox {
     const office = this.postOffices.get(input.postOfficeId);
-    if (!office || office.workspaceId !== workspaceId) throw new NotFoundError("Post office not found.");
+    if (!office || office.workspaceId !== workspaceId || !office.active) throw new NotFoundError("Post office not found.");
     const boxNumber = input.boxNumber.trim();
     if ([...this.mailboxes.values()].some((mailbox) =>
       mailbox.workspaceId === workspaceId &&

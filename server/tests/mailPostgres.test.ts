@@ -119,4 +119,55 @@ describe.skipIf(!url)("PostgreSQL mail durability and worker concurrency", () =>
     await first.resolveReviewItem(session, workspaceId, review.id, mailboxId);
     expect(await prisma.mailEvent.count({ where: { workspaceId } })).toBe(1);
   });
+
+  it("atomically creates a missing box and resolves, including repeat submission", async () => {
+    await first.processIncomingMail(mail("missing", "Mail2Day: PO Box 3020 has mail"));
+    const [review] = await first.listReviewItems(session, workspaceId);
+    const office = await prisma.postOffice.findFirstOrThrow({ where: { workspaceId } });
+    const input = { postOfficeId: office.id, boxNumber: "3020" };
+    const results = await Promise.all([first.resolveReviewItem(session, workspaceId, review.id, "", input), second.resolveReviewItem(session, workspaceId, review.id, "", input)]);
+    expect(results.map((result) => result.kind).sort()).toEqual(["duplicate", "processed"]);
+    expect(await prisma.mailbox.count({ where: { workspaceId, boxNumber: "3020" } })).toBe(1);
+    expect(await prisma.mailEvent.count({ where: { workspaceId } })).toBe(1);
+    expect(await first.pendingMailAcknowledgements(workspaceId, "gmail")).toEqual(["missing"]);
+    expect(await prisma.auditEvent.count({ where: { workspaceId, eventType: "mail.needs_review" } })).toBe(1);
+  });
+
+  it("rolls back box creation when resolution cannot be committed", async () => {
+    await first.processIncomingMail(mail("missing", "Mail2Day: PO Box 3020 has mail"));
+    const [review] = await first.listReviewItems(session, workspaceId);
+    const office = await prisma.postOffice.findFirstOrThrow({ where: { workspaceId } });
+    const failing = prisma.$extends({ query: { mailAcknowledgement: { async upsert() { throw new Error("queue unavailable"); } } } });
+    await expect(new PrismaStore(failing as unknown as PrismaClient).resolveReviewItem(session, workspaceId, review.id, "", { postOfficeId: office.id, boxNumber: "3020" })).rejects.toThrow("queue unavailable");
+    expect(await prisma.mailbox.count({ where: { workspaceId } })).toBe(1);
+    expect(await prisma.mailEvent.count({ where: { workspaceId } })).toBe(0);
+    expect(await first.listReviewItems(session, workspaceId)).toHaveLength(1);
+  });
+
+  it("does not create an orphan box when a second administrator ignores concurrently", async () => {
+    await first.processIncomingMail(mail("race", "Unknown"));
+    const [review] = await first.listReviewItems(session, workspaceId);
+    const office = await prisma.postOffice.findFirstOrThrow({ where: { workspaceId } });
+    const user = await prisma.user.create({ data: { email: `${randomUUID()}@example.test`, passwordHash: "unused", memberships: { create: { workspaceId, role: "ADMIN", status: "ACTIVE" } } } });
+    users.push(user.id);
+    const outcomes = await Promise.allSettled([
+      first.resolveReviewItem(session, workspaceId, review.id, "", { postOfficeId: office.id, boxNumber: "3020" }),
+      second.dismissReviewItem({ ...session, userId: user.id }, workspaceId, review.id)
+    ]);
+    expect(outcomes.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(await prisma.mailbox.count({ where: { workspaceId, boxNumber: "3020" } })).toBe(await prisma.mailEvent.count({ where: { workspaceId } }));
+    expect(await first.listReviewItems(session, workspaceId)).toHaveLength(0);
+    expect(await prisma.auditEvent.count({ where: { workspaceId, eventType: { in: ["mail.review_resolved", "mail.review_ignored"] } } })).toBe(1);
+  });
+
+  it("keeps old unresolved reviews visible and scopes decisions by provider", async () => {
+    await first.processIncomingMail(mail("same", "Unknown"));
+    await first.processIncomingMail({ ...mail("same", "Unknown"), provider: "imap" });
+    const reviews = await first.listReviewItems(session, workspaceId);
+    await first.dismissReviewItem(session, workspaceId, reviews.find((item) => item.provider === "gmail")!.id);
+    await prisma.auditEvent.createMany({ data: Array.from({ length: 105 }, (_, i) => ({ workspaceId, actorUserId: "system", eventType: "mail.needs_review", entityType: "mail_message", entityId: `later-${i}`, metadata: { provider: "gmail" } })) });
+    const remaining = await first.listReviewItems(session, workspaceId);
+    expect(remaining).toHaveLength(106);
+    expect(remaining.some((item) => item.provider === "imap" && item.providerMessageId === "same")).toBe(true);
+  });
 });

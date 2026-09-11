@@ -62,7 +62,10 @@ const updateMailboxSchema = z.object({
   postOfficeId: z.string().min(1).optional(),
   boxNumber: z.string().min(1).max(40).optional()
 }).refine((input) => Object.keys(input).length > 0, { message: "At least one field is required." });
-const resolveReviewSchema = z.object({ mailboxId: z.string().min(1) });
+const resolveReviewSchema = z.union([
+  z.object({ mailboxId: z.string().min(1) }).strict(),
+  z.object({ newMailbox: z.object({ postOfficeId: z.string().min(1), boxNumber: z.string().trim().min(1).max(40).regex(/[a-z0-9]/i) }).strict() }).strict()
+]);
 const releaseSeenSchema = z.object({
   version: z.string().min(1).max(40).default(appVersion)
 }).refine((input) => input.version === appVersion, { message: "Release version does not match the current app version." });
@@ -293,7 +296,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const { workspaceId, reviewItemId } = request.params as { workspaceId: string; reviewItemId: string };
     const body = resolveReviewSchema.parse(request.body);
     const session = await securedSession(request, workspaceId);
-    const result = await store.resolveReviewItem(session, workspaceId, reviewItemId, body.mailboxId);
+    const result = await store.resolveReviewItem(session, workspaceId, reviewItemId, "mailboxId" in body ? body.mailboxId : "", "newMailbox" in body ? body.newMailbox : undefined);
     realtimeHub.emitWorkspace(workspaceId, { type: "dashboard.updated", snapshot: await store.dashboard(session, workspaceId) });
     return result;
   });

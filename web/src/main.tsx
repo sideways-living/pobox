@@ -94,7 +94,10 @@ function App() {
     socket.onerror = () => setConnected(false);
     socket.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      if (message.type === "dashboard.updated") setSnapshot(message.snapshot);
+      if (message.type === "dashboard.updated") {
+        setSnapshot(message.snapshot);
+        void loadReviewItems().then(setReviewItems).catch(() => setError("Unable to refresh the review queue. Reload to see current items."));
+      }
     };
     return () => socket.close();
   }, [snapshot?.workspace.id]);
@@ -1268,17 +1271,17 @@ function HistorySection({ snapshot }: { snapshot: DashboardSnapshot }) {
   );
 }
 
-function NeedsReviewSection({ snapshot, reviewItems, mutate, refresh }: { snapshot: DashboardSnapshot; reviewItems: ReviewItem[]; mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>; refresh: () => Promise<void> }) {
+function NeedsReviewSection({ snapshot, reviewItems, refresh }: { snapshot: DashboardSnapshot; reviewItems: ReviewItem[]; mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>; refresh: () => Promise<void> }) {
   const mailboxes = snapshot.postOffices.flatMap((office) => office.mailboxes.map((box) => ({ ...box, officeName: office.name })));
 
   return (
-    <div className="page-grid">
+    <div className="page-grid review-page">
       <section className="page-main">
-        <Panel title="Needs Review Queue" aside={`${reviewItems.length} items`}>
+        <Panel title="Needs Review Queue" aside={`${reviewItems.length} items awaiting a decision`}>
           {reviewItems.length > 0 ? (
             <div className="review-list">
               {reviewItems.map((item) => (
-                <ReviewItemRow key={item.id} item={item} postOffices={snapshot.postOffices} mailboxes={mailboxes} mutate={mutate} refresh={refresh} />
+                <ReviewItemRow key={item.id} item={item} postOffices={snapshot.postOffices} mailboxes={mailboxes} canReview={snapshot.currentUser.role === "ADMIN"} refresh={refresh} />
               ))}
             </div>
           ) : (
@@ -1286,15 +1289,6 @@ function NeedsReviewSection({ snapshot, reviewItems, mutate, refresh }: { snapsh
           )}
         </Panel>
       </section>
-      <aside className="side-panels">
-        <Panel title="Review Summary">
-          <div className="detail-list">
-            <DetailRow label="Waiting review" value={String(reviewItems.length)} />
-            <DetailRow label="Low confidence" value={String(reviewItems.filter((item) => (item.confidence ?? 1) < 0.7).length)} />
-            <DetailRow label="Unmatched box" value={String(reviewItems.filter((item) => !item.mailboxNumber).length)} />
-          </div>
-        </Panel>
-      </aside>
     </div>
   );
 }
@@ -1303,23 +1297,25 @@ function ReviewItemRow({
   item,
   postOffices,
   mailboxes,
-  mutate,
+  canReview,
   refresh
 }: {
   item: ReviewItem;
   postOffices: PostOffice[];
   mailboxes: Array<Mailbox & { officeName: string }>;
-  mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>;
+  canReview: boolean;
   refresh: () => Promise<void>;
 }) {
   const matchingMailboxes = mailboxes.filter((box) => item.mailboxNumber && normalizeBoxNumber(box.boxNumber) === normalizeBoxNumber(item.mailboxNumber));
-  const defaultMailbox = matchingMailboxes.length === 1 ? matchingMailboxes[0] : item.mailboxNumber ? undefined : mailboxes[0];
+  const defaultMailbox = matchingMailboxes.length === 1 ? matchingMailboxes[0] : undefined;
   const parsedPostOfficeName = item.postOfficeName;
   const guessedOffice = item.postOfficeName
     ? postOffices.find((office) => normalizeLocationName(office.name) === normalizeLocationName(parsedPostOfficeName ?? ""))
     : undefined;
   const [selectedMailboxId, setSelectedMailboxId] = useState(defaultMailbox?.id ?? "");
-  const [createOfficeId, setCreateOfficeId] = useState(guessedOffice?.id ?? postOffices[0]?.id ?? "");
+  const [createOfficeId, setCreateOfficeId] = useState(guessedOffice?.id ?? "");
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState("");
   const [newBoxNumber, setNewBoxNumber] = useState(item.mailboxNumber ?? "");
   const selectedMailbox = mailboxes.find((box) => box.id === selectedMailboxId);
   const receivedAt = item.receivedAt ?? item.createdAt;
@@ -1335,41 +1331,50 @@ function ReviewItemRow({
 
   useEffect(() => {
     if (!postOffices.some((office) => office.id === createOfficeId)) {
-      setCreateOfficeId(guessedOffice?.id ?? postOffices[0]?.id ?? "");
+      setCreateOfficeId(guessedOffice?.id ?? "");
     }
   }, [createOfficeId, guessedOffice?.id, postOffices.map((office) => office.id).join(",")]);
 
   async function resolve() {
     if (!selectedMailboxId) return;
-    await mutate(async () => {
+    await run(async () => {
       await resolveReviewItem(item.id, selectedMailboxId);
-      await refresh();
-    }, selectedMailboxId);
+    });
   }
 
   async function createAndResolve() {
     if (!createOfficeId || !newBoxNumber.trim()) return;
-    await mutate(async () => {
-      const mailbox = await createMailbox({ postOfficeId: createOfficeId, boxNumber: newBoxNumber.trim() });
-      await resolveReviewItem(item.id, mailbox.id);
-      await refresh();
+    await run(async () => {
+      await resolveReviewItem(item.id, "", { postOfficeId: createOfficeId, boxNumber: newBoxNumber.trim() });
     });
   }
 
   async function ignore() {
     if (!window.confirm("Mark this review item ignored and mark the source email handled on the next poll?")) return;
-    await mutate(async () => {
+    await run(async () => {
       await dismissReviewItem(item.id);
-      await refresh();
     });
   }
 
   async function markResolved() {
     if (!window.confirm("Mark this review item resolved without changing a PO box? The source email will be marked handled on the next poll.")) return;
-    await mutate(async () => {
+    await run(async () => {
       await markReviewItemResolved(item.id);
-      await refresh();
     });
+  }
+
+  async function run(action: () => Promise<void>) {
+    if (busy) return;
+    setBusy(true);
+    setActionError("");
+    try {
+      await action();
+      await refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to save this review. Try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -1379,13 +1384,15 @@ function ReviewItemRow({
         <strong>{item.subject ?? "Unmatched mail notification"}</strong>
         <span>{item.mailboxNumber ? `Parsed guess: PO Box ${item.mailboxNumber}` : item.postOfficeName ? `Parsed guess: ${item.postOfficeName}` : "Parsed guess: none"}</span>
         <span>Needs review: {item.reason}</span>
-        {item.sender && <span>From {item.sender}</span>}
-        {item.bodyPreview && <small>{item.bodyPreview}</small>}
-        <small>Received {new Date(receivedAt).toLocaleString()}</small>
+        <span>From {item.sender || "Unknown sender"}</span>
+        <small>{item.receivedAt ? "Received" : "Imported (received time unavailable)"} {new Date(receivedAt).toLocaleString()}</small>
+        <details className="review-email" open><summary>Email content</summary><pre>{item.bodyPreview || "No email body available."}</pre></details>
         <small>{notificationLabel} - {item.provider ?? "mail"} - {item.providerMessageId}</small>
       </div>
       <StatusPill tone="warning">{confidenceLabel(item.confidence)}</StatusPill>
-      <div className="review-actions">
+      {actionError && <p role="alert" className="review-error">{actionError} <button onClick={() => void refresh()}>Refresh queue</button></p>}
+      {!canReview && <p className="small">An administrator must resolve or ignore this item.</p>}
+      {canReview && <fieldset disabled={busy} className="review-actions" aria-label="Review actions">
         {boxMissing && <p className="review-warning">No saved box matches PO Box {item.mailboxNumber}. Create it below or choose another saved box.</p>}
         {duplicateCandidates && <p className="review-warning">PO Box {item.mailboxNumber} exists at multiple post offices. Choose the correct location before marking waiting.</p>}
         {item.notificationType === "PARCEL" && item.postOfficeName && !item.mailboxNumber && <p className="review-warning">Parcel collection is for {item.postOfficeName}. Choose the correct saved PO box for this post office.</p>}
@@ -1400,18 +1407,20 @@ function ReviewItemRow({
         ) : (
           <p className="small">Add a post office and box before resolving review items.</p>
         )}
-        {boxMissing && postOffices.length > 0 && (
+        {postOffices.length > 0 && (
           <div className="review-create-box">
             <label>Create missing PO box<select value={createOfficeId} onChange={(event) => setCreateOfficeId(event.target.value)}>
+              <option value="">Choose a post office</option>
               {postOffices.map((office) => <option key={office.id} value={office.id}>{office.name}</option>)}
             </select></label>
             <label>PO Box Number<input value={newBoxNumber} onChange={(event) => setNewBoxNumber(event.target.value)} /></label>
             <button className="secondary" disabled={!createOfficeId || !newBoxNumber.trim()} onClick={createAndResolve}><Plus size={16} />Create and Mark Waiting</button>
           </div>
         )}
-        <button className="secondary" onClick={markResolved}><Check size={16} />Mark Resolved</button>
+        <button className="secondary" onClick={markResolved}><Check size={16} />Resolve Without Changing a Box</button>
         <button className="secondary" onClick={ignore}><X size={16} />Mark Ignored</button>
-      </div>
+        {busy && <span role="status">Saving review...</span>}
+      </fieldset>}
     </article>
   );
 }

@@ -1057,6 +1057,8 @@ input, select {
   gap: 12px;
 }
 
+.review-page { grid-template-columns: minmax(0, 1fr); }
+
 .review-item {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto minmax(260px, 340px);
@@ -1081,16 +1083,30 @@ input, select {
 .review-actions {
   display: grid;
   gap: 8px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
 }
+
+.review-email pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.review-content, .review-actions, .review-error { overflow-wrap: anywhere; }
+.review-actions input, .review-actions select { width: 100%; min-width: 0; box-sizing: border-box; }
+.review-error { grid-column: 1 / -1; color: #a73524; }
 
 .review-create-box {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
-  padding: 10px;
-  background: #ffffff;
-  border: 1px solid #d7e0db;
-  border-radius: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #d7e0db;
 }
 
 .review-actions label {

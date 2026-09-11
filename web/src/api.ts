@@ -185,12 +185,12 @@ export async function loadReviewItems(): Promise<ReviewItem[]> {
   return response.json();
 }
 
-export async function resolveReviewItem(reviewItemId: string, mailboxId: string): Promise<void> {
+export async function resolveReviewItem(reviewItemId: string, mailboxId: string, newMailbox?: { postOfficeId: string; boxNumber: string }): Promise<void> {
   const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/review-items/${reviewItemId}/resolve`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mailboxId })
+    body: JSON.stringify(newMailbox ? { newMailbox } : { mailboxId })
   });
   if (!response.ok) throw new Error(await errorMessage(response));
 }
