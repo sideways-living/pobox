@@ -735,9 +735,10 @@ export class PrismaStore implements AppStore {
       orderBy: { createdAt: "asc" },
       include: { user: { include: { profile: true } } }
     });
-    return (members as MemberWithUserRow[])
+    return members
       .map((member): TeamMemberSummary => ({
         version: member.updatedAt.toISOString(),
+        deletedAt: member.deletedAt?.toISOString(),
         id: member.user.id,
         email: member.user.email,
         displayName: member.user.profile?.displayName ?? member.user.email,
@@ -989,6 +990,7 @@ export class PrismaStore implements AppStore {
         include: { user: { include: { profile: true } } }
       });
       if (!member) throw new NotFoundError("User not found.");
+      if (member.deletedAt) throw new ConflictError("Deleted users cannot be edited or reactivated.");
       if (input.expectedVersion && input.expectedVersion !== member.updatedAt.toISOString()) throw new ConflictError("This user's access changed. Cancel editing and reload before saving.");
       const nextRole = input.role ?? member.role;
       const nextStatus = input.status ?? member.status;
@@ -1039,8 +1041,15 @@ export class PrismaStore implements AppStore {
   async deleteUser(session: Session, workspaceId: string, userId: string): Promise<void> {
     await this.requireMember(session, workspaceId, "ADMIN");
     if (session.userId === userId) throw new ConflictError("You cannot delete your own user.");
-    await this.updateUser(session, workspaceId, userId, { status: "DISABLED" });
-    await this.audit(session.userId, workspaceId, "member.deleted", "user", userId, { historyPreserved: true });
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockManagement(tx, workspaceId, session);
+      const member = await tx.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId } } });
+      if (!member) throw new NotFoundError("User not found.");
+      if (member.deletedAt) return;
+      if (member.role === "ADMIN" && member.status === "ACTIVE" && await tx.workspaceMember.count({ where: { workspaceId, role: "ADMIN", status: "ACTIVE", user: { active: true } } }) <= 1) throw new ConflictError("At least one active admin is required.");
+      await tx.workspaceMember.update({ where: { id: member.id }, data: { status: "DISABLED", deletedAt: new Date(), updatedAt: new Date(Math.max(Date.now(), member.updatedAt.getTime() + 1)) } });
+      await this.audit(session.userId, workspaceId, "member.deleted", "user", userId, { historyPreserved: true }, tx);
+    });
   }
 
   async createPostOffice(session: Session, workspaceId: string, input: CreatePostOfficeInput): Promise<PostOffice> {

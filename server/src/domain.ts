@@ -27,6 +27,7 @@ export interface Workspace {
 }
 
 export interface WorkspaceMember {
+  deletedAt?: string;
   version?: string;
   id: string;
   workspaceId: string;

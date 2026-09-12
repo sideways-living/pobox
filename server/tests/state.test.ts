@@ -514,6 +514,7 @@ describe("shared mailbox state", () => {
     const disabledUser = await store.updateUser(daniel, "ws_company", user.id, { status: "DISABLED" });
     expect(disabledUser.status).toBe("DISABLED");
     expect(disabledUser.active).toBe(false);
+    expect((await store.listMembers(daniel, "ws_company")).find((candidate) => candidate.id === user.id)?.deletedAt).toBeUndefined();
     await expect(store.login("ops-delete@example.com", "Temporary123!")).rejects.toThrow("Invalid email or password.");
 
     const reactivatedUser = await store.updateUser(daniel, "ws_company", user.id, { status: "ACTIVE" });
@@ -530,6 +531,11 @@ describe("shared mailbox state", () => {
     const members = await store.listMembers(daniel, "ws_company");
     expect(members.find((candidate) => candidate.id === user.id)?.active).toBe(false);
     expect(members.find((candidate) => candidate.id === user.id)?.status).toBe("DISABLED");
+    const deletedAt = members.find((candidate) => candidate.id === user.id)?.deletedAt;
+    expect(deletedAt).toEqual(expect.any(String));
+    await store.deleteUser(daniel, "ws_company", user.id);
+    expect((await store.listMembers(daniel, "ws_company")).find((candidate) => candidate.id === user.id)?.deletedAt).toBe(deletedAt);
+    await expect(store.updateUser(daniel, "ws_company", user.id, { status: "ACTIVE" })).rejects.toThrow("Deleted users cannot be edited or reactivated.");
     expect([...store.auditEvents.values()].some((event) => event.eventType === "member.deleted" && event.entityId === user.id)).toBe(true);
   });
 

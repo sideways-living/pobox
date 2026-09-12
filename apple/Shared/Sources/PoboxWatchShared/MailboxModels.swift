@@ -49,6 +49,7 @@ public struct CurrentUser: Codable, Identifiable, Sendable {
 }
 
 public struct TeamMember: Codable, Identifiable, Sendable {
+    public let deletedAt: String?
     public let version: String?
     public let id: String
     public let email: String

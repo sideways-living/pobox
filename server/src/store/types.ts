@@ -32,6 +32,7 @@ export interface IncomingMailResult {
 }
 
 export interface TeamMemberSummary {
+  deletedAt?: string;
   version?: string;
   id: string;
   email: string;

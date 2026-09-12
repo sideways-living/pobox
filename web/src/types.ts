@@ -64,6 +64,7 @@ export interface CollectionHistoryEvent {
 }
 
 export interface TeamMember {
+  deletedAt?: string;
   version: string;
   id: string;
   email: string;

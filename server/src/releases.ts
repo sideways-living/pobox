@@ -1,4 +1,4 @@
-export const appVersion = "0.13.9";
+export const appVersion = "0.13.10";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.10-deleted-users",
+    version: "0.13.10",
+    releasedAt: "2026-09-13T00:00:00.000Z",
+    title: "A clearer team directory",
+    summary: "Deleted users now appear in a separate Deleted Users list instead of the team directory. Their past activity is kept, and disabled users remain separate from deleted users.",
+    audience: "ALL"
+  },
   {
     id: "0.13.9-safer-deployment",
     version: "0.13.9",

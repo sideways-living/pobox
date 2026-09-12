@@ -133,6 +133,7 @@ model WorkspaceMember {
   status      MemberStatus @default(INVITED)
   invitedBy   String?
   joinedAt    DateTime?
+  deletedAt   DateTime?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   workspace   Workspace    @relation(fields: [workspaceId], references: [id])

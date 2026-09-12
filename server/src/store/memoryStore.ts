@@ -599,6 +599,7 @@ export class MemoryStore implements AppStore {
         return {
           id: user.id,
           version: member.version ?? member.id,
+          deletedAt: member.deletedAt,
           email: user.email,
           displayName: user.displayName,
           role: member.role,
@@ -824,6 +825,7 @@ export class MemoryStore implements AppStore {
     const user = this.users.get(userId);
     if (!member || !user) throw new NotFoundError("User not found.");
     if (input.expectedVersion && input.expectedVersion !== (member.version ?? member.id)) throw new ConflictError("This user's access changed. Cancel editing and reload before saving.");
+    if (member.deletedAt) throw new ConflictError("Deleted users cannot be edited or reactivated.");
     const nextRole = input.role ?? member.role;
     const nextStatus = input.status ?? member.status;
     this.assertUserManagementChangeIsSafe(session, workspaceId, userId, member, nextRole, nextStatus);
@@ -870,7 +872,8 @@ export class MemoryStore implements AppStore {
     const user = this.users.get(userId);
     if (!member || !user) throw new NotFoundError("User not found.");
     this.assertUserManagementChangeIsSafe(session, workspaceId, userId, member, member.role, "DISABLED");
-    this.members.set(member.id, { ...member, version: nanoid(), status: "DISABLED" });
+    if (member.deletedAt) return;
+    this.members.set(member.id, { ...member, version: nanoid(), status: "DISABLED", deletedAt: new Date().toISOString() });
     this.audit(session.userId, workspaceId, "member.deleted", "user", userId, {});
   }
 

@@ -1109,11 +1109,11 @@ struct MacTeamView: View {
             MacInfoRow(title: snapshot?.currentUser.displayName ?? "Unknown user", detail: snapshot?.currentUser.email ?? "No email loaded", systemImage: "person.crop.circle", tint: .blue)
             MacInfoRow(title: "Role", detail: snapshot?.currentUser.role ?? "Unknown", systemImage: "person.badge.key", tint: .purple)
 
-            MacPanel(title: "Members", aside: "\(members.count) users") {
-                if members.isEmpty {
+            MacPanel(title: "Members", aside: "\(members.filter { $0.deletedAt == nil }.count) users") {
+                if !members.contains(where: { $0.deletedAt == nil }) {
                     MacEmptyStateView(title: "No team list loaded", subtitle: "Refresh after signing in to load the workspace members.")
                 } else {
-                    ForEach(members) { member in
+                    ForEach(members.filter { $0.deletedAt == nil }) { member in
                         MacTeamMemberRow(
                             member: member,
                             currentUserId: snapshot?.currentUser.id,
@@ -1121,6 +1121,19 @@ struct MacTeamView: View {
                             updateUser: updateUser,
                             deleteUser: deleteUser
                         )
+                    }
+                }
+            }
+
+            MacPanel(title: "Deleted Users", aside: "\(members.filter { $0.deletedAt != nil }.count) users") {
+                if !members.contains(where: { $0.deletedAt != nil }) {
+                    Text("No deleted users.").foregroundStyle(.secondary)
+                }
+                ForEach(members.filter { $0.deletedAt != nil }) { member in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(member.displayName).font(.headline)
+                        Text(member.email).foregroundStyle(.secondary)
+                        Text("Deleted").foregroundStyle(.secondary)
                     }
                 }
             }

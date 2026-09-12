@@ -1099,6 +1099,8 @@ function MapFallback({ offices, message }: { offices: PostOffice[]; message?: st
 }
 
 function TeamSection({ snapshot, members, refresh, setError }: { snapshot: DashboardSnapshot; members: TeamMember[]; refresh: () => Promise<void>; setError: (value: string | null) => void }) {
+  const directoryMembers = members.filter((member) => !member.deletedAt);
+  const deletedMembers = members.filter((member) => member.deletedAt);
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
@@ -1161,9 +1163,9 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
   return (
     <div className="page-grid">
       <section className="page-main">
-        <Panel title="Team Directory" aside={`${members.length} users`}>
+        <Panel title="Team Directory" aside={`${directoryMembers.length} ${directoryMembers.length === 1 ? "user" : "users"}`}>
           <div className="team-list">
-            {members.map((member) => (
+            {directoryMembers.map((member) => (
               <TeamMemberRow
                 key={member.id}
                 member={member}
@@ -1175,13 +1177,26 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
             ))}
           </div>
         </Panel>
+        <Panel title="Deleted Users" aside={`${deletedMembers.length} ${deletedMembers.length === 1 ? "user" : "users"}`}>
+          {deletedMembers.length === 0 ? <p className="muted-line">No deleted users.</p> : (
+            <div className="team-list">
+              {deletedMembers.map((member) => (
+                <div className="team-member" key={member.id}>
+                  <div><strong>{member.displayName}</strong><span>{member.email}</span><small>Deleted {new Date(member.deletedAt!).toLocaleString("en-AU")}</small></div>
+                  <StatusPill tone="muted">Deleted</StatusPill>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
       </section>
       <aside className="side-panels">
         <Panel title="Access Summary">
           <div className="detail-list">
-            <DetailRow label="Admins" value={String(members.filter((member) => member.role === "ADMIN").length)} />
-            <DetailRow label="Members" value={String(members.filter((member) => member.role === "MEMBER").length)} />
-            <DetailRow label="Disabled" value={String(members.filter((member) => !member.active).length)} />
+            <DetailRow label="Admins" value={String(directoryMembers.filter((member) => member.role === "ADMIN").length)} />
+            <DetailRow label="Members" value={String(directoryMembers.filter((member) => member.role === "MEMBER").length)} />
+            <DetailRow label="Disabled" value={String(directoryMembers.filter((member) => member.status === "DISABLED").length)} />
+            <DetailRow label="Deleted" value={String(deletedMembers.length)} />
           </div>
           <p className="muted-line">Only admins can manage users. Disabling or deleting a user turns off access while keeping historical audit records.</p>
         </Panel>

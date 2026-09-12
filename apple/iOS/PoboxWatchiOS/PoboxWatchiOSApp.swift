@@ -1110,11 +1110,24 @@ struct iPhoneTeamView: View {
             }
 
             Section("Members") {
-                if members.isEmpty {
+                if !members.contains(where: { $0.deletedAt == nil }) {
                     Label("No team list loaded", systemImage: "person.2")
                 } else {
-                    ForEach(members) { member in
+                    ForEach(members.filter { $0.deletedAt == nil }) { member in
                         iPhoneTeamMemberRow(member: member, currentUserId: snapshot?.currentUser.id, canManage: snapshot?.currentUser.role == "ADMIN", updateUser: updateUser, deleteUser: deleteUser)
+                    }
+                }
+            }
+
+            Section("Deleted Users") {
+                if !members.contains(where: { $0.deletedAt != nil }) {
+                    Text("No deleted users.").foregroundStyle(.secondary)
+                }
+                ForEach(members.filter { $0.deletedAt != nil }) { member in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(member.displayName).font(.headline)
+                        Text(member.email).foregroundStyle(.secondary)
+                        Text("Deleted").foregroundStyle(.secondary)
                     }
                 }
             }

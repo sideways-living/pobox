@@ -77,6 +77,23 @@ try {
   page.once("dialog", (dialog) => { assert.match(dialog.message(), /History.*Pending review/); return dialog.accept(); });
   await office.getByTitle("Delete post office", { exact: true }).click();
   await office.waitFor({ state: "detached" });
+  await page.getByRole("button", { name: "Team", exact: true }).click();
+  const directory = page.locator("section.panel").filter({ has: page.getByRole("heading", { name: "Team Directory", exact: true }) });
+  const deleted = page.locator("section.panel").filter({ has: page.getByRole("heading", { name: "Deleted Users", exact: true }) });
+  const john = directory.locator(".team-member").filter({ hasText: "john@example.com" });
+  page.once("dialog", dialog => dialog.dismiss());
+  await john.getByTitle("Delete user access", { exact: true }).click();
+  assert.equal(await john.count(), 1);
+  page.once("dialog", dialog => dialog.accept());
+  await john.getByTitle("Delete user access", { exact: true }).click();
+  await deleted.getByText("john@example.com", { exact: true }).waitFor();
+  assert.equal(await john.count(), 0);
+  assert.equal(await deleted.getByRole("button").count(), 0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.screenshot({ path: "/tmp/pobox-deleted-users-mobile.png", fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({ path: "/tmp/pobox-deleted-users-desktop.png", fullPage: true });
   assert.deepEqual(errors, []);
   console.log("PASS: directory population and stale responses, multiple boxes, duplicate validation, collection timestamp, responsive edits, failure/retry, archive confirmation.");
 } finally { await browser.close(); }

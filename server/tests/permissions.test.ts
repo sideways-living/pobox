@@ -74,12 +74,13 @@ describe("workspace permissions and live updates", () => {
     store.members.set("shared", { id: "shared", userId: member.userId, workspaceId: "other", role: "MEMBER", status: "ACTIVE" });
     await store.processIncomingMail({ workspaceId: "ws_company", provider: "gmail", providerMessageId: "mail", sender: "notice@example.test", subject: "Mail2Day: PO Box 1234 has mail" });
     const event = await store.collectMailbox(member, "ws_company", "box_1234", "WEB");
+    await expect(store.updateUser(admin, "ws_company", member.userId, { email: "stolen@example.test" })).rejects.toThrow("Shared account");
     await store.deleteUser(admin, "ws_company", member.userId);
     expect((await request(member, "GET", "ws_company/dashboard")).statusCode).toBe(403);
     expect((await request(member, "GET", "other/dashboard")).statusCode).toBe(200);
     expect(store.collectionEvents.get(event.id)?.collectedBy).toBe(member.userId);
     expect(store.users.has(member.userId)).toBe(true);
-    await expect(store.updateUser(admin, "ws_company", member.userId, { email: "stolen@example.test" })).rejects.toThrow("Shared account");
+    await expect(store.updateUser(admin, "ws_company", member.userId, { email: "stolen@example.test" })).rejects.toThrow("Deleted users cannot be edited or reactivated.");
   });
 
   it("requires edit preconditions and rejects stale forms", async () => {
