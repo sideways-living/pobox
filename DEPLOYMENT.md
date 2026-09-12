@@ -58,7 +58,7 @@ The script:
 4. Loads/validates `.env`, sets the release's `WEB_DIST_PATH`, runs `npm ci --include=dev`, generates Prisma and builds. The running release is not overwritten.
 5. Stamps the built commit/version and hashes HTML/assets. Creates a checked database archive before migration.
 6. Applies existing migrations. Migration errors stop before restart. Build deliberately precedes migration, reducing schema changes caused by a broken build.
-7. Starts/restarts the named PM2 process with the selected script/cwd/environment. Retries readiness a bounded number of times.
+7. Validates the new PM2 configuration and built entry point, removes only the named PM2 entry if present, and starts it from the new release configuration. This avoids PM2 retaining an old npm launcher or working directory. Expect a brief restart interruption. Retries readiness a bounded number of times.
 8. Requires local and public database-backed readiness, exact commit/version/storage, matching built HTML and matching JS/CSS bytes. PM2 `online` alone is insufficient.
 9. Only then runs `pm2 save` and writes `last-successful-release`.
 

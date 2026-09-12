@@ -8,6 +8,31 @@ import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import { validateEnvironment } from "../scripts/validate-env.mjs";
 import { verifyRelease } from "../scripts/verify-release.mjs";
+import { activateRelease } from "../scripts/activate-pm2-release.mjs";
+
+test("PM2 activation replaces stale launchers and release paths, preserving other apps", () => {
+  const root = mkdtempSync(join(tmpdir(), "pobox-pm2-"));
+  const name = "pobox-watch-api", configPath = join(root, "ecosystem.deploy.json");
+  const script = join(root, "server/dist/src/index.js");
+  mkdirSync(join(root, "server/dist/src"), { recursive: true });
+  writeFileSync(script, "");
+  writeFileSync(configPath, JSON.stringify({ apps: [{ name, cwd: root, script }] }));
+  try {
+    for (const oldPath of ["/bin/npm", "/old-release/server/dist/src/index.js", null]) {
+      const calls = [];
+      activateRelease(root, name, args => {
+        calls.push(args);
+        return args[0] === "jlist" ? JSON.stringify([{ name: "unrelated" }, ...(oldPath ? [{ name, pm2_env: { pm_exec_path: oldPath } }] : [])]) : "";
+      });
+      assert.deepEqual(calls, [["jlist"], ...(oldPath ? [["delete", name]] : []), ["start", configPath, "--only", name]]);
+    }
+    const calls = [];
+    assert.throws(() => activateRelease(root, name, args => { calls.push(args); if (args[0] === "jlist") return JSON.stringify([{ name }]); throw Error("delete failed"); }), /delete failed/);
+    assert.equal(calls.some(args => args[0] === "start"), false);
+    rmSync(script);
+    assert.throws(() => activateRelease(root, name, () => { throw Error("must not touch PM2"); }), /entry point is invalid/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
 
 const good = { NODE_ENV: "production", PORT: "4175", POBOX_WATCH_STORAGE: "prisma", POBOX_WATCH_SEED_DEMO: "false", DATABASE_URL: "postgresql://test:secret@localhost/test", SESSION_SECRET: "a".repeat(40), ENCRYPTION_KEY: "b".repeat(40), APP_BASE_URL: "https://pobox.watch", API_BASE_URL: "https://pobox.watch", CORS_ORIGIN: "https://pobox.watch", WEBAUTHN_RP_ID: "pobox.watch", WEBAUTHN_ORIGIN: "https://pobox.watch" };
 test("environment validation rejects placeholders, wrong origins, demo storage and incomplete polling without printing secrets", () => {
@@ -56,7 +81,7 @@ for (const failure of ["commit", "ci", "build", "backup", "migrate", "ready"]) t
     writeFileSync(join(app, "ecosystem.config.cjs"), "local settings");
     writeFileSync(join(app, ".env"), Object.entries(good).map(([k, v]) => `${k}='${v}'`).join("\n"), { mode: 0o600 });
     const stub = (name, body) => writeFileSync(join(bin, name), `#!/bin/bash\nset -eu\necho '${name}' \\"$@\\" >> '${log}'\n${body}\n`.replaceAll('\\"', '"'), { mode: 0o755 });
-    stub("npm", `if [[ "${failure}" == ci && "$1" == ci ]] || [[ "${failure}" == build && "$*" == 'run build' ]] || [[ "${failure}" == migrate && "$*" == *prisma:migrate* ]]; then exit 9; fi\nif [[ "$*" == 'run build' ]]; then mkdir -p web/dist server/dist; echo '<script src="/assets/test.js"></script>' > web/dist/index.html; fi`);
+    stub("npm", `if [[ "${failure}" == ci && "$1" == ci ]] || [[ "${failure}" == build && "$*" == 'run build' ]] || [[ "${failure}" == migrate && "$*" == *prisma:migrate* ]]; then exit 9; fi\nif [[ "$*" == 'run build' ]]; then mkdir -p web/dist server/dist/src; touch server/dist/src/index.js; echo '<script src="/assets/test.js"></script>' > web/dist/index.html; fi`);
     stub("pm2", failure === "ready" ? 'if [[ "$1" == jlist ]]; then echo "[]"; fi; exit 0' : "exit 8");
     stub("sleep", "exit 0");
     stub("pg_dump", failure === "backup" ? "exit 9" : 'while [[ "$#" -gt 0 ]]; do if [[ "$1" == --file ]]; then shift; echo archive > "$1"; fi; shift; done');
@@ -69,7 +94,7 @@ for (const failure of ["commit", "ci", "build", "backup", "migrate", "ready"]) t
     assert.equal(execFileSync("git", ["show", "stash@{0}:package.json"], { cwd: app }).toString(), '{"version":"local drift"}');
     assert.equal(execFileSync("git", ["show", "stash@{0}^3:ecosystem.config.cjs"], { cwd: app }).toString(), "local settings");
     const calls = existsSync(log) ? readFileSync(log, "utf8") : "";
-    if (failure === "ready") { assert.match(calls, /pm2 startOrRestart/); assert.doesNotMatch(calls, /pm2 save/); }
+    if (failure === "ready") { assert.match(calls, /pm2 start /); assert.doesNotMatch(calls, /pm2 save/); }
     else assert.ok(!calls.includes("pm2"));
     if (failure === "commit") assert.ok(!existsSync(log));
   } finally { rmSync(root, { recursive: true, force: true }); }

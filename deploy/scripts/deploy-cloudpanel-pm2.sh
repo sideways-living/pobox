@@ -52,7 +52,7 @@ bash deploy/backup/backup-db.sh
 npm run prisma:migrate --workspace server
 export PM2_NAME
 node deploy/scripts/write-pm2-config.mjs
-pm2 startOrRestart "$RELEASE_DIR/ecosystem.deploy.json" --only "$PM2_NAME" --update-env
+node deploy/scripts/activate-pm2-release.mjs
 verified=false
 for attempt in {1..12}; do
   if bash deploy/scripts/verify-cloudpanel-pm2.sh; then verified=true; break; fi
