@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { PasswordForm } from "./PasswordForm";
 import { createRoot } from "react-dom/client";
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import { load as loadMapKit } from "@apple/mapkit-loader";
@@ -64,6 +65,16 @@ function loginEmailFromLocation() {
 }
 
 function App() {
+  const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get("reset-password"));
+  useEffect(() => {
+    const receiveResetLink = () => {
+      const token = new URLSearchParams(window.location.hash.slice(1)).get("reset-password");
+      if (token) setResetToken(token);
+    };
+    window.addEventListener("hashchange", receiveResetLink);
+    return () => window.removeEventListener("hashchange", receiveResetLink);
+  }, []);
+  useEffect(() => { if (resetToken) window.history.replaceState(null, "", window.location.pathname + window.location.search); }, [resetToken]);
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
@@ -213,6 +224,8 @@ function App() {
     setError(null);
   }
 
+  if (resetToken) return <main className="login-shell"><section className="login-panel"><h1>Reset password</h1><PasswordForm key={resetToken} mode="reset" token={resetToken} /></section></main>;
+  if (new URLSearchParams(window.location.search).has("forgot-password")) return <main className="login-shell"><section className="login-panel"><h1>Forgot password?</h1><PasswordForm mode="forgot" email={loginEmailFromLocation()} /><a href="/">Return to pobox.watch</a></section></main>;
   if (securityGate) {
     return (
       <MandatorySecuritySetup
@@ -352,6 +365,7 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [passwordMode, setPasswordMode] = useState(false);
+  const [forgotPassword, setForgotPassword] = useState(() => new URLSearchParams(window.location.search).has("forgot-password"));
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -410,10 +424,12 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
     setError(null);
   }
 
+  if (forgotPassword) return <main className="login-shell"><section className="login-panel"><h1>Forgot password?</h1><PasswordForm mode="forgot" email={email} /><button className="secondary" onClick={() => setForgotPassword(false)}>Back to Sign In</button></section></main>;
+
   return (
     <main className="login-shell">
       <form className="login-panel" onSubmit={submit}>
-        <div className="brand large"><Mail size={26} />pobox.watch</div>
+        <div className="brand large"><img src="/icons/icon-192.png" alt="" />pobox.watch</div>
         <div className="login-copy">
           <h1>Sign in with your passkey</h1>
           <p>Use your passkey first. If your account is not set up yet, use your password once and finish security setup before entering the app.</p>
@@ -434,6 +450,7 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
         {challengeId && <button type="button" className="secondary" disabled={busy} onClick={usePasskeyMode}>Cancel Verification</button>}
         {!challengeId && !passwordMode && <button type="button" className="secondary" disabled={busy} onClick={usePasswordFallback}>Use Password to Set Up Security</button>}
         {!challengeId && passwordMode && <button type="button" className="secondary" disabled={busy} onClick={usePasskeyMode}><KeyRound size={18} />Back to Passkey</button>}
+        <button type="button" className="secondary" onClick={() => setForgotPassword(true)}>Forgot Password?</button>
         <details className="small"><summary>Lost a passkey or authenticator?</summary><p>Use your password if your passkey is unavailable. Use an unused recovery code instead of your authenticator code, then replace the authenticator in Settings. If you have neither an authenticator nor recovery codes, access cannot be restored from this screen. Contact your administrator; security checks cannot be skipped.</p></details>
       </form>
     </main>
@@ -1298,6 +1315,7 @@ function TeamMemberRow({
             <button type="button" className="secondary" title="Reactivate user access" disabled={self} onClick={() => onSave(member.id, { expectedVersion: member.version, email: member.email, displayName: member.displayName, role: member.role, status: "ACTIVE" })}>Reactivate</button>
           )}
           <button type="button" className="icon-button danger" title="Delete user access" disabled={self} onClick={() => onDelete(member)}><Trash2 size={16} /></button>
+          {member.active && <a className="secondary" href={`/?forgot-password=1&email=${encodeURIComponent(member.email)}`} title="Request a password reset email"><KeyRound size={16} />Reset Password</a>}
         </div>
       )}
     </div>
@@ -1309,6 +1327,7 @@ function SettingsSection({ snapshot, refresh, setError }: { snapshot: DashboardS
     <div className="page-grid settings-page">
       <section className="page-main">
         <SecurityPanel setError={setError} />
+        <Panel title="Change Password"><PasswordForm mode="change" /><details><summary>Forgot your current password?</summary><PasswordForm mode="forgot" email={snapshot.currentUser.email} /></details></Panel>
         <Panel title="Workspace">
           <div className="detail-list">
             <DetailRow label="Workspace" value={snapshot.workspace.name} />

@@ -1,6 +1,6 @@
 {
   "name": "@pobox-watch/server",
-  "version": "0.13.10",
+  "version": "0.13.11",
   "type": "module",
   "private": true,
   "scripts": {
@@ -27,11 +27,13 @@
     "fastify": "^5.5.0",
     "googleapis": "^178.0.0",
     "nanoid": "^5.1.5",
+    "nodemailer": "^10.0.9",
     "parse5": "^8.0.1",
     "zod": "^4.0.17"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
+    "@types/nodemailer": "^8.0.1",
     "@types/ws": "^8.18.1",
     "prisma": "6.12.0",
     "tsx": "^4.20.4",

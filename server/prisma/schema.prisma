@@ -49,6 +49,7 @@ model User {
   authChallenges    AuthChallenge[]
   webAuthnChallenges WebAuthnChallenge[]
   recoveryCodes     RecoveryCode[]
+  passwordResets    PasswordReset[]
   collectedEvents   CollectionEvent[]
   devices           Device[]
   passkeyCredentials PasskeyCredential[]
@@ -84,6 +85,14 @@ model RecoveryCode {
   user      User      @relation(fields: [userId], references: [id])
 
   @@index([userId, usedAt])
+}
+
+model PasswordReset {
+  tokenHash String @id
+  userId String
+  expiresAt DateTime
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 model WebAuthnChallenge {

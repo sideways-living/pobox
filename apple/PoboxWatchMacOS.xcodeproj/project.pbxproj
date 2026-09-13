@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        AAAAAAAAAAAAAAAAAAAAAA01 /* PasswordSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAAAAAAAAAAAAAAAAAAAA02 /* PasswordSettingsView.swift */; };
 		4A2B812C0000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4A2B812C0000000000000002 /* Assets.xcassets */; };
 		9C8202E6A066449AC8B2BBFC /* PoboxWatchMacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA029BAA74B6AEAA2A8B7B6 /* PoboxWatchMacOSApp.swift */; };
 		BCF7E75839B35176A4A41782 /* LocationReminderPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1699F8903E81A884E231D1A5 /* LocationReminderPolicy.swift */; };
@@ -41,6 +42,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+        AAAAAAAAAAAAAAAAAAAAAA02 /* PasswordSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordSettingsView.swift; sourceTree = "<group>"; };
 		BA623A716C187C5CA97AC072 /* pobox.watch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "pobox.watch.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		54BAC908F278B9E5641724F2 /* PoboxWatchShared.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PoboxWatchShared.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 			4A2B812C0000000000000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -120,6 +122,7 @@
 				1699F8903E81A884E231D1A5 /* LocationReminderPolicy.swift */,
 				7451E3C90F480C8FFE75816C /* PoboxWatchAPIClient.swift */,
 				8383CFF48734BB1E6121572E /* MailboxModels.swift */,
+                AAAAAAAAAAAAAAAAAAAAAA02 /* PasswordSettingsView.swift */,
 			);
 			path = PoboxWatchShared;
 			sourceTree = "<group>";
@@ -226,6 +229,7 @@
 				BCF7E75839B35176A4A41782 /* LocationReminderPolicy.swift in Sources */,
 				240F0EB53EE900C9DE9131FB /* PoboxWatchAPIClient.swift in Sources */,
 				899B66472461DE33C376ACFC /* MailboxModels.swift in Sources */,
+                AAAAAAAAAAAAAAAAAAAAAA01 /* PasswordSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -368,7 +372,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.13.10;
+				MARKETING_VERSION = 0.13.11;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch.macos";
 				PRODUCT_NAME = "pobox.watch";
 				SUPPORTED_PLATFORMS = "macosx";
@@ -392,7 +396,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.13.10;
+				MARKETING_VERSION = 0.13.11;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch.macos";
 				PRODUCT_NAME = "pobox.watch";
 				SUPPORTED_PLATFORMS = "macosx";
@@ -418,7 +422,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.13.10;
+				MARKETING_VERSION = 0.13.11;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch.macos.shared";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -445,7 +449,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.13.10;
+				MARKETING_VERSION = 0.13.11;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch.macos.shared";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

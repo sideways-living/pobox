@@ -16,6 +16,7 @@ import { MemoryStore } from "../store/memoryStore.js";
 import type { AppStore } from "../store/types.js";
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "../store/types.js";
 
+import { resetEmailConfigured, sendPasswordReset } from "../auth/passwordReset.js";
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
 const twoFactorSchema = z.object({ challengeId: z.string().min(16), code: z.string().min(6).max(32) });
 const totpConfirmSchema = z.object({ code: z.string().min(6).max(32) });
@@ -178,6 +179,29 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const session = result;
     setSessionCookie(reply, session);
     return { ok: true, expiresAt: session.expiresAt, previousLoginAt: session.previousLoginAt };
+  });
+
+  app.post("/api/v1/auth/password/forgot", { config: { rateLimit: { max: 3, timeWindow: "15 minutes" } } }, async (request, reply) => {
+    const { email } = z.object({ email: z.string().trim().email().max(254) }).parse(request.body);
+    if (!resetEmailConfigured()) return reply.code(503).send({ error: "Password reset email is not configured. Please contact your administrator." });
+    try {
+      const token = await store.requestPasswordReset(email);
+      if (token) await sendPasswordReset(email, token);
+    } catch {
+      app.log.error("Password reset email could not be delivered.");
+    }
+    return { ok: true, message: "If this email has an active account, a reset link will arrive shortly." };
+  });
+  app.post("/api/v1/auth/password/reset", { config: { rateLimit: { max: 5, timeWindow: "15 minutes" } } }, async request => {
+    const body = z.object({ token: z.string().min(40).max(128), password: z.string().min(12).max(200) }).parse(request.body);
+    await store.resetPassword(body.token, body.password);
+    return { ok: true };
+  });
+  app.post("/api/v1/auth/password/change", { config: { rateLimit: { max: 5, timeWindow: "15 minutes" } } }, async request => {
+    const session = await securedSession(request, "ws_company");
+    const body = z.object({ currentPassword: z.string().min(1).max(200), password: z.string().min(12).max(200) }).parse(request.body);
+    await store.changePassword(session, body.currentPassword, body.password);
+    return { ok: true };
   });
 
   app.post("/api/v1/auth/2fa/verify", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {

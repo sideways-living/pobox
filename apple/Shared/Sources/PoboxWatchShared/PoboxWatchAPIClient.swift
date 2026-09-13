@@ -71,6 +71,15 @@ public actor PoboxWatchAPIClient {
         try validate(response, data: data)
     }
 
+    public func changePassword(current: String, password: String) async throws {
+        var request = URLRequest(url: baseURL.appending(path: "/api/v1/auth/password/change"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["currentPassword": current, "password": password])
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+    }
+
     public func dashboard(workspaceId: String) async throws -> MailboxDashboardSnapshot {
         let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/dashboard")
         let (data, response) = try await session.data(from: url)

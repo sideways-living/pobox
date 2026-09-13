@@ -9,6 +9,7 @@ import {
   type RegistrationResponseJSON
 } from "@simplewebauthn/server";
 import argon2 from "argon2";
+import { resetDigest, resetToken } from "../auth/passwordReset.js";
 import { createHash, randomBytes } from "node:crypto";
 import { decryptSecret, encryptSecret, generateRecoveryCodes, generateTotpSecret, hashRecoveryCode, recoveryCodeMatches, totpUri, verifyTotp } from "../auth/totp.js";
 import { challengeFromClientData, webAuthnConfig } from "../auth/webauthn.js";
@@ -88,6 +89,49 @@ interface ReviewMatchAuditRow {
 }
 
 export class PrismaStore implements AppStore {
+  async requestPasswordReset(email: string): Promise<string | undefined> {
+    return this.prisma.$transaction(async tx => {
+      const user = await tx.user.findUnique({ where: { email: email.toLowerCase() } });
+      if (!user?.active || !await tx.workspaceMember.count({ where: { userId: user.id, status: "ACTIVE" } })) return;
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${user.id} FOR UPDATE`;
+      await tx.passwordReset.deleteMany({ where: { OR: [{ userId: user.id }, { expiresAt: { lte: new Date() } }] } });
+      const token = resetToken();
+      await tx.passwordReset.create({ data: { tokenHash: resetDigest(token), userId: user.id, expiresAt: new Date(Date.now() + 1800000) } });
+      return token;
+    });
+  }
+  private async replacePassword(tx: Prisma.TransactionClient, userId: string, passwordHash: string) {
+    await tx.user.update({ where: { id: userId }, data: { passwordHash } });
+    await tx.session.deleteMany({ where: { userId } });
+    await tx.authChallenge.deleteMany({ where: { userId } });
+    await tx.webAuthnChallenge.deleteMany({ where: { userId } });
+    await tx.passwordReset.deleteMany({ where: { userId } });
+    for (const member of await tx.workspaceMember.findMany({ where: { userId } })) await this.audit(userId, member.workspaceId, "password.changed", "user", userId, {}, tx);
+  }
+  async resetPassword(token: string, password: string): Promise<void> {
+    const passwordHash = await argon2.hash(password);
+    await this.prisma.$transaction(async tx => {
+      const reset = await tx.passwordReset.findUnique({ where: { tokenHash: resetDigest(token) } });
+      if (!reset) throw new UnauthorizedError("Reset link is invalid or expired. Request a new link.");
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${reset.userId} FOR UPDATE`;
+      const current = await tx.passwordReset.findUnique({ where: { tokenHash: resetDigest(token) } });
+      const user = await tx.user.findUnique({ where: { id: reset.userId } });
+      if (!current || current.expiresAt <= new Date() || !user?.active || !await tx.workspaceMember.count({ where: { userId: user.id, status: "ACTIVE" } })) throw new UnauthorizedError("Reset link is invalid or expired. Request a new link.");
+      await this.replacePassword(tx, user.id, passwordHash);
+    });
+  }
+  async changePassword(session: Session, currentPassword: string, password: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: session.userId } });
+    if (!user?.active || !await argon2.verify(user.passwordHash, currentPassword)) throw new UnauthorizedError("Current password is incorrect.");
+    const passwordHash = await argon2.hash(password);
+    await this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${user.id} FOR UPDATE`;
+      const current = await tx.user.findUnique({ where: { id: user.id } });
+      const liveSession = await tx.session.findUnique({ where: { id: session.id } });
+      if (!current?.active || current.passwordHash !== user.passwordHash || !liveSession || liveSession.expiresAt <= new Date()) throw new UnauthorizedError("Account changed. Sign in again.");
+      await this.replacePassword(tx, user.id, passwordHash);
+    });
+  }
   async checkReadiness(): Promise<void> {
     await this.prisma.workspace.count();
   }

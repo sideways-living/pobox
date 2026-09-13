@@ -33,7 +33,7 @@ final class PoboxWatchMacOSAppDelegate: NSObject, NSApplicationDelegate {
         )
         window.title = "pobox.watch"
         window.contentMinSize = NSSize(width: 940, height: 620)
-        window.contentView = NSHostingView(rootView: MacRootView(model: model))
+        window.contentView = NSHostingView(rootView: MacRootView(model: model).tint(PoboxTheme.blue))
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -450,6 +450,7 @@ struct MacLoginView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(model.isLoading || model.email.isEmpty)
 
+                    Link("Forgot Password?", destination: URL(string: "https://pobox.watch/?forgot-password=1")!)
                     Button("Use Password to Set Up Security") {
                         model.passwordMode = true
                     }
@@ -598,7 +599,7 @@ struct MacOverviewDashboardView: View {
     var body: some View {
         MacPage(title: snapshot?.workspace.name ?? "Overview", subtitle: signedInText) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-                MacMetricCard(value: "\(snapshot?.outstandingMailboxCount ?? 0)", label: "Boxes needing collection", systemImage: "tray.full.fill", tint: .orange)
+                MacMetricCard(value: "\(snapshot?.outstandingMailboxCount ?? 0)", label: "Boxes needing collection", systemImage: "tray.full.fill", tint: PoboxTheme.orange)
                 MacMetricCard(value: "\(snapshot?.postOffices.count ?? 0)", label: "Post office locations", systemImage: "building.2", tint: .blue)
                 MacMetricCard(value: "\(reviewItems.count)", label: "Review queue items", systemImage: "exclamationmark.triangle.fill", tint: .red)
             }
@@ -612,7 +613,7 @@ struct MacOverviewDashboardView: View {
                             title: mailbox.name,
                             detail: "PO Box \(mailbox.boxNumber)",
                             systemImage: "tray.full.fill",
-                            tint: .orange
+                            tint: PoboxTheme.orange
                         )
                     }
                 }
@@ -697,7 +698,7 @@ struct MacMailboxManageRow: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 Image(systemName: hasWaitingItem(mailbox) ? "tray.full.fill" : "checkmark.circle.fill")
-                    .foregroundStyle(hasWaitingItem(mailbox) ? .orange : .green)
+                    .foregroundStyle(hasWaitingItem(mailbox) ? PoboxTheme.orange : PoboxTheme.green)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(mailbox.name)
@@ -1141,7 +1142,7 @@ struct MacTeamView: View {
             if snapshot?.currentUser.role == "ADMIN" {
                 MacCreateUserForm(createUser: createUser)
             } else {
-                MacInfoRow(title: "Admin required", detail: "Only admins can create new users.", systemImage: "lock", tint: .orange)
+                MacInfoRow(title: "Admin required", detail: "Only admins can create new users.", systemImage: "lock", tint: PoboxTheme.orange)
             }
         }
     }
@@ -1158,14 +1159,15 @@ struct MacSettingsView: View {
     var body: some View {
         MacPage(title: "Settings", subtitle: "Configuration for this native pobox.watch client.") {
             MacInfoRow(title: "Server", detail: "https://pobox.watch", systemImage: "network", tint: .blue)
-            MacInfoRow(title: "Workspace", detail: snapshot?.workspace.name ?? "Unknown", systemImage: "building.2", tint: .green)
-            MacInfoRow(title: "Security", detail: "Passkey and authenticator setup is mandatory. Use the web app to add passkeys and manage setup.", systemImage: "key.fill", tint: .orange)
+            MacInfoRow(title: "Workspace", detail: snapshot?.workspace.name ?? "Unknown", systemImage: "building.2", tint: PoboxTheme.green)
+            MacInfoRow(title: "Security", detail: "Passkey and authenticator setup is mandatory. Use the web app to add passkeys and manage setup.", systemImage: "key.fill", tint: PoboxTheme.orange)
+            MacPanel(title: "Password", aside: "") { PasswordSettingsView(onChanged: logout) }
 
             if snapshot?.currentUser.role == "ADMIN" {
                 MacCreatePostOfficeForm(locationResults: locationResults, searchPostOfficeLocations: searchPostOfficeLocations, createPostOffice: createPostOffice)
                 MacCreateMailboxForm(postOffices: snapshot?.postOffices ?? [], createMailbox: createMailbox)
             } else {
-                MacInfoRow(title: "Admin required", detail: "Only admins can add post offices and boxes.", systemImage: "lock", tint: .orange)
+                MacInfoRow(title: "Admin required", detail: "Only admins can add post offices and boxes.", systemImage: "lock", tint: PoboxTheme.orange)
             }
 
             Button {

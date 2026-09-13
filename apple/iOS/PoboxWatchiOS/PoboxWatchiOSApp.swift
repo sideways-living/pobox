@@ -7,6 +7,7 @@ struct PoboxWatchiOSApp: App {
     var body: some Scene {
         WindowGroup {
             iPhoneRootView()
+                .tint(PoboxTheme.blue)
         }
     }
 }
@@ -408,6 +409,7 @@ struct iPhoneLoginView: View {
                         }
                         .disabled(model.isLoading || model.email.isEmpty)
 
+                        Link("Forgot Password?", destination: URL(string: "https://pobox.watch/?forgot-password=1")!)
                         Button("Use Password to Set Up Security") {
                             model.passwordMode = true
                         }
@@ -641,7 +643,7 @@ struct iPhoneMailboxRow: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 Image(systemName: hasWaitingItem(mailbox) ? "tray.full.fill" : "checkmark.circle.fill")
-                    .foregroundStyle(hasWaitingItem(mailbox) ? .orange : .green)
+                    .foregroundStyle(hasWaitingItem(mailbox) ? PoboxTheme.orange : PoboxTheme.green)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(mailbox.name)
@@ -1255,6 +1257,7 @@ struct iPhoneSettingsView: View {
             }
 
             Section("Security") {
+                PasswordSettingsView(onChanged: logout)
                 Label("Passkey and authenticator 2FA are mandatory", systemImage: "key.fill")
                 Text("Use pobox.watch in Safari to add passkeys or complete first-time security setup.")
                     .font(.callout)

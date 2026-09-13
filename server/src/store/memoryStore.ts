@@ -1,4 +1,5 @@
 import argon2 from "argon2";
+import { resetDigest, resetToken } from "../auth/passwordReset.js";
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -51,6 +52,38 @@ import type {
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "./types.js";
 
 export class MemoryStore implements AppStore {
+  passwordResets = new Map<string, { userId: string; expiresAt: number }>();
+  async requestPasswordReset(email: string): Promise<string | undefined> {
+    const user = [...this.users.values()].find(u => u.email.toLowerCase() === email.toLowerCase() && u.active);
+    if (!user || ![...this.members.values()].some(m => m.userId === user.id && m.status === "ACTIVE")) return;
+    for (const [key, reset] of this.passwordResets) if (reset.userId === user.id || reset.expiresAt <= Date.now()) this.passwordResets.delete(key);
+    const token = resetToken();
+    this.passwordResets.set(resetDigest(token), { userId: user.id, expiresAt: Date.now() + 1800000 });
+    return token;
+  }
+  private replacePassword(userId: string, hash: string) {
+    this.users.get(userId)!.passwordHash = hash;
+    for (const [key, value] of this.sessions) if (value.userId === userId) this.sessions.delete(key);
+    for (const [key, value] of this.authChallenges) if (value.userId === userId) this.authChallenges.delete(key);
+    for (const [key, value] of this.webAuthnChallenges) if (value.userId === userId) this.webAuthnChallenges.delete(key);
+    for (const [key, value] of this.passwordResets) if (value.userId === userId) this.passwordResets.delete(key);
+    for (const member of this.members.values()) if (member.userId === userId) this.audit(userId, member.workspaceId, "password.changed", "user", userId, {});
+  }
+  async resetPassword(token: string, password: string): Promise<void> {
+    const hash = await argon2.hash(password);
+    const reset = this.passwordResets.get(resetDigest(token));
+    if (!reset || reset.expiresAt <= Date.now() || !this.users.get(reset.userId)?.active || ![...this.members.values()].some(m => m.userId === reset.userId && m.status === "ACTIVE")) throw new UnauthorizedError("Reset link is invalid or expired. Request a new link.");
+    this.replacePassword(reset.userId, hash);
+  }
+  async changePassword(session: Session, currentPassword: string, password: string): Promise<void> {
+    await this.getSession(session.id);
+    const user = this.users.get(session.userId)!;
+    const originalHash = user.passwordHash;
+    if (!(await argon2.verify(originalHash, currentPassword))) throw new UnauthorizedError("Current password is incorrect.");
+    const hash = await argon2.hash(password);
+    if (user.passwordHash !== originalHash || !this.sessions.has(session.id)) throw new UnauthorizedError("Account changed. Sign in again.");
+    this.replacePassword(user.id, hash);
+  }
   async checkReadiness(): Promise<void> {}
   users = new Map<string, User>();
   workspaces = new Map<string, Workspace>();

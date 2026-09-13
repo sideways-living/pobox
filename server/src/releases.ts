@@ -1,4 +1,4 @@
-export const appVersion = "0.13.10";
+export const appVersion = "0.13.11";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.11-password-and-colours",
+    version: "0.13.11",
+    releasedAt: "2026-09-14T00:00:00.000Z",
+    title: "Password help and a refreshed look",
+    summary: "Change your password in Settings or request a reset link from Forgot Password once email delivery is configured. The app now uses colours inspired by the pobox.watch icon. Your passkey and authenticator protection stays in place.",
+    audience: "ALL"
+  },
   {
     id: "0.13.10-deleted-users",
     version: "0.13.10",

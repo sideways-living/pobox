@@ -139,6 +139,9 @@ export interface AppChangesResult {
 }
 
 export interface AppStore {
+  requestPasswordReset(email: string): Promise<string | undefined>;
+  resetPassword(token: string, password: string): Promise<void>;
+  changePassword(session: Session, currentPassword: string, password: string): Promise<void>;
   checkReadiness(): Promise<void>;
   seedDemo(): Promise<void>;
   login(email: string, password: string): Promise<LoginResult>;
