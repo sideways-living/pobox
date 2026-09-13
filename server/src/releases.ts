@@ -1,4 +1,4 @@
-export const appVersion = "0.13.11";
+export const appVersion = "0.13.12";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.12-mobile-summary",
+    version: "0.13.12",
+    releasedAt: "2026-09-14T01:00:00.000Z",
+    title: "More room on your phone",
+    summary: "The summary banner is hidden on phone-sized screens, leaving more room for your post offices and mail. It remains visible on larger screens.",
+    audience: "ALL"
+  },
   {
     id: "0.13.11-password-and-colours",
     version: "0.13.11",

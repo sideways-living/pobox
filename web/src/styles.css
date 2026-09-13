@@ -1281,7 +1281,7 @@ input, select {
   }
 
   .summary-band {
-    grid-template-columns: 1fr;
+    display: none;
   }
 
   .post-office-summary {

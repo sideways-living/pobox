@@ -1,7 +1,7 @@
 {
   "name": "pobox-watch-monorepo",
   "private": true,
-  "version": "0.13.11",
+  "version": "0.13.12",
   "description": "pobox.watch shared PO box monitoring system.",
   "workspaces": [
     "server",
