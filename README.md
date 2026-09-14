@@ -4,6 +4,10 @@ pobox.watch is a multi-user shared PO box monitoring system. A central Node.js b
 
 ## Local Development
 
+For iPhone and Mac development, open `apple/PoboxWatch.xcodeproj`.
+Choose the **pobox.watch iOS** or **pobox.watch macOS** scheme.
+See [Apple app setup](apple/README.md) for device selection, signing and build commands.
+
 ```bash
 npm install
 npm run dev:server

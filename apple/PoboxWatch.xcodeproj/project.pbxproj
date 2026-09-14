@@ -1,0 +1,1170 @@
+// !$*UTF8*$!
+{
+	"classes" = {
+
+	};
+	"objectVersion" = "60";
+	"archiveVersion" = "1";
+	"objects" = {
+		"347379D6EEB551E82C1E784C" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"B621CA49A286455256B5C34B",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"B2DE9839B8DE6DF7D9A9BF5C" = {
+			"isa" = "PBXGroup";
+			"sourceTree" = "<group>";
+			"children" = (
+				"111297B124F2A0ABC45F7ACD",
+				"D19664ABFD10BA9A4A6CCCB8",
+				"3B5767207F6EA31EBB352746",
+				"618456F2879A9861CBC16692",
+			);
+		};
+		"271C244CF316A5E443E0A4E3" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"BCF7E75839B35176A4A41782",
+				"240F0EB53EE900C9DE9131FB",
+				"899B66472461DE33C376ACFC",
+				"AAAAAAAAAAAAAAAAAAAAAA01",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"111297B124F2A0ABC45F7ACD" = {
+			"path" = "iOS";
+			"isa" = "PBXGroup";
+			"children" = (
+				"CDBDBC9EDC04291169BF4BF2",
+			);
+			"sourceTree" = "<group>";
+		};
+		"89A016E73D51E4854FA18B21" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"AAAAAAAAAAAAAAAAAAAAAA01" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "AAAAAAAAAAAAAAAAAAAAAA02";
+		};
+		"BCF7E75839B35176A4A41782" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "1699F8903E81A884E231D1A5";
+		};
+		"433447FEFB8B8D2ADB64FAC9" = {
+			"buildConfigurationList" = "A669D8562C481E47ADEB4DF7";
+			"productReference" = "BA623A716C187C5CA97AC072";
+			"productType" = "com.apple.product-type.application";
+			"productName" = "pobox.watch";
+			"isa" = "PBXNativeTarget";
+			"buildPhases" = (
+				"C301E9402DDC89DB504D9E0B",
+				"347379D6EEB551E82C1E784C",
+				"4A2B812B0000000000000003",
+				"260F4006A76343654140CDF6",
+			);
+			"dependencies" = (
+				"71FDD490BFEC899BBB5D4D2F",
+			);
+			"name" = "pobox.watch iOS";
+			"buildRules" = (
+
+			);
+		};
+		"7451E3C90F480C8FFE75816C" = {
+			"path" = "PoboxWatchAPIClient.swift";
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"sourceTree" = "<group>";
+		};
+		"4A2B812B0000000000000004" = {
+			"path" = "Info.plist";
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.plist.xml";
+			"sourceTree" = "<group>";
+		};
+		"B621CA49A286455256B5C34B" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "54BAC908F278B9E5641724F2";
+		};
+		"618456F2879A9861CBC16692" = {
+			"isa" = "PBXGroup";
+			"name" = "Products";
+			"children" = (
+				"BA623A716C187C5CA97AC072",
+				"54BAC908F278B9E5641724F2",
+				"1A30095720847083BB3D3C9A",
+				"837067F09BEBDBB4F95AD297",
+			);
+			"sourceTree" = "<group>";
+		};
+		"CDBDBC9EDC04291169BF4BF2" = {
+			"path" = "PoboxWatchiOS";
+			"isa" = "PBXGroup";
+			"children" = (
+				"4A2B812B0000000000000002",
+				"4A2B812B0000000000000004",
+				"5EA029BAA74B6AEAA2A8B7B6",
+			);
+			"sourceTree" = "<group>";
+		};
+		"71FDD490BFEC899BBB5D4D2F" = {
+			"isa" = "PBXTargetDependency";
+			"target" = "AFC342D6E51FC59F04135EA3";
+			"targetProxy" = "B2FA78FD120BB9A5C9AEA6C7";
+		};
+		"A669D8562C481E47ADEB4DF7" = {
+			"isa" = "XCConfigurationList";
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+			"buildConfigurations" = (
+				"71FDD490BFEC899BBB5D4D2E",
+				"B2FA78FD120BB9A5C9AEA6C8",
+			);
+		};
+		"E017B610CD2B8EAC4B3327A7" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+
+			};
+			"name" = "Debug";
+		};
+		"721C3601753C9775EE6FBB0C" = {
+			"isa" = "XCConfigurationList";
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+			"buildConfigurations" = (
+				"833216C93F3FC38C359D74B6",
+				"4A58D9727D1ECAF47338F3D9",
+			);
+		};
+		"4A2B812B0000000000000003" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"4A2B812B0000000000000001",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"0A00D89FEA6468BAE0FAFD88" = {
+			"path" = "PoboxWatchShared";
+			"isa" = "PBXGroup";
+			"children" = (
+				"1699F8903E81A884E231D1A5",
+				"7451E3C90F480C8FFE75816C",
+				"8383CFF48734BB1E6121572E",
+				"AAAAAAAAAAAAAAAAAAAAAA02",
+			);
+			"sourceTree" = "<group>";
+		};
+		"71FDD490BFEC899BBB5D4D2E" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CLANG_WARN_DOCUMENTATION_COMMENTS" = "YES";
+				"CLANG_WARN_UNGUARDED_AVAILABILITY" = "YES_AGGRESSIVE";
+				"CLANG_WARN_DIRECT_OBJC_ISA_USAGE" = "YES_ERROR";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"CLANG_WARN_SUSPICIOUS_MOVE" = "YES";
+				"CLANG_WARN__DUPLICATE_METHOD_MATCH" = "YES";
+				"CLANG_ENABLE_OBJC_WEAK" = "YES";
+				"GCC_WARN_UNDECLARED_SELECTOR" = "YES";
+				"CLANG_WARN_INFINITE_RECURSION" = "YES";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+				"CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION" = "YES_AGGRESSIVE";
+				"SDKROOT" = "iphoneos";
+				"CLANG_CXX_LANGUAGE_STANDARD" = "gnu++20";
+				"ENABLE_TESTABILITY" = "YES";
+				"CLANG_WARN_BOOL_CONVERSION" = "YES";
+				"CLANG_WARN_UNREACHABLE_CODE" = "YES";
+				"ENABLE_STRICT_OBJC_MSGSEND" = "YES";
+				"CLANG_ANALYZER_NONNULL" = "YES";
+				"CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING" = "YES";
+				"CLANG_WARN_STRICT_PROTOTYPES" = "YES";
+				"CLANG_WARN_ENUM_CONVERSION" = "YES";
+				"CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER" = "YES";
+				"GCC_PREPROCESSOR_DEFINITIONS" = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				"GCC_WARN_64_TO_32_BIT_CONVERSION" = "YES";
+				"CLANG_WARN_EMPTY_BODY" = "YES";
+				"GCC_WARN_UNINITIALIZED_AUTOS" = "YES_AGGRESSIVE";
+				"GCC_WARN_ABOUT_RETURN_TYPE" = "YES_ERROR";
+				"CLANG_WARN_COMMA" = "YES";
+				"GCC_DYNAMIC_NO_PIC" = "NO";
+				"GCC_C_LANGUAGE_STANDARD" = "gnu17";
+				"GCC_WARN_UNUSED_VARIABLE" = "YES";
+				"CLANG_WARN_RANGE_LOOP_ANALYSIS" = "YES";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_WARN_INT_CONVERSION" = "YES";
+				"ALWAYS_SEARCH_USER_PATHS" = "NO";
+				"CLANG_WARN_OBJC_ROOT_CLASS" = "YES_ERROR";
+				"CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS" = "YES";
+				"COPY_PHASE_STRIP" = "NO";
+				"CLANG_WARN_CONSTANT_CONVERSION" = "YES";
+				"GCC_NO_COMMON_BLOCKS" = "YES";
+				"GCC_OPTIMIZATION_LEVEL" = "0";
+				"MTL_ENABLE_DEBUG_INFO" = "INCLUDE_SOURCE";
+				"ONLY_ACTIVE_ARCH" = "YES";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"CLANG_WARN_NON_LITERAL_NULL_CONVERSION" = "YES";
+				"MTL_FAST_MATH" = "YES";
+				"GCC_WARN_UNUSED_FUNCTION" = "YES";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+				"CLANG_WARN_OBJC_LITERAL_CONVERSION" = "YES";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+				"CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"SUPPORTS_MACCATALYST" = "NO";
+				"DEVELOPMENT_TEAM" = "";
+				"SWIFT_EMIT_LOC_STRINGS" = "YES";
+				"MARKETING_VERSION" = "0.13.15";
+				"INFOPLIST_FILE" = "iOS/PoboxWatchiOS/Info.plist";
+				"SWIFT_VERSION" = "6.0";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME" = "AccentColor";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"PRODUCT_NAME" = "pobox.watch";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.sidewaysliving.poboxwatch";
+				"CURRENT_PROJECT_VERSION" = "1";
+			};
+			"name" = "Debug";
+		};
+		"C301E9402DDC89DB504D9E0B" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"9C8202E6A066449AC8B2BBFC",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"9C8202E6A066449AC8B2BBFC" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "5EA029BAA74B6AEAA2A8B7B6";
+		};
+		"4A58D9727D1ECAF47338F3D9" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CLANG_WARN_DOCUMENTATION_COMMENTS" = "YES";
+				"CLANG_WARN_UNGUARDED_AVAILABILITY" = "YES_AGGRESSIVE";
+				"CLANG_WARN_DIRECT_OBJC_ISA_USAGE" = "YES_ERROR";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"CLANG_WARN_SUSPICIOUS_MOVE" = "YES";
+				"CLANG_WARN__DUPLICATE_METHOD_MATCH" = "YES";
+				"CLANG_ENABLE_OBJC_WEAK" = "YES";
+				"ENABLE_NS_ASSERTIONS" = "NO";
+				"CLANG_WARN_INFINITE_RECURSION" = "YES";
+				"GCC_WARN_UNDECLARED_SELECTOR" = "YES";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+				"SWIFT_COMPILATION_MODE" = "wholemodule";
+				"CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION" = "YES_AGGRESSIVE";
+				"SDKROOT" = "iphoneos";
+				"CLANG_CXX_LANGUAGE_STANDARD" = "gnu++20";
+				"CLANG_WARN_BOOL_CONVERSION" = "YES";
+				"CLANG_WARN_UNREACHABLE_CODE" = "YES";
+				"ENABLE_STRICT_OBJC_MSGSEND" = "YES";
+				"CLANG_ANALYZER_NONNULL" = "YES";
+				"CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING" = "YES";
+				"CLANG_WARN_STRICT_PROTOTYPES" = "YES";
+				"CLANG_WARN_ENUM_CONVERSION" = "YES";
+				"CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER" = "YES";
+				"GCC_WARN_64_TO_32_BIT_CONVERSION" = "YES";
+				"CLANG_WARN_EMPTY_BODY" = "YES";
+				"GCC_WARN_UNINITIALIZED_AUTOS" = "YES_AGGRESSIVE";
+				"GCC_WARN_ABOUT_RETURN_TYPE" = "YES_ERROR";
+				"CLANG_WARN_COMMA" = "YES";
+				"GCC_C_LANGUAGE_STANDARD" = "gnu17";
+				"GCC_WARN_UNUSED_VARIABLE" = "YES";
+				"CLANG_WARN_RANGE_LOOP_ANALYSIS" = "YES";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_WARN_INT_CONVERSION" = "YES";
+				"ALWAYS_SEARCH_USER_PATHS" = "NO";
+				"CLANG_WARN_OBJC_ROOT_CLASS" = "YES_ERROR";
+				"CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS" = "YES";
+				"COPY_PHASE_STRIP" = "NO";
+				"CLANG_WARN_CONSTANT_CONVERSION" = "YES";
+				"GCC_NO_COMMON_BLOCKS" = "YES";
+				"MTL_ENABLE_DEBUG_INFO" = "NO";
+				"CLANG_WARN_NON_LITERAL_NULL_CONVERSION" = "YES";
+				"MTL_FAST_MATH" = "YES";
+				"VALIDATE_PRODUCT" = "YES";
+				"GCC_WARN_UNUSED_FUNCTION" = "YES";
+				"CLANG_WARN_OBJC_LITERAL_CONVERSION" = "YES";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+				"CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"SUPPORTS_MACCATALYST" = "NO";
+				"DEVELOPMENT_TEAM" = "";
+				"SWIFT_EMIT_LOC_STRINGS" = "YES";
+				"MARKETING_VERSION" = "0.13.15";
+				"DEFINES_MODULE" = "YES";
+				"SKIP_INSTALL" = "YES";
+				"DYLIB_COMPATIBILITY_VERSION" = "1";
+				"SWIFT_VERSION" = "6.0";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"DYLIB_INSTALL_NAME_BASE" = "@rpath";
+				"PRODUCT_NAME" = "PoboxWatchShared";
+				"DYLIB_CURRENT_VERSION" = "1";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.sidewaysliving.poboxwatch.shared";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"PRODUCT_MODULE_NAME" = "PoboxWatchShared";
+			};
+			"name" = "Release";
+		};
+		"5EA029BAA74B6AEAA2A8B7B6" = {
+			"path" = "PoboxWatchiOSApp.swift";
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"sourceTree" = "<group>";
+		};
+		"4A2B812B0000000000000002" = {
+			"path" = "Assets.xcassets";
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "folder.assetcatalog";
+			"sourceTree" = "<group>";
+		};
+		"AFC342D6E51FC59F04135EA3" = {
+			"buildConfigurationList" = "721C3601753C9775EE6FBB0C";
+			"productReference" = "54BAC908F278B9E5641724F2";
+			"productType" = "com.apple.product-type.framework";
+			"productName" = "PoboxWatchShared";
+			"isa" = "PBXNativeTarget";
+			"buildPhases" = (
+				"271C244CF316A5E443E0A4E3",
+				"89A016E73D51E4854FA18B21",
+			);
+			"dependencies" = (
+
+			);
+			"name" = "PoboxWatchShared iOS";
+			"buildRules" = (
+
+			);
+		};
+		"54BAC908F278B9E5641724F2" = {
+			"path" = "PoboxWatchShared.framework";
+			"isa" = "PBXFileReference";
+			"includeInIndex" = "0";
+			"explicitFileType" = "wrapper.framework";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"3B5767207F6EA31EBB352746" = {
+			"path" = "Shared/Sources";
+			"isa" = "PBXGroup";
+			"children" = (
+				"0A00D89FEA6468BAE0FAFD88",
+			);
+			"sourceTree" = "<group>";
+		};
+		"CF02341838AD0E4E76597AE6" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+
+			};
+			"name" = "Release";
+		};
+		"4A2B812B0000000000000001" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "4A2B812B0000000000000002";
+		};
+		"BA623A716C187C5CA97AC072" = {
+			"path" = "pobox.watch.app";
+			"isa" = "PBXFileReference";
+			"includeInIndex" = "0";
+			"explicitFileType" = "wrapper.application";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"D6CC854C2BBFAFE42C383599" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "54BAC908F278B9E5641724F2";
+			"settings" = {
+				"ATTRIBUTES" = (
+					"CodeSignOnCopy",
+					"RemoveHeadersOnCopy",
+				);
+			};
+		};
+		"833216C93F3FC38C359D74B6" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CLANG_WARN_DOCUMENTATION_COMMENTS" = "YES";
+				"CLANG_WARN_UNGUARDED_AVAILABILITY" = "YES_AGGRESSIVE";
+				"CLANG_WARN_DIRECT_OBJC_ISA_USAGE" = "YES_ERROR";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"CLANG_WARN_SUSPICIOUS_MOVE" = "YES";
+				"CLANG_WARN__DUPLICATE_METHOD_MATCH" = "YES";
+				"CLANG_ENABLE_OBJC_WEAK" = "YES";
+				"GCC_WARN_UNDECLARED_SELECTOR" = "YES";
+				"CLANG_WARN_INFINITE_RECURSION" = "YES";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+				"CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION" = "YES_AGGRESSIVE";
+				"SDKROOT" = "iphoneos";
+				"CLANG_CXX_LANGUAGE_STANDARD" = "gnu++20";
+				"ENABLE_TESTABILITY" = "YES";
+				"CLANG_WARN_BOOL_CONVERSION" = "YES";
+				"CLANG_WARN_UNREACHABLE_CODE" = "YES";
+				"ENABLE_STRICT_OBJC_MSGSEND" = "YES";
+				"CLANG_ANALYZER_NONNULL" = "YES";
+				"CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING" = "YES";
+				"CLANG_WARN_STRICT_PROTOTYPES" = "YES";
+				"CLANG_WARN_ENUM_CONVERSION" = "YES";
+				"CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER" = "YES";
+				"GCC_PREPROCESSOR_DEFINITIONS" = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				"GCC_WARN_64_TO_32_BIT_CONVERSION" = "YES";
+				"CLANG_WARN_EMPTY_BODY" = "YES";
+				"GCC_WARN_UNINITIALIZED_AUTOS" = "YES_AGGRESSIVE";
+				"GCC_WARN_ABOUT_RETURN_TYPE" = "YES_ERROR";
+				"CLANG_WARN_COMMA" = "YES";
+				"GCC_DYNAMIC_NO_PIC" = "NO";
+				"GCC_C_LANGUAGE_STANDARD" = "gnu17";
+				"GCC_WARN_UNUSED_VARIABLE" = "YES";
+				"CLANG_WARN_RANGE_LOOP_ANALYSIS" = "YES";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_WARN_INT_CONVERSION" = "YES";
+				"ALWAYS_SEARCH_USER_PATHS" = "NO";
+				"CLANG_WARN_OBJC_ROOT_CLASS" = "YES_ERROR";
+				"CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS" = "YES";
+				"COPY_PHASE_STRIP" = "NO";
+				"CLANG_WARN_CONSTANT_CONVERSION" = "YES";
+				"GCC_NO_COMMON_BLOCKS" = "YES";
+				"GCC_OPTIMIZATION_LEVEL" = "0";
+				"MTL_ENABLE_DEBUG_INFO" = "INCLUDE_SOURCE";
+				"ONLY_ACTIVE_ARCH" = "YES";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"CLANG_WARN_NON_LITERAL_NULL_CONVERSION" = "YES";
+				"MTL_FAST_MATH" = "YES";
+				"GCC_WARN_UNUSED_FUNCTION" = "YES";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+				"CLANG_WARN_OBJC_LITERAL_CONVERSION" = "YES";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+				"CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"SUPPORTS_MACCATALYST" = "NO";
+				"DEVELOPMENT_TEAM" = "";
+				"SWIFT_EMIT_LOC_STRINGS" = "YES";
+				"MARKETING_VERSION" = "0.13.15";
+				"DEFINES_MODULE" = "YES";
+				"SKIP_INSTALL" = "YES";
+				"DYLIB_COMPATIBILITY_VERSION" = "1";
+				"SWIFT_VERSION" = "6.0";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"DYLIB_INSTALL_NAME_BASE" = "@rpath";
+				"PRODUCT_NAME" = "PoboxWatchShared";
+				"DYLIB_CURRENT_VERSION" = "1";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.sidewaysliving.poboxwatch.shared";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"PRODUCT_MODULE_NAME" = "PoboxWatchShared";
+			};
+			"name" = "Debug";
+		};
+		"899B66472461DE33C376ACFC" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "8383CFF48734BB1E6121572E";
+		};
+		"260F4006A76343654140CDF6" = {
+			"buildActionMask" = "2147483647";
+			"dstSubfolderSpec" = "10";
+			"isa" = "PBXCopyFilesBuildPhase";
+			"runOnlyForDeploymentPostprocessing" = "0";
+			"dstPath" = "";
+			"files" = (
+				"D6CC854C2BBFAFE42C383599",
+			);
+			"name" = "Embed Frameworks";
+		};
+		"58D6D3DE8D70B08749A14163" = {
+			"buildConfigurationList" = "09BF8B5C82DA7707FECA7D0A";
+			"targets" = (
+				"433447FEFB8B8D2ADB64FAC9",
+				"AFC342D6E51FC59F04135EA3",
+				"4A104311068D971FEE69E521",
+				"96780FC2CBFA144B55520C7E",
+			);
+			"developmentRegion" = "en";
+			"knownRegions" = (
+				"en",
+				"Base",
+			);
+			"isa" = "PBXProject";
+			"compatibilityVersion" = "Xcode 15.0";
+			"productRefGroup" = "618456F2879A9861CBC16692";
+			"projectDirPath" = "";
+			"attributes" = {
+				"LastSwiftUpdateCheck" = "1600";
+				"BuildIndependentTargetsInParallel" = "1";
+				"LastUpgradeCheck" = "1600";
+				"TargetAttributes" = {
+					"433447FEFB8B8D2ADB64FAC9" = {
+						"CreatedOnToolsVersion" = "16.0";
+					};
+					"AFC342D6E51FC59F04135EA3" = {
+						"CreatedOnToolsVersion" = "16.0";
+					};
+					"4A104311068D971FEE69E521" = {
+						"CreatedOnToolsVersion" = "16.0";
+					};
+					"96780FC2CBFA144B55520C7E" = {
+						"CreatedOnToolsVersion" = "16.0";
+					};
+				};
+			};
+			"hasScannedForEncodings" = "0";
+			"projectRoot" = "";
+			"mainGroup" = "B2DE9839B8DE6DF7D9A9BF5C";
+		};
+		"1699F8903E81A884E231D1A5" = {
+			"path" = "LocationReminderPolicy.swift";
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"sourceTree" = "<group>";
+		};
+		"B2FA78FD120BB9A5C9AEA6C8" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CLANG_WARN_DOCUMENTATION_COMMENTS" = "YES";
+				"CLANG_WARN_UNGUARDED_AVAILABILITY" = "YES_AGGRESSIVE";
+				"CLANG_WARN_DIRECT_OBJC_ISA_USAGE" = "YES_ERROR";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"CLANG_WARN_SUSPICIOUS_MOVE" = "YES";
+				"CLANG_WARN__DUPLICATE_METHOD_MATCH" = "YES";
+				"CLANG_ENABLE_OBJC_WEAK" = "YES";
+				"ENABLE_NS_ASSERTIONS" = "NO";
+				"CLANG_WARN_INFINITE_RECURSION" = "YES";
+				"GCC_WARN_UNDECLARED_SELECTOR" = "YES";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+				"SWIFT_COMPILATION_MODE" = "wholemodule";
+				"CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION" = "YES_AGGRESSIVE";
+				"SDKROOT" = "iphoneos";
+				"CLANG_CXX_LANGUAGE_STANDARD" = "gnu++20";
+				"CLANG_WARN_BOOL_CONVERSION" = "YES";
+				"CLANG_WARN_UNREACHABLE_CODE" = "YES";
+				"ENABLE_STRICT_OBJC_MSGSEND" = "YES";
+				"CLANG_ANALYZER_NONNULL" = "YES";
+				"CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING" = "YES";
+				"CLANG_WARN_STRICT_PROTOTYPES" = "YES";
+				"CLANG_WARN_ENUM_CONVERSION" = "YES";
+				"CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER" = "YES";
+				"GCC_WARN_64_TO_32_BIT_CONVERSION" = "YES";
+				"CLANG_WARN_EMPTY_BODY" = "YES";
+				"GCC_WARN_UNINITIALIZED_AUTOS" = "YES_AGGRESSIVE";
+				"GCC_WARN_ABOUT_RETURN_TYPE" = "YES_ERROR";
+				"CLANG_WARN_COMMA" = "YES";
+				"GCC_C_LANGUAGE_STANDARD" = "gnu17";
+				"GCC_WARN_UNUSED_VARIABLE" = "YES";
+				"CLANG_WARN_RANGE_LOOP_ANALYSIS" = "YES";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_WARN_INT_CONVERSION" = "YES";
+				"ALWAYS_SEARCH_USER_PATHS" = "NO";
+				"CLANG_WARN_OBJC_ROOT_CLASS" = "YES_ERROR";
+				"CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS" = "YES";
+				"COPY_PHASE_STRIP" = "NO";
+				"CLANG_WARN_CONSTANT_CONVERSION" = "YES";
+				"GCC_NO_COMMON_BLOCKS" = "YES";
+				"MTL_ENABLE_DEBUG_INFO" = "NO";
+				"CLANG_WARN_NON_LITERAL_NULL_CONVERSION" = "YES";
+				"MTL_FAST_MATH" = "YES";
+				"VALIDATE_PRODUCT" = "YES";
+				"GCC_WARN_UNUSED_FUNCTION" = "YES";
+				"CLANG_WARN_OBJC_LITERAL_CONVERSION" = "YES";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+				"CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"SUPPORTS_MACCATALYST" = "NO";
+				"DEVELOPMENT_TEAM" = "";
+				"SWIFT_EMIT_LOC_STRINGS" = "YES";
+				"MARKETING_VERSION" = "0.13.15";
+				"INFOPLIST_FILE" = "iOS/PoboxWatchiOS/Info.plist";
+				"SWIFT_VERSION" = "6.0";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME" = "AccentColor";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"PRODUCT_NAME" = "pobox.watch";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.sidewaysliving.poboxwatch";
+				"CURRENT_PROJECT_VERSION" = "1";
+			};
+			"name" = "Release";
+		};
+		"09BF8B5C82DA7707FECA7D0A" = {
+			"isa" = "XCConfigurationList";
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+			"buildConfigurations" = (
+				"E017B610CD2B8EAC4B3327A7",
+				"CF02341838AD0E4E76597AE6",
+			);
+		};
+		"240F0EB53EE900C9DE9131FB" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "7451E3C90F480C8FFE75816C";
+		};
+		"AAAAAAAAAAAAAAAAAAAAAA02" = {
+			"path" = "PasswordSettingsView.swift";
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"sourceTree" = "<group>";
+		};
+		"B2FA78FD120BB9A5C9AEA6C7" = {
+			"isa" = "PBXContainerItemProxy";
+			"containerPortal" = "58D6D3DE8D70B08749A14163";
+			"remoteGlobalIDString" = "AFC342D6E51FC59F04135EA3";
+			"remoteInfo" = "PoboxWatchShared";
+			"proxyType" = "1";
+		};
+		"8383CFF48734BB1E6121572E" = {
+			"path" = "MailboxModels.swift";
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"sourceTree" = "<group>";
+		};
+		"3BFE662C0420796C22C16C6E" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"B46E0F92B23D440DC59C86E1",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"3DA4435AC778CC407ED4B38A" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"30340C8CAB9189DB584A8E9F",
+				"740FDFD435E40C09EE8DCF88",
+				"FB0280B862EAC08F9149EE99",
+				"FF443D7FB83331A5DDA39A49",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"D19664ABFD10BA9A4A6CCCB8" = {
+			"path" = "macOS";
+			"isa" = "PBXGroup";
+			"children" = (
+				"B2C411D218F8F1E20F70F0F7",
+			);
+			"sourceTree" = "<group>";
+		};
+		"CCE5D8AF2841167AB5067DD8" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"FF443D7FB83331A5DDA39A49" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "AAAAAAAAAAAAAAAAAAAAAA02";
+		};
+		"30340C8CAB9189DB584A8E9F" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "1699F8903E81A884E231D1A5";
+		};
+		"4A104311068D971FEE69E521" = {
+			"buildConfigurationList" = "FAD32B48DF01E1248C58CFB3";
+			"productReference" = "1A30095720847083BB3D3C9A";
+			"productType" = "com.apple.product-type.application";
+			"productName" = "pobox.watch";
+			"isa" = "PBXNativeTarget";
+			"buildPhases" = (
+				"4815EB7819CB10E094BFA85B",
+				"3BFE662C0420796C22C16C6E",
+				"D32B645E88C41350A7A17EF5",
+				"2BF5E415A0A792B64350B062",
+			);
+			"dependencies" = (
+				"FE71DA29D7F64AF41A8C4203",
+			);
+			"name" = "pobox.watch macOS";
+			"buildRules" = (
+
+			);
+		};
+		"B46E0F92B23D440DC59C86E1" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "837067F09BEBDBB4F95AD297";
+		};
+		"B2C411D218F8F1E20F70F0F7" = {
+			"path" = "PoboxWatchMacOS";
+			"isa" = "PBXGroup";
+			"children" = (
+				"7A969EE0127C3D834D41B8C3",
+				"208A5168608C1102933BE11C",
+				"29E9BB58966F6F71AF6F60D0",
+			);
+			"sourceTree" = "<group>";
+		};
+		"FE71DA29D7F64AF41A8C4203" = {
+			"isa" = "PBXTargetDependency";
+			"target" = "96780FC2CBFA144B55520C7E";
+			"targetProxy" = "E117A271209ACE3F46372836";
+		};
+		"FAD32B48DF01E1248C58CFB3" = {
+			"isa" = "XCConfigurationList";
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+			"buildConfigurations" = (
+				"16BA042C1E42D2BE5BE07610",
+				"132C9BCDB96A3A3E25713FFC",
+			);
+		};
+		"208A5168608C1102933BE11C" = {
+			"path" = "Info.plist";
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.plist.xml";
+			"sourceTree" = "<group>";
+		};
+		"3EC5648B24D1B2F8D1EA48D5" = {
+			"isa" = "XCConfigurationList";
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+			"buildConfigurations" = (
+				"A02531561C78A3A93B1D91C1",
+				"7A89D0DDD32E17B50CF64AF3",
+			);
+		};
+		"16BA042C1E42D2BE5BE07610" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CLANG_WARN_DOCUMENTATION_COMMENTS" = "YES";
+				"CLANG_WARN_UNGUARDED_AVAILABILITY" = "YES_AGGRESSIVE";
+				"CLANG_WARN_DIRECT_OBJC_ISA_USAGE" = "YES_ERROR";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"CLANG_WARN_SUSPICIOUS_MOVE" = "YES";
+				"CLANG_WARN__DUPLICATE_METHOD_MATCH" = "YES";
+				"CLANG_ENABLE_OBJC_WEAK" = "YES";
+				"GCC_WARN_UNDECLARED_SELECTOR" = "YES";
+				"CLANG_WARN_INFINITE_RECURSION" = "YES";
+				"MACOSX_DEPLOYMENT_TARGET" = "14.0";
+				"CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION" = "YES_AGGRESSIVE";
+				"SDKROOT" = "macosx";
+				"CLANG_CXX_LANGUAGE_STANDARD" = "gnu++20";
+				"ENABLE_TESTABILITY" = "YES";
+				"CLANG_WARN_BOOL_CONVERSION" = "YES";
+				"CLANG_WARN_UNREACHABLE_CODE" = "YES";
+				"ENABLE_STRICT_OBJC_MSGSEND" = "YES";
+				"CLANG_ANALYZER_NONNULL" = "YES";
+				"CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING" = "YES";
+				"CLANG_WARN_STRICT_PROTOTYPES" = "YES";
+				"CLANG_WARN_ENUM_CONVERSION" = "YES";
+				"CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER" = "YES";
+				"GCC_PREPROCESSOR_DEFINITIONS" = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				"GCC_WARN_64_TO_32_BIT_CONVERSION" = "YES";
+				"CLANG_WARN_EMPTY_BODY" = "YES";
+				"GCC_WARN_UNINITIALIZED_AUTOS" = "YES_AGGRESSIVE";
+				"GCC_WARN_ABOUT_RETURN_TYPE" = "YES_ERROR";
+				"CLANG_WARN_COMMA" = "YES";
+				"GCC_DYNAMIC_NO_PIC" = "NO";
+				"GCC_C_LANGUAGE_STANDARD" = "gnu17";
+				"GCC_WARN_UNUSED_VARIABLE" = "YES";
+				"CLANG_WARN_RANGE_LOOP_ANALYSIS" = "YES";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_WARN_INT_CONVERSION" = "YES";
+				"ALWAYS_SEARCH_USER_PATHS" = "NO";
+				"CLANG_WARN_OBJC_ROOT_CLASS" = "YES_ERROR";
+				"CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS" = "YES";
+				"COPY_PHASE_STRIP" = "NO";
+				"CLANG_WARN_CONSTANT_CONVERSION" = "YES";
+				"GCC_NO_COMMON_BLOCKS" = "YES";
+				"GCC_OPTIMIZATION_LEVEL" = "0";
+				"MTL_ENABLE_DEBUG_INFO" = "INCLUDE_SOURCE";
+				"ONLY_ACTIVE_ARCH" = "YES";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"CLANG_WARN_NON_LITERAL_NULL_CONVERSION" = "YES";
+				"MTL_FAST_MATH" = "YES";
+				"GCC_WARN_UNUSED_FUNCTION" = "YES";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+				"CLANG_WARN_OBJC_LITERAL_CONVERSION" = "YES";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+				"CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				"SWIFT_VERSION" = "6.0";
+				"DEVELOPMENT_TEAM" = "";
+				"MARKETING_VERSION" = "0.13.15";
+				"INFOPLIST_FILE" = "macOS/PoboxWatchMacOS/Info.plist";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME" = "AccentColor";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"PRODUCT_NAME" = "pobox.watch";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.sidewaysliving.poboxwatch.macos";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"SWIFT_EMIT_LOC_STRINGS" = "YES";
+			};
+			"name" = "Debug";
+		};
+		"4815EB7819CB10E094BFA85B" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"CDB88E13D7D1E2BF70D5C799",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"CDB88E13D7D1E2BF70D5C799" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "29E9BB58966F6F71AF6F60D0";
+		};
+		"7A89D0DDD32E17B50CF64AF3" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CLANG_WARN_DOCUMENTATION_COMMENTS" = "YES";
+				"CLANG_WARN_UNGUARDED_AVAILABILITY" = "YES_AGGRESSIVE";
+				"CLANG_WARN_DIRECT_OBJC_ISA_USAGE" = "YES_ERROR";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"CLANG_WARN_SUSPICIOUS_MOVE" = "YES";
+				"CLANG_WARN__DUPLICATE_METHOD_MATCH" = "YES";
+				"CLANG_ENABLE_OBJC_WEAK" = "YES";
+				"ENABLE_NS_ASSERTIONS" = "NO";
+				"CLANG_WARN_INFINITE_RECURSION" = "YES";
+				"GCC_WARN_UNDECLARED_SELECTOR" = "YES";
+				"MACOSX_DEPLOYMENT_TARGET" = "14.0";
+				"SWIFT_COMPILATION_MODE" = "wholemodule";
+				"CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION" = "YES_AGGRESSIVE";
+				"SDKROOT" = "macosx";
+				"CLANG_CXX_LANGUAGE_STANDARD" = "gnu++20";
+				"CLANG_WARN_BOOL_CONVERSION" = "YES";
+				"CLANG_WARN_UNREACHABLE_CODE" = "YES";
+				"ENABLE_STRICT_OBJC_MSGSEND" = "YES";
+				"CLANG_ANALYZER_NONNULL" = "YES";
+				"CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING" = "YES";
+				"CLANG_WARN_STRICT_PROTOTYPES" = "YES";
+				"CLANG_WARN_ENUM_CONVERSION" = "YES";
+				"CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER" = "YES";
+				"GCC_WARN_64_TO_32_BIT_CONVERSION" = "YES";
+				"CLANG_WARN_EMPTY_BODY" = "YES";
+				"GCC_WARN_UNINITIALIZED_AUTOS" = "YES_AGGRESSIVE";
+				"GCC_WARN_ABOUT_RETURN_TYPE" = "YES_ERROR";
+				"CLANG_WARN_COMMA" = "YES";
+				"GCC_C_LANGUAGE_STANDARD" = "gnu17";
+				"GCC_WARN_UNUSED_VARIABLE" = "YES";
+				"CLANG_WARN_RANGE_LOOP_ANALYSIS" = "YES";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_WARN_INT_CONVERSION" = "YES";
+				"ALWAYS_SEARCH_USER_PATHS" = "NO";
+				"CLANG_WARN_OBJC_ROOT_CLASS" = "YES_ERROR";
+				"CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS" = "YES";
+				"COPY_PHASE_STRIP" = "NO";
+				"CLANG_WARN_CONSTANT_CONVERSION" = "YES";
+				"GCC_NO_COMMON_BLOCKS" = "YES";
+				"MTL_ENABLE_DEBUG_INFO" = "NO";
+				"CLANG_WARN_NON_LITERAL_NULL_CONVERSION" = "YES";
+				"MTL_FAST_MATH" = "YES";
+				"VALIDATE_PRODUCT" = "YES";
+				"GCC_WARN_UNUSED_FUNCTION" = "YES";
+				"CLANG_WARN_OBJC_LITERAL_CONVERSION" = "YES";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+				"CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"SWIFT_VERSION" = "6.0";
+				"DEVELOPMENT_TEAM" = "";
+				"MARKETING_VERSION" = "0.13.15";
+				"DEFINES_MODULE" = "YES";
+				"SKIP_INSTALL" = "YES";
+				"DYLIB_COMPATIBILITY_VERSION" = "1";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"DYLIB_INSTALL_NAME_BASE" = "@rpath";
+				"PRODUCT_NAME" = "PoboxWatchShared";
+				"DYLIB_CURRENT_VERSION" = "1";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.sidewaysliving.poboxwatch.macos.shared";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"SWIFT_EMIT_LOC_STRINGS" = "YES";
+				"PRODUCT_MODULE_NAME" = "PoboxWatchShared";
+			};
+			"name" = "Release";
+		};
+		"29E9BB58966F6F71AF6F60D0" = {
+			"path" = "PoboxWatchMacOSApp.swift";
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"sourceTree" = "<group>";
+		};
+		"D32B645E88C41350A7A17EF5" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"7761C482A13858D9E4F8110E",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"96780FC2CBFA144B55520C7E" = {
+			"buildConfigurationList" = "3EC5648B24D1B2F8D1EA48D5";
+			"productReference" = "837067F09BEBDBB4F95AD297";
+			"productType" = "com.apple.product-type.framework";
+			"productName" = "PoboxWatchShared";
+			"isa" = "PBXNativeTarget";
+			"buildPhases" = (
+				"3DA4435AC778CC407ED4B38A",
+				"CCE5D8AF2841167AB5067DD8",
+			);
+			"dependencies" = (
+
+			);
+			"name" = "PoboxWatchShared macOS";
+			"buildRules" = (
+
+			);
+		};
+		"837067F09BEBDBB4F95AD297" = {
+			"path" = "PoboxWatchShared.framework";
+			"isa" = "PBXFileReference";
+			"includeInIndex" = "0";
+			"explicitFileType" = "wrapper.framework";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"7A969EE0127C3D834D41B8C3" = {
+			"path" = "Assets.xcassets";
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "folder.assetcatalog";
+			"sourceTree" = "<group>";
+		};
+		"987E421FC8E1578A58652FBB" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "837067F09BEBDBB4F95AD297";
+			"settings" = {
+				"ATTRIBUTES" = (
+					"CodeSignOnCopy",
+					"RemoveHeadersOnCopy",
+				);
+			};
+		};
+		"1A30095720847083BB3D3C9A" = {
+			"path" = "pobox.watch.app";
+			"isa" = "PBXFileReference";
+			"includeInIndex" = "0";
+			"explicitFileType" = "wrapper.application";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"A02531561C78A3A93B1D91C1" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CLANG_WARN_DOCUMENTATION_COMMENTS" = "YES";
+				"CLANG_WARN_UNGUARDED_AVAILABILITY" = "YES_AGGRESSIVE";
+				"CLANG_WARN_DIRECT_OBJC_ISA_USAGE" = "YES_ERROR";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"CLANG_WARN_SUSPICIOUS_MOVE" = "YES";
+				"CLANG_WARN__DUPLICATE_METHOD_MATCH" = "YES";
+				"CLANG_ENABLE_OBJC_WEAK" = "YES";
+				"GCC_WARN_UNDECLARED_SELECTOR" = "YES";
+				"CLANG_WARN_INFINITE_RECURSION" = "YES";
+				"MACOSX_DEPLOYMENT_TARGET" = "14.0";
+				"CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION" = "YES_AGGRESSIVE";
+				"SDKROOT" = "macosx";
+				"CLANG_CXX_LANGUAGE_STANDARD" = "gnu++20";
+				"ENABLE_TESTABILITY" = "YES";
+				"CLANG_WARN_BOOL_CONVERSION" = "YES";
+				"CLANG_WARN_UNREACHABLE_CODE" = "YES";
+				"ENABLE_STRICT_OBJC_MSGSEND" = "YES";
+				"CLANG_ANALYZER_NONNULL" = "YES";
+				"CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING" = "YES";
+				"CLANG_WARN_STRICT_PROTOTYPES" = "YES";
+				"CLANG_WARN_ENUM_CONVERSION" = "YES";
+				"CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER" = "YES";
+				"GCC_PREPROCESSOR_DEFINITIONS" = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				"GCC_WARN_64_TO_32_BIT_CONVERSION" = "YES";
+				"CLANG_WARN_EMPTY_BODY" = "YES";
+				"GCC_WARN_UNINITIALIZED_AUTOS" = "YES_AGGRESSIVE";
+				"GCC_WARN_ABOUT_RETURN_TYPE" = "YES_ERROR";
+				"CLANG_WARN_COMMA" = "YES";
+				"GCC_DYNAMIC_NO_PIC" = "NO";
+				"GCC_C_LANGUAGE_STANDARD" = "gnu17";
+				"GCC_WARN_UNUSED_VARIABLE" = "YES";
+				"CLANG_WARN_RANGE_LOOP_ANALYSIS" = "YES";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_WARN_INT_CONVERSION" = "YES";
+				"ALWAYS_SEARCH_USER_PATHS" = "NO";
+				"CLANG_WARN_OBJC_ROOT_CLASS" = "YES_ERROR";
+				"CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS" = "YES";
+				"COPY_PHASE_STRIP" = "NO";
+				"CLANG_WARN_CONSTANT_CONVERSION" = "YES";
+				"GCC_NO_COMMON_BLOCKS" = "YES";
+				"GCC_OPTIMIZATION_LEVEL" = "0";
+				"MTL_ENABLE_DEBUG_INFO" = "INCLUDE_SOURCE";
+				"ONLY_ACTIVE_ARCH" = "YES";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"CLANG_WARN_NON_LITERAL_NULL_CONVERSION" = "YES";
+				"MTL_FAST_MATH" = "YES";
+				"GCC_WARN_UNUSED_FUNCTION" = "YES";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+				"CLANG_WARN_OBJC_LITERAL_CONVERSION" = "YES";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+				"CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"SWIFT_VERSION" = "6.0";
+				"DEVELOPMENT_TEAM" = "";
+				"MARKETING_VERSION" = "0.13.15";
+				"DEFINES_MODULE" = "YES";
+				"SKIP_INSTALL" = "YES";
+				"DYLIB_COMPATIBILITY_VERSION" = "1";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"DYLIB_INSTALL_NAME_BASE" = "@rpath";
+				"PRODUCT_NAME" = "PoboxWatchShared";
+				"DYLIB_CURRENT_VERSION" = "1";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.sidewaysliving.poboxwatch.macos.shared";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"SWIFT_EMIT_LOC_STRINGS" = "YES";
+				"PRODUCT_MODULE_NAME" = "PoboxWatchShared";
+			};
+			"name" = "Debug";
+		};
+		"FB0280B862EAC08F9149EE99" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "8383CFF48734BB1E6121572E";
+		};
+		"2BF5E415A0A792B64350B062" = {
+			"buildActionMask" = "2147483647";
+			"dstSubfolderSpec" = "10";
+			"isa" = "PBXCopyFilesBuildPhase";
+			"runOnlyForDeploymentPostprocessing" = "0";
+			"dstPath" = "";
+			"files" = (
+				"987E421FC8E1578A58652FBB",
+			);
+			"name" = "Embed Frameworks";
+		};
+		"7761C482A13858D9E4F8110E" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "7A969EE0127C3D834D41B8C3";
+		};
+		"132C9BCDB96A3A3E25713FFC" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CLANG_WARN_DOCUMENTATION_COMMENTS" = "YES";
+				"CLANG_WARN_UNGUARDED_AVAILABILITY" = "YES_AGGRESSIVE";
+				"CLANG_WARN_DIRECT_OBJC_ISA_USAGE" = "YES_ERROR";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"CLANG_WARN_SUSPICIOUS_MOVE" = "YES";
+				"CLANG_WARN__DUPLICATE_METHOD_MATCH" = "YES";
+				"CLANG_ENABLE_OBJC_WEAK" = "YES";
+				"ENABLE_NS_ASSERTIONS" = "NO";
+				"CLANG_WARN_INFINITE_RECURSION" = "YES";
+				"GCC_WARN_UNDECLARED_SELECTOR" = "YES";
+				"MACOSX_DEPLOYMENT_TARGET" = "14.0";
+				"SWIFT_COMPILATION_MODE" = "wholemodule";
+				"CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION" = "YES_AGGRESSIVE";
+				"SDKROOT" = "macosx";
+				"CLANG_CXX_LANGUAGE_STANDARD" = "gnu++20";
+				"CLANG_WARN_BOOL_CONVERSION" = "YES";
+				"CLANG_WARN_UNREACHABLE_CODE" = "YES";
+				"ENABLE_STRICT_OBJC_MSGSEND" = "YES";
+				"CLANG_ANALYZER_NONNULL" = "YES";
+				"CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING" = "YES";
+				"CLANG_WARN_STRICT_PROTOTYPES" = "YES";
+				"CLANG_WARN_ENUM_CONVERSION" = "YES";
+				"CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER" = "YES";
+				"GCC_WARN_64_TO_32_BIT_CONVERSION" = "YES";
+				"CLANG_WARN_EMPTY_BODY" = "YES";
+				"GCC_WARN_UNINITIALIZED_AUTOS" = "YES_AGGRESSIVE";
+				"GCC_WARN_ABOUT_RETURN_TYPE" = "YES_ERROR";
+				"CLANG_WARN_COMMA" = "YES";
+				"GCC_C_LANGUAGE_STANDARD" = "gnu17";
+				"GCC_WARN_UNUSED_VARIABLE" = "YES";
+				"CLANG_WARN_RANGE_LOOP_ANALYSIS" = "YES";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_WARN_INT_CONVERSION" = "YES";
+				"ALWAYS_SEARCH_USER_PATHS" = "NO";
+				"CLANG_WARN_OBJC_ROOT_CLASS" = "YES_ERROR";
+				"CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS" = "YES";
+				"COPY_PHASE_STRIP" = "NO";
+				"CLANG_WARN_CONSTANT_CONVERSION" = "YES";
+				"GCC_NO_COMMON_BLOCKS" = "YES";
+				"MTL_ENABLE_DEBUG_INFO" = "NO";
+				"CLANG_WARN_NON_LITERAL_NULL_CONVERSION" = "YES";
+				"MTL_FAST_MATH" = "YES";
+				"VALIDATE_PRODUCT" = "YES";
+				"GCC_WARN_UNUSED_FUNCTION" = "YES";
+				"CLANG_WARN_OBJC_LITERAL_CONVERSION" = "YES";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+				"CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				"SWIFT_VERSION" = "6.0";
+				"DEVELOPMENT_TEAM" = "";
+				"MARKETING_VERSION" = "0.13.15";
+				"INFOPLIST_FILE" = "macOS/PoboxWatchMacOS/Info.plist";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME" = "AccentColor";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"PRODUCT_NAME" = "pobox.watch";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.sidewaysliving.poboxwatch.macos";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"SWIFT_EMIT_LOC_STRINGS" = "YES";
+			};
+			"name" = "Release";
+		};
+		"740FDFD435E40C09EE8DCF88" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "7451E3C90F480C8FFE75816C";
+		};
+		"E117A271209ACE3F46372836" = {
+			"isa" = "PBXContainerItemProxy";
+			"containerPortal" = "58D6D3DE8D70B08749A14163";
+			"remoteGlobalIDString" = "96780FC2CBFA144B55520C7E";
+			"remoteInfo" = "PoboxWatchShared";
+			"proxyType" = "1";
+		};
+	};
+	"rootObject" = "58D6D3DE8D70B08749A14163";
+}
