@@ -1,4 +1,4 @@
-export const appVersion = "0.13.21";
+export const appVersion = "0.13.22";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.22-cancellable-collection-plan",
+    version: "0.13.22",
+    releasedAt: "2026-09-14T11:00:00.000Z",
+    title: "Change your collection plan",
+    summary: "After choosing I'm collecting today, select the same control again if your plans change. The post office immediately becomes available for another team member to collect.",
+    audience: "ALL"
+  },
   {
     id: "0.13.21-collection-plans",
     version: "0.13.21",

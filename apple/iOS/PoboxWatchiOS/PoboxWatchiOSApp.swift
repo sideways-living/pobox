@@ -816,14 +816,32 @@ private struct iPhoneCollectionClaimControl: View {
 
     var body: some View {
         if let activeClaim = office.collectionClaim {
-            HStack(spacing: 10) {
-                Label(ownsClaim ? "You're collecting until 3:00 am tomorrow" : "\(activeClaim.displayName) is collecting until 3:00 am tomorrow", systemImage: "person.badge.clock")
+            if ownsClaim {
+                HStack(spacing: 10) {
+                    Button {
+                        Task { await model.releaseClaim(office) }
+                    } label: {
+                        Label("I'm collecting today", systemImage: "checkmark.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(PoboxTheme.green)
+                    .disabled(model.busyMailboxId == "claim:\(office.id)")
+                    .accessibilityValue("On")
+                    .accessibilityHint("Tap again to cancel your collection plan")
+                    Text("until 3:00 am tomorrow")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                HStack(spacing: 10) {
+                    Label("\(activeClaim.displayName) is collecting until 3:00 am tomorrow", systemImage: "person.badge.clock")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(ownsClaim ? PoboxTheme.green : PoboxTheme.blue)
-                Spacer()
-                if ownsClaim || model.snapshot?.currentUser.role == "ADMIN" {
-                    Button("Cancel") { Task { await model.releaseClaim(office) } }
+                    .foregroundStyle(PoboxTheme.blue)
+                    Spacer()
+                    if model.snapshot?.currentUser.role == "ADMIN" {
+                        Button("Cancel") { Task { await model.releaseClaim(office) } }
                         .disabled(model.busyMailboxId == "claim:\(office.id)")
+                    }
                 }
             }
         } else {
@@ -833,6 +851,8 @@ private struct iPhoneCollectionClaimControl: View {
                 Label("I'll collect today", systemImage: "person.badge.clock")
             }
             .disabled(model.busyMailboxId == "claim:\(office.id)")
+            .accessibilityValue("Off")
+            .accessibilityHint("Tap to tell the team you will collect from this post office today")
         }
     }
 }

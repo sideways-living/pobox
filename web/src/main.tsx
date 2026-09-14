@@ -964,12 +964,20 @@ function CollectionClaimControl({ office, currentUser, busy, mutate, compact = f
   const ownsClaim = claim?.userId === currentUser.id;
   const expiry = claim ? new Date(claim.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "3:00 am";
   if (!claim) {
-    return <button type="button" className={compact ? "secondary collection-plan-button" : "primary collection-plan-button"} disabled={busy} onClick={() => mutate(() => claimPostOffice(office.id), `claim:${office.id}`)}><UserCheck size={16} />{busy ? "Saving..." : "I'll collect today"}</button>;
+    return <button type="button" aria-pressed="false" className={compact ? "secondary collection-plan-button" : "primary collection-plan-button"} disabled={busy} onClick={() => mutate(() => claimPostOffice(office.id), `claim:${office.id}`)}><UserCheck size={16} />{busy ? "Saving..." : "I'll collect today"}</button>;
+  }
+  if (ownsClaim) {
+    return (
+      <div className="collection-claim own">
+        <button type="button" aria-pressed="true" className="secondary collection-plan-button collection-plan-button-active" title="Select again to cancel your collection plan" disabled={busy} onClick={() => mutate(() => releasePostOfficeClaim(office.id), `claim:${office.id}`)}><UserCheck size={16} />{busy ? "Saving..." : "I'm collecting today"}</button>
+        <small>until {expiry} tomorrow</small>
+      </div>
+    );
   }
   return (
-    <div className={`collection-claim${ownsClaim ? " own" : ""}`}>
-      <span><UserCheck size={16} /><strong>{ownsClaim ? "You're collecting" : `${claim.displayName} is collecting`}</strong><small>until {expiry} tomorrow</small></span>
-      {(ownsClaim || currentUser.role === "ADMIN") && <button type="button" className="icon-button" title="Cancel collection plan" aria-label={`Cancel collection plan for ${office.name}`} disabled={busy} onClick={() => mutate(() => releasePostOfficeClaim(office.id), `claim:${office.id}`)}><X size={15} /></button>}
+    <div className="collection-claim">
+      <span><UserCheck size={16} /><strong>{claim.displayName} is collecting</strong><small>until {expiry} tomorrow</small></span>
+      {currentUser.role === "ADMIN" && <button type="button" className="icon-button" title="Cancel collection plan as administrator" aria-label={`Cancel collection plan for ${office.name}`} disabled={busy} onClick={() => mutate(() => releasePostOfficeClaim(office.id), `claim:${office.id}`)}><X size={15} /></button>}
     </div>
   );
 }

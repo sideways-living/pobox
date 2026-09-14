@@ -291,6 +291,12 @@ h3 {
   width: fit-content;
 }
 
+.collection-plan-button-active {
+  border-color: #2e7650;
+  background: #d9f1e3;
+  color: #17472f;
+}
+
 .collection-claim {
   display: inline-flex;
   align-items: center;
@@ -307,6 +313,10 @@ h3 {
   border-color: #9bcbb0;
   background: #eef8f2;
   color: #215a3a;
+}
+
+.collection-claim.own .collection-plan-button {
+  margin: -3px 0 -3px -3px;
 }
 
 .collection-claim > span {

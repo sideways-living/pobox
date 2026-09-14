@@ -932,13 +932,27 @@ private struct MacCollectionClaimControl: View {
     var body: some View {
         HStack(spacing: 10) {
             if let activeClaim = office.collectionClaim {
-                Label(ownsClaim ? "You're collecting until 3:00 am tomorrow" : "\(activeClaim.displayName) is collecting until 3:00 am tomorrow", systemImage: "person.badge.clock")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(ownsClaim ? PoboxTheme.green : PoboxTheme.blue)
-                Spacer()
-                if ownsClaim || currentUser?.role == "ADMIN" {
-                    Button("Cancel plan") { Task { await releaseClaim(office) } }
+                if ownsClaim {
+                    Button { Task { await releaseClaim(office) } } label: {
+                        Label("I'm collecting today", systemImage: "checkmark.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(PoboxTheme.green)
+                    .disabled(busy)
+                    .help("Select again to cancel your collection plan")
+                    .accessibilityValue("On")
+                    Text("until 3:00 am tomorrow")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Label("\(activeClaim.displayName) is collecting until 3:00 am tomorrow", systemImage: "person.badge.clock")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(PoboxTheme.blue)
+                    Spacer()
+                    if currentUser?.role == "ADMIN" {
+                        Button("Cancel plan") { Task { await releaseClaim(office) } }
                         .disabled(busy)
+                    }
                 }
             } else {
                 Button { Task { await claim(office) } } label: {
@@ -946,6 +960,8 @@ private struct MacCollectionClaimControl: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(busy)
+                .help("Tell the team you will collect from this post office today")
+                .accessibilityValue("Off")
             }
         }
         .padding(.vertical, 4)
