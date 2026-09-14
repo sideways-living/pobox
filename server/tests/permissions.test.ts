@@ -100,6 +100,15 @@ describe("workspace permissions and live updates", () => {
     expect((await store.listMembers(admin, "ws_company")).find(item => item.id === member.userId)?.status).toBe("DISABLED");
   });
 
+  it("lets a member update only their own profile avatar", async () => {
+    const response = await request(member, "PATCH", "ws_company/profile", { avatar: "📬" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ avatar: "📬" });
+    expect((await store.dashboard(member, "ws_company")).currentUser.avatar).toBe("📬");
+    expect((await store.dashboard(admin, "ws_company")).currentUser.avatar).toBeUndefined();
+    expect((await request(member, "PATCH", "ws_company/profile", { avatar: "this is not an emoji or image" })).statusCode).toBe(400);
+  });
+
   it("broadcasts invalidation only and closes disabled subscribers before sending data", async () => {
     await app.ready();
     const ws = await app.injectWS("/api/v1/workspaces/ws_company/realtime", { headers: { cookie: `pobox_watch_session=${member.id}` } });

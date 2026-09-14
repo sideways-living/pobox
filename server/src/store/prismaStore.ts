@@ -68,7 +68,7 @@ interface MemberWithUserRow {
     id: string;
     email: string;
     active: boolean;
-    profile: { displayName: string } | null;
+    profile: { displayName: string; avatar: string | null } | null;
   };
   role: TeamMemberSummary["role"];
   status: TeamMemberSummary["status"];
@@ -593,6 +593,7 @@ export class PrismaStore implements AppStore {
         id: user.id,
         email: user.email,
         displayName: user.profile?.displayName ?? user.email,
+        avatar: user.profile?.avatar ?? undefined,
         role: member.role
       },
       outstandingMailboxCount: await this.outstandingMailboxCount(workspaceId),
@@ -786,6 +787,7 @@ export class PrismaStore implements AppStore {
         id: member.user.id,
         email: member.user.email,
         displayName: member.user.profile?.displayName ?? member.user.email,
+        avatar: member.user.profile?.avatar ?? undefined,
         role: member.role,
         status: member.status,
         active: member.user.active && member.status === "ACTIVE"
@@ -1040,7 +1042,7 @@ export class PrismaStore implements AppStore {
       const nextStatus = input.status ?? member.status;
       if (session.userId === userId && (nextRole !== member.role || nextStatus !== member.status)) throw new ConflictError("You cannot change your own role or access status.");
       if (member.role === "ADMIN" && member.status === "ACTIVE" && (nextRole !== "ADMIN" || nextStatus !== "ACTIVE") && await tx.workspaceMember.count({ where: { workspaceId, role: "ADMIN", status: "ACTIVE", user: { active: true } } }) <= 1) throw new ConflictError("At least one active admin is required.");
-      const changesIdentity = (input.email !== undefined && input.email.toLowerCase() !== member.user.email) || (input.displayName !== undefined && input.displayName !== (member.user.profile?.displayName ?? member.user.email));
+      const changesIdentity = (input.email !== undefined && input.email.toLowerCase() !== member.user.email) || (input.displayName !== undefined && input.displayName !== (member.user.profile?.displayName ?? member.user.email)) || (input.avatar !== undefined && input.avatar !== (member.user.profile?.avatar ?? ""));
       if (changesIdentity && await tx.workspaceMember.count({ where: { userId, workspaceId: { not: workspaceId } } })) throw new ForbiddenError("Shared account identity must be managed outside this workspace.");
 
       try {
@@ -1048,7 +1050,17 @@ export class PrismaStore implements AppStore {
           where: { id: userId },
           data: {
             ...(input.email ? { email: input.email.toLowerCase() } : {}),
-            ...(input.displayName ? { profile: { upsert: { update: { displayName: input.displayName }, create: { displayName: input.displayName } } } } : {}),
+            ...((input.displayName !== undefined || input.avatar !== undefined) ? {
+              profile: {
+                upsert: {
+                  update: {
+                    ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
+                    ...(input.avatar !== undefined ? { avatar: input.avatar || null } : {})
+                  },
+                  create: { displayName: input.displayName ?? member.user.email, avatar: input.avatar || null }
+                }
+              }
+            } : {}),
             memberships: {
               update: {
                 where: { workspaceId_userId: { workspaceId, userId } },
@@ -1061,6 +1073,7 @@ export class PrismaStore implements AppStore {
         await this.audit(session.userId, workspaceId, "member.updated", "user", userId, {
           email: input.email?.toLowerCase(),
           displayName: input.displayName,
+          avatar: input.avatar,
           role: input.role,
           status: input.status
         }, tx);
@@ -1069,6 +1082,7 @@ export class PrismaStore implements AppStore {
           version: updated.memberships[0]?.updatedAt.toISOString(),
           email: updated.email,
           displayName: updated.profile?.displayName ?? updated.email,
+          avatar: updated.profile?.avatar ?? undefined,
           role: updated.memberships[0]?.role ?? member.role,
           status: updated.memberships[0]?.status ?? member.status,
           active: updated.active && nextStatus === "ACTIVE"
@@ -1080,6 +1094,19 @@ export class PrismaStore implements AppStore {
         throw error;
       }
     });
+  }
+
+  async updateProfile(session: Session, workspaceId: string, avatar: string): Promise<{ avatar?: string }> {
+    await this.requireMember(session, workspaceId);
+    const user = await this.prisma.user.findUnique({ where: { id: session.userId }, include: { profile: true } });
+    if (!user) throw new NotFoundError("User not found.");
+    const profile = await this.prisma.userProfile.upsert({
+      where: { userId: user.id },
+      update: { avatar: avatar || null },
+      create: { userId: user.id, displayName: user.email, avatar: avatar || null }
+    });
+    await this.audit(session.userId, workspaceId, "profile.avatar.updated", "user", user.id, { hasAvatar: Boolean(profile.avatar) });
+    return { avatar: profile.avatar ?? undefined };
   }
 
   async deleteUser(session: Session, workspaceId: string, userId: string): Promise<void> {

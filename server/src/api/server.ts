@@ -33,13 +33,20 @@ const createUserSchema = z.object({
   password: z.string().min(12).max(200),
   role: z.enum(["ADMIN", "MEMBER"])
 });
+const avatarSchema = z.string().trim().max(350000).refine((value) => {
+  if (!value) return true;
+  if ([...value].length <= 8 && !/[\u0000-\u001f\u007f]/.test(value)) return true;
+  return /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value) || /^https:\/\/[^\s]+$/.test(value);
+}, { message: "Choose an emoji or a supported image." });
 const updateUserSchema = z.object({
   expectedVersion: z.string().min(1).max(100),
   email: z.string().email().optional(),
   displayName: z.string().min(1).max(120).optional(),
+  avatar: avatarSchema.optional(),
   role: z.enum(["ADMIN", "MEMBER"]).optional(),
   status: z.enum(["INVITED", "ACTIVE", "DISABLED"]).optional()
 }).refine((input) => Object.keys(input).length > 0, { message: "At least one field is required." });
+const updateProfileSchema = z.object({ avatar: avatarSchema });
 const createPostOfficeSchema = z.object({
   name: z.string().trim().min(1).max(160),
   address: z.string().trim().min(1).max(240),
@@ -399,6 +406,15 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const member = await store.updateUser(session, workspaceId, userId, body);
     realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
     return member;
+  });
+
+  app.patch("/api/v1/workspaces/:workspaceId/profile", async (request) => {
+    const { workspaceId } = request.params as { workspaceId: string };
+    const body = updateProfileSchema.parse(request.body);
+    const session = await securedSession(request, workspaceId);
+    const profile = await store.updateProfile(session, workspaceId, body.avatar);
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
+    return profile;
   });
 
   app.delete("/api/v1/workspaces/:workspaceId/team/users/:userId", async (request, reply) => {

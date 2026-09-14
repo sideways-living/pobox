@@ -37,6 +37,7 @@ export interface TeamMemberSummary {
   id: string;
   email: string;
   displayName: string;
+  avatar?: string;
   role: Role;
   status: MemberStatus;
   active: boolean;
@@ -69,6 +70,7 @@ export interface UpdateUserInput {
   expectedVersion?: string;
   email?: string;
   displayName?: string;
+  avatar?: string;
   role?: Role;
   status?: MemberStatus;
 }
@@ -177,6 +179,7 @@ export interface AppStore {
   syncPostOfficeDirectory(session: Session, workspaceId: string): Promise<PostOfficeDirectoryStatus>;
   createUser(session: Session, workspaceId: string, input: CreateUserInput): Promise<TeamMemberSummary>;
   updateUser(session: Session, workspaceId: string, userId: string, input: UpdateUserInput): Promise<TeamMemberSummary>;
+  updateProfile(session: Session, workspaceId: string, avatar: string): Promise<{ avatar?: string }>;
   deleteUser(session: Session, workspaceId: string, userId: string): Promise<void>;
   createPostOffice(session: Session, workspaceId: string, input: CreatePostOfficeInput): Promise<PostOffice>;
   updatePostOffice(session: Session, workspaceId: string, postOfficeId: string, input: UpdatePostOfficeInput): Promise<PostOffice>;

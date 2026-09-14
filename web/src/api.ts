@@ -248,6 +248,17 @@ export async function updateUser(userId: string, input: UpdateUserInput): Promis
   return response.json();
 }
 
+export async function updateProfileAvatar(avatar: string): Promise<{ avatar?: string }> {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/profile`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ avatar })
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
 export async function deleteUser(userId: string): Promise<void> {
   const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/team/users/${userId}`, {
     method: "DELETE",

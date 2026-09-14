@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import { load as loadMapKit } from "@apple/mapkit-loader";
 import type { Annotation, Map as AppleMap } from "@apple/mapkit-loader";
-import { AlertTriangle, Bell, Check, Clock, Edit2, ExternalLink, KeyRound, LogIn, LogOut, Mail, MapPin, Menu, Package, Plus, RefreshCw, Route, Save, Shield, Trash2, Users, X } from "lucide-react";
+import { AlertTriangle, Ban, Bell, Check, Clock, Edit2, ExternalLink, KeyRound, LogIn, LogOut, Mail, MapPin, Menu, Package, Plus, RefreshCw, Route, Save, Shield, Trash2, UserCheck, Users, X } from "lucide-react";
 import {
   authenticatePasskey,
   beginNativeHandoff,
@@ -38,6 +38,7 @@ import {
   syncPostOfficeDirectory,
   updateMailbox,
   updatePostOffice,
+  updateProfileAvatar,
   updateUser,
   verifySecondFactor
 } from "./api";
@@ -1174,7 +1175,7 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
     }
   }
 
-  async function saveMember(memberId: string, input: { expectedVersion: string; email: string; displayName: string; role: "ADMIN" | "MEMBER"; status: MemberStatus }) {
+  async function saveMember(memberId: string, input: { expectedVersion: string; email: string; displayName: string; avatar?: string; role: "ADMIN" | "MEMBER"; status: MemberStatus }) {
     try {
       await updateUser(memberId, input);
       await refresh();
@@ -1219,7 +1220,7 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
             <div className="team-list">
               {deletedMembers.map((member) => (
                 <div className="team-member" key={member.id}>
-                  <div><strong>{member.displayName}</strong><span>{member.email}</span><small>Deleted {new Date(member.deletedAt!).toLocaleString("en-AU")}</small></div>
+                  <div className="team-identity"><UserAvatar avatar={member.avatar} name={member.displayName} /><div><strong>{member.displayName}</strong><span>{member.email}</span><small>Deleted {new Date(member.deletedAt!).toLocaleString("en-AU")}</small></div></div>
                   <StatusPill tone="muted">Deleted</StatusPill>
                 </div>
               ))}
@@ -1274,12 +1275,13 @@ function TeamMemberRow({
   member: TeamMember;
   currentUserId: string;
   canManage: boolean;
-  onSave: (memberId: string, input: { expectedVersion: string; email: string; displayName: string; role: "ADMIN" | "MEMBER"; status: MemberStatus }) => Promise<boolean>;
+  onSave: (memberId: string, input: { expectedVersion: string; email: string; displayName: string; avatar?: string; role: "ADMIN" | "MEMBER"; status: MemberStatus }) => Promise<boolean>;
   onDelete: (member: TeamMember) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [email, setEmail] = useState(member.email);
   const [displayName, setDisplayName] = useState(member.displayName);
+  const [avatar, setAvatar] = useState(member.avatar ?? "");
   const [role, setRole] = useState<"ADMIN" | "MEMBER">(member.role);
   const [status, setStatus] = useState<MemberStatus>(member.status);
   const [memberVersion, setMemberVersion] = useState(member.version);
@@ -1290,19 +1292,21 @@ function TeamMemberRow({
     setMemberVersion(member.version);
     setEmail(member.email);
     setDisplayName(member.displayName);
+    setAvatar(member.avatar ?? "");
     setRole(member.role);
     setStatus(member.status);
-  }, [editing, member.version, member.email, member.displayName, member.role, member.status]);
+  }, [editing, member.version, member.email, member.displayName, member.avatar, member.role, member.status]);
 
   if (editing) {
     return (
       <form className="team-member editable-row" onSubmit={async (event) => {
         event.preventDefault();
-        if (await onSave(member.id, { expectedVersion: memberVersion, email, displayName, role, status })) setEditing(false);
+        if (await onSave(member.id, { expectedVersion: memberVersion, email, displayName, avatar, role, status })) setEditing(false);
       }}>
         <div className="edit-fields">
           <label>Name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></label>
           <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
+          <AvatarEditor value={avatar} onChange={setAvatar} idPrefix={`member-${member.id}`} />
           <label>Role<select value={role} onChange={(event) => setRole(event.target.value as "ADMIN" | "MEMBER")} disabled={self}><option value="MEMBER">Member</option><option value="ADMIN">Admin</option></select></label>
           <label>Status<select value={status} onChange={(event) => setStatus(event.target.value as MemberStatus)} disabled={self}><option value="ACTIVE">Active</option><option value="INVITED">Invited</option><option value="DISABLED">Disabled</option></select></label>
           {self && <p className="field-note">You cannot change your own role, status, or delete your own account.</p>}
@@ -1317,35 +1321,125 @@ function TeamMemberRow({
 
   return (
     <div className="team-member">
-      <div>
-        <strong>{member.displayName}</strong>
-        <span>{member.email}</span>
-      </div>
-      <div className="team-badges">
-        <StatusPill tone={member.active ? "ok" : "muted"}>{member.active ? "Active" : "Disabled"}</StatusPill>
-        <StatusPill tone={member.role === "ADMIN" ? "info" : "muted"}>{member.role}</StatusPill>
-        <small>{member.status}</small>
+      <div className="team-identity">
+        <UserAvatar avatar={member.avatar} name={member.displayName} />
+        <div>
+          <strong>{member.displayName}</strong>
+          <span>{member.email}</span>
+        </div>
       </div>
       {canManage && (
-        <div className="row-actions">
-          <button type="button" className="icon-button" title="Edit user" onClick={() => setEditing(true)}><Edit2 size={16} /></button>
-          {member.active ? (
-            <button type="button" className="secondary" title="Disable user access" disabled={self} onClick={() => onSave(member.id, { expectedVersion: member.version, email: member.email, displayName: member.displayName, role: member.role, status: "DISABLED" })}>Disable</button>
-          ) : (
-            <button type="button" className="secondary" title="Reactivate user access" disabled={self} onClick={() => onSave(member.id, { expectedVersion: member.version, email: member.email, displayName: member.displayName, role: member.role, status: "ACTIVE" })}>Reactivate</button>
-          )}
-          <button type="button" className="icon-button danger" title="Delete user access" disabled={self} onClick={() => onDelete(member)}><Trash2 size={16} /></button>
-          {member.active && <a className="secondary" href={`/?forgot-password=1&email=${encodeURIComponent(member.email)}`} title="Request a password reset email"><KeyRound size={16} />Reset Password</a>}
+        <div className="team-controls">
+          <span className="team-status-text">{member.active ? "Active" : member.status === "INVITED" ? "Invited" : "Disabled"} · {member.role === "ADMIN" ? "Admin" : "Member"}</span>
+          <div className="row-actions" aria-label={`Actions for ${member.displayName}`}>
+            <button type="button" className="icon-button" title="Edit user" aria-label={`Edit ${member.displayName}`} onClick={() => setEditing(true)}><Edit2 size={17} /></button>
+            <a className={`secondary icon-button${member.active ? "" : " is-disabled"}`} href={member.active ? `/?forgot-password=1&email=${encodeURIComponent(member.email)}` : undefined} title={member.active ? "Reset password" : "Reactivate user before resetting password"} aria-label={`Reset password for ${member.displayName}`} aria-disabled={!member.active}><KeyRound size={17} /></a>
+            {member.active ? (
+              <button type="button" className="icon-button" title="Disable user" aria-label={`Disable ${member.displayName}`} disabled={self} onClick={() => onSave(member.id, { expectedVersion: member.version, email: member.email, displayName: member.displayName, avatar: member.avatar, role: member.role, status: "DISABLED" })}><Ban size={17} /></button>
+            ) : (
+              <button type="button" className="icon-button" title="Reactivate user" aria-label={`Reactivate ${member.displayName}`} disabled={self} onClick={() => onSave(member.id, { expectedVersion: member.version, email: member.email, displayName: member.displayName, avatar: member.avatar, role: member.role, status: "ACTIVE" })}><UserCheck size={17} /></button>
+            )}
+            <button type="button" className="icon-button danger" title="Delete user" aria-label={`Delete ${member.displayName}`} disabled={self} onClick={() => onDelete(member)}><Trash2 size={17} /></button>
+          </div>
         </div>
       )}
+      {!canManage && <span className="team-status-text">{member.active ? "Active" : "Disabled"} · {member.role === "ADMIN" ? "Admin" : "Member"}</span>}
     </div>
   );
 }
 
+function UserAvatar({ avatar, name, large = false }: { avatar?: string; name: string; large?: boolean }) {
+  const image = avatarIsImage(avatar);
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join("") || "?";
+  return (
+    <span className={`user-avatar${large ? " large" : ""}`} aria-label={`${name} profile image`}>
+      {image ? <img src={avatar} alt="" referrerPolicy="no-referrer" /> : <span aria-hidden="true">{avatar || initials}</span>}
+    </span>
+  );
+}
+
+function AvatarEditor({ value, onChange, idPrefix }: { value: string; onChange: (value: string) => void; idPrefix: string }) {
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const image = avatarIsImage(value);
+
+  async function chooseImage(file?: File) {
+    if (!file) return;
+    try {
+      setAvatarError(null);
+      onChange(await resizeAvatar(file));
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : "Unable to use that image.");
+    }
+  }
+
+  return (
+    <fieldset className="avatar-editor">
+      <legend>Profile image or emoji</legend>
+      <label htmlFor={`${idPrefix}-emoji`}>Emoji
+        <input id={`${idPrefix}-emoji`} value={image ? "" : value} maxLength={8} placeholder="🙂" onChange={(event) => { setAvatarError(null); onChange(event.target.value); }} />
+      </label>
+      <label htmlFor={`${idPrefix}-image`}>Image
+        <input id={`${idPrefix}-image`} type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { void chooseImage(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+      </label>
+      {value && <button className="secondary avatar-remove" type="button" onClick={() => { setAvatarError(null); onChange(""); }}><X size={15} />Remove</button>}
+      {avatarError && <small className="field-error">{avatarError}</small>}
+    </fieldset>
+  );
+}
+
+function avatarIsImage(value?: string) {
+  return Boolean(value && (/^data:image\/(?:png|jpeg|webp);base64,/.test(value) || /^https:\/\//.test(value)));
+}
+
+async function resizeAvatar(file: File) {
+  if (file.size > 5_000_000) throw new Error("Choose an image smaller than 5 MB.");
+  const bitmap = await createImageBitmap(file);
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 192;
+    canvas.height = 192;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("This browser could not prepare the image.");
+    const crop = Math.min(bitmap.width, bitmap.height);
+    context.drawImage(bitmap, (bitmap.width - crop) / 2, (bitmap.height - crop) / 2, crop, crop, 0, 0, 192, 192);
+    const encoded = canvas.toDataURL("image/webp", 0.82);
+    if (encoded.length > 350000) throw new Error("The prepared image is too large. Choose a simpler image.");
+    return encoded;
+  } finally {
+    bitmap.close();
+  }
+}
+
 function SettingsSection({ snapshot, refresh, setError }: { snapshot: DashboardSnapshot; refresh: () => Promise<void>; setError: (value: string | null) => void }) {
+  const [avatar, setAvatar] = useState(snapshot.currentUser.avatar ?? "");
+  const [savingAvatar, setSavingAvatar] = useState(false);
+
+  useEffect(() => setAvatar(snapshot.currentUser.avatar ?? ""), [snapshot.currentUser.avatar]);
+
+  async function saveAvatar(event: React.FormEvent) {
+    event.preventDefault();
+    setSavingAvatar(true);
+    try {
+      await updateProfileAvatar(avatar);
+      await refresh();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update profile image.");
+    } finally {
+      setSavingAvatar(false);
+    }
+  }
+
   return (
     <div className="page-grid settings-page">
       <section className="page-main">
+        <Panel title="Profile Image">
+          <form className="profile-avatar-form" onSubmit={saveAvatar}>
+            <UserAvatar avatar={avatar} name={snapshot.currentUser.displayName} large />
+            <AvatarEditor value={avatar} onChange={setAvatar} idPrefix="own-profile" />
+            <button className="primary" type="submit" disabled={savingAvatar}><Save size={16} />{savingAvatar ? "Saving..." : "Save Profile Image"}</button>
+          </form>
+        </Panel>
         <SecurityPanel setError={setError} />
         <Panel title="Change Password"><PasswordForm mode="change" /><details><summary>Forgot your current password?</summary><PasswordForm mode="forgot" email={snapshot.currentUser.email} /></details></Panel>
         <Panel title="Workspace">

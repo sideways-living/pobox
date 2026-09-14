@@ -510,6 +510,11 @@ describe("shared mailbox state", () => {
     const updatedUser = await store.updateUser(daniel, "ws_company", user.id, { displayName: "Ops Updated", role: "ADMIN" });
     expect(updatedUser.displayName).toBe("Ops Updated");
     expect(updatedUser.role).toBe("ADMIN");
+    expect((await store.updateUser(daniel, "ws_company", user.id, { avatar: "📬" })).avatar).toBe("📬");
+
+    const ownProfile = await store.updateProfile(daniel, "ws_company", "👤");
+    expect(ownProfile.avatar).toBe("👤");
+    expect((await store.dashboard(daniel, "ws_company")).currentUser.avatar).toBe("👤");
 
     const disabledUser = await store.updateUser(daniel, "ws_company", user.id, { status: "DISABLED" });
     expect(disabledUser.status).toBe("DISABLED");

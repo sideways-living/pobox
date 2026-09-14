@@ -7,6 +7,7 @@ export interface User {
   id: string;
   email: string;
   displayName: string;
+  avatar?: string;
   passwordHash: string;
   emailVerified: boolean;
   active: boolean;
@@ -127,7 +128,7 @@ export interface ParsedMailNotification {
 
 export interface DashboardSnapshot {
   workspace: Workspace;
-  currentUser: Pick<User, "id" | "email" | "displayName"> & { role: Role };
+  currentUser: Pick<User, "id" | "email" | "displayName" | "avatar"> & { role: Role };
   outstandingMailboxCount: number;
   postOffices: Array<PostOffice & { mailboxes: Mailbox[] }>;
   history: Array<MailEvent | CollectionEvent>;

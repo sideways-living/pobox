@@ -30,7 +30,7 @@ export interface PostOffice {
 
 export interface DashboardSnapshot {
   workspace: { id: string; name: string };
-  currentUser: { id: string; email: string; displayName: string; role: "ADMIN" | "MEMBER" };
+  currentUser: { id: string; email: string; displayName: string; avatar?: string; role: "ADMIN" | "MEMBER" };
   outstandingMailboxCount: number;
   postOffices: PostOffice[];
   history: Array<MailHistoryEvent | CollectionHistoryEvent>;
@@ -69,6 +69,7 @@ export interface TeamMember {
   id: string;
   email: string;
   displayName: string;
+  avatar?: string;
   role: "ADMIN" | "MEMBER";
   status: MemberStatus;
   active: boolean;
@@ -101,6 +102,7 @@ export interface UpdateUserInput {
   expectedVersion: string;
   email?: string;
   displayName?: string;
+  avatar?: string;
   role?: "ADMIN" | "MEMBER";
   status?: MemberStatus;
 }

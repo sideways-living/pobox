@@ -477,7 +477,7 @@ export class MemoryStore implements AppStore {
     });
     return {
       workspace,
-      currentUser: { id: user.id, email: user.email, displayName: user.displayName, role: member.role },
+      currentUser: { id: user.id, email: user.email, displayName: user.displayName, avatar: user.avatar, role: member.role },
       outstandingMailboxCount: await this.outstandingMailboxCount(workspaceId),
       postOffices,
       history
@@ -635,6 +635,7 @@ export class MemoryStore implements AppStore {
           deletedAt: member.deletedAt,
           email: user.email,
           displayName: user.displayName,
+          avatar: user.avatar,
           role: member.role,
           status: member.status,
           active: user.active && member.status === "ACTIVE"
@@ -863,7 +864,7 @@ export class MemoryStore implements AppStore {
     const nextStatus = input.status ?? member.status;
     this.assertUserManagementChangeIsSafe(session, workspaceId, userId, member, nextRole, nextStatus);
     const email = input.email?.toLowerCase();
-    if (((email && email !== user.email) || (input.displayName && input.displayName !== user.displayName)) && [...this.members.values()].some(candidate => candidate.userId === userId && candidate.workspaceId !== workspaceId)) throw new ForbiddenError("Shared account identity must be managed outside this workspace.");
+    if (((email && email !== user.email) || (input.displayName && input.displayName !== user.displayName) || (input.avatar !== undefined && input.avatar !== (user.avatar ?? ""))) && [...this.members.values()].some(candidate => candidate.userId === userId && candidate.workspaceId !== workspaceId)) throw new ForbiddenError("Shared account identity must be managed outside this workspace.");
     if (email && [...this.users.values()].some((candidate) => candidate.id !== userId && candidate.email.toLowerCase() === email)) {
       throw new ConflictError("User email already exists.");
     }
@@ -871,6 +872,7 @@ export class MemoryStore implements AppStore {
       ...user,
       email: email ?? user.email,
       displayName: input.displayName ?? user.displayName,
+      avatar: input.avatar === undefined ? user.avatar : input.avatar || undefined,
       active: user.active
     };
     const updatedMember = {
@@ -884,6 +886,7 @@ export class MemoryStore implements AppStore {
     this.audit(session.userId, workspaceId, "member.updated", "user", userId, {
       email,
       displayName: input.displayName,
+      avatar: input.avatar,
       role: input.role,
       status: input.status
     });
@@ -892,10 +895,20 @@ export class MemoryStore implements AppStore {
       version: updatedMember.version,
       email: updatedUser.email,
       displayName: updatedUser.displayName,
+      avatar: updatedUser.avatar,
       role: updatedMember.role,
       status: updatedMember.status,
       active: updatedUser.active && updatedMember.status === "ACTIVE"
     };
+  }
+
+  async updateProfile(session: Session, workspaceId: string, avatar: string): Promise<{ avatar?: string }> {
+    await this.requireMember(session, workspaceId);
+    const user = this.users.get(session.userId);
+    if (!user) throw new NotFoundError("User not found.");
+    user.avatar = avatar || undefined;
+    this.audit(session.userId, workspaceId, "profile.avatar.updated", "user", user.id, { hasAvatar: Boolean(user.avatar) });
+    return { avatar: user.avatar };
   }
 
   async deleteUser(session: Session, workspaceId: string, userId: string): Promise<void> {

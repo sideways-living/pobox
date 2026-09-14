@@ -1,4 +1,4 @@
-export const appVersion = "0.13.17";
+export const appVersion = "0.13.18";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.18-team-avatars-actions",
+    version: "0.13.18",
+    releasedAt: "2026-09-14T07:00:00.000Z",
+    title: "Clearer team controls and profile images",
+    summary: "Team rows now show simple status text and clear action icons. Add an emoji or photo to your profile in Settings; admins can also update profile images from Team.",
+    audience: "ALL"
+  },
   {
     id: "0.13.17-openstreetmap-fallback",
     version: "0.13.17",

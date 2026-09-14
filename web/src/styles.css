@@ -652,7 +652,7 @@ input, select {
 
 .team-member {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto auto;
+  grid-template-columns: minmax(220px, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 12px;
@@ -665,13 +665,54 @@ input, select {
   color: #606f7c;
 }
 
-.team-member div {
+.team-identity > div {
   display: grid;
   gap: 3px;
 }
 
-.team-badges {
+.team-identity {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px !important;
+}
+
+.team-controls {
+  display: grid;
   justify-items: end;
+  gap: 7px !important;
+}
+
+.team-status-text {
+  color: #46534e;
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.user-avatar {
+  width: 44px;
+  height: 44px;
+  display: inline-grid;
+  flex: 0 0 44px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #cbd7d0;
+  border-radius: 50%;
+  background: #e8f3ee;
+  color: #143329;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.user-avatar.large {
+  width: 72px;
+  height: 72px;
+  font-size: 2rem;
+}
+
+.user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .row-actions {
@@ -691,6 +732,54 @@ input, select {
 .icon-button.danger {
   border-color: #d65d4f;
   color: #a73524;
+}
+
+a.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.icon-button.is-disabled {
+  pointer-events: none;
+  opacity: 0.45;
+}
+
+.avatar-editor {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.6fr) minmax(190px, 1.4fr) auto;
+  align-items: end;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.edit-fields .avatar-editor {
+  grid-column: 1 / -1;
+}
+
+.avatar-editor legend {
+  margin-bottom: 7px;
+  font-weight: 800;
+}
+
+.avatar-editor .field-error {
+  grid-column: 1 / -1;
+  color: #a73524;
+}
+
+.avatar-remove {
+  min-height: 42px;
+}
+
+.profile-avatar-form {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
 }
 
 .editable-row {
@@ -1319,10 +1408,16 @@ input, select {
     align-items: stretch;
   }
 
-  .team-badges,
+  .team-controls,
   .row-actions {
     justify-content: flex-start;
     justify-items: start;
+  }
+
+  .profile-avatar-form,
+  .avatar-editor {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
   .map-board-copy {
