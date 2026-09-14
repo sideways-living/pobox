@@ -798,45 +798,48 @@ private struct MacCollectionQueueRow: View {
 
             Spacer()
 
-            Button {
-                openAppleMapsDirections(office)
-            } label: {
-                Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
-                    .frame(width: 22, height: 22)
-            }
-            .buttonStyle(.bordered)
-            .help("Directions")
-            .accessibilityLabel("Directions to \(office.name)")
-
-            Button {
-                Task {
-                    if ownsClaim {
-                        await releaseClaim(office)
-                    } else {
-                        await claim(office)
-                    }
+            HStack(spacing: 10) {
+                Button {
+                    openAppleMapsDirections(office)
+                } label: {
+                    MacActionIcon(systemName: "location.north.fill")
                 }
-            } label: {
-                Image(systemName: ownsClaim ? "person.crop.circle.badge.checkmark" : "person.badge.clock")
-                    .frame(width: 22, height: 22)
-            }
-            .buttonStyle(.bordered)
-            .tint(ownsClaim ? PoboxTheme.green : PoboxTheme.blue)
-            .disabled(busyId == "claim:\(office.id)" || blockedBy != nil)
-            .help(claimActionLabel)
-            .accessibilityLabel(claimActionLabel)
-            .accessibilityValue(ownsClaim ? "On" : "Off")
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .help("Directions")
+                .accessibilityLabel("Directions to \(office.name)")
 
-            Button {
-                Task { await collect(mailbox) }
-            } label: {
-                Image(systemName: "checkmark.circle.fill")
-                    .frame(width: 22, height: 22)
+                Button {
+                    Task {
+                        if ownsClaim {
+                            await releaseClaim(office)
+                        } else {
+                            await claim(office)
+                        }
+                    }
+                } label: {
+                    MacActionIcon(systemName: ownsClaim ? "calendar.badge.minus" : "calendar.badge.checkmark")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .tint(ownsClaim ? PoboxTheme.green : PoboxTheme.blue)
+                .disabled(busyId == "claim:\(office.id)" || blockedBy != nil)
+                .help(claimActionLabel)
+                .accessibilityLabel(claimActionLabel)
+                .accessibilityValue(ownsClaim ? "On" : "Off")
+
+                Button {
+                    Task { await collect(mailbox) }
+                } label: {
+                    MacActionIcon(systemName: "checkmark.circle.fill")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .tint(PoboxTheme.green)
+                .disabled(busyId == mailbox.id || blockedBy != nil)
+                .help(blockedBy.map { "\($0) is collecting from this post office" } ?? "Collected")
+                .accessibilityLabel("Mark PO Box \(mailbox.boxNumber) collected")
             }
-            .buttonStyle(.bordered)
-            .disabled(busyId == mailbox.id || blockedBy != nil)
-            .help(blockedBy.map { "\($0) is collecting from this post office" } ?? "Collected")
-            .accessibilityLabel("Mark PO Box \(mailbox.boxNumber) collected")
         }
         .padding(14)
         .background(PoboxTheme.surface, in: RoundedRectangle(cornerRadius: 8))
@@ -1614,8 +1617,10 @@ struct MacTeamMemberRow: View {
                     Button {
                         openPasswordReset(for: member.email)
                     } label: {
-                        Image(systemName: "key")
+                        MacActionIcon(systemName: "key.fill")
                     }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
                     .disabled(!member.active)
                     .help(member.active ? "Reset password" : "Reactivate this user before resetting their password")
 
@@ -1627,8 +1632,10 @@ struct MacTeamMemberRow: View {
                         status = member.status
                         editing.toggle()
                     } label: {
-                        Image(systemName: "pencil")
+                        MacActionIcon(systemName: "square.and.pencil")
                     }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
                     .help("Edit user")
 
                     Button {
@@ -1636,16 +1643,21 @@ struct MacTeamMemberRow: View {
                             await updateUser(member, member.email, member.displayName, member.avatar ?? "", member.role, member.active ? "DISABLED" : "ACTIVE")
                         }
                     } label: {
-                        Image(systemName: member.active ? "person.slash" : "person.badge.plus")
+                        MacActionIcon(systemName: member.active ? "person.crop.circle.badge.minus" : "person.crop.circle.badge.plus")
                     }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
                     .disabled(member.id == currentUserId)
                     .help(member.active ? "Disable user" : "Reactivate user")
 
                     Button(role: .destructive) {
                         confirmDelete = true
                     } label: {
-                        Image(systemName: "trash")
+                        MacActionIcon(systemName: "trash.fill")
                     }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .tint(.red)
                     .disabled(member.id == currentUserId)
                     .help("Delete user")
 
@@ -2070,6 +2082,16 @@ private struct MacStatusBadge: View {
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
             .background((hasWaitingItem(mailbox) ? PoboxTheme.orange : PoboxTheme.green).opacity(0.12), in: Capsule())
+    }
+}
+
+private struct MacActionIcon: View {
+    let systemName: String
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: 22, weight: .semibold))
+            .frame(width: 30, height: 30)
     }
 }
 

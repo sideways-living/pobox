@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import { load as loadMapKit } from "@apple/mapkit-loader";
 import type { Annotation, Map as AppleMap } from "@apple/mapkit-loader";
-import { AlertTriangle, Ban, Bell, Check, Clock, Edit2, ExternalLink, KeyRound, LogIn, LogOut, Mail, MapPin, Menu, Package, Plus, RefreshCw, Route, Save, Shield, Trash2, UserCheck, Users, X } from "lucide-react";
+import { AlertTriangle, Bell, CalendarCheck2, Check, CircleCheckBig, Clock, Edit2, ExternalLink, KeyRound, LogIn, LogOut, Mail, MapPin, Menu, Navigation, Package, Plus, RefreshCw, Save, Shield, Trash2, UserCheck, UserPen, UserRoundCheck, UserRoundX, Users, X } from "lucide-react";
 import {
   authenticatePasskey,
   beginNativeHandoff,
@@ -708,9 +708,9 @@ function CollectionQueueRow({ office, box, currentUser, busyId, mutate }: {
         <small>{detectedText}</small>
       </div>
       <div className="collection-queue-actions" aria-label={`Actions for PO Box ${box.boxNumber}`}>
-        <a className="icon-button" href={appleMapsDirectionsUrl(office)} target="_blank" rel="noreferrer" title="Directions" aria-label={`Directions to ${office.name}`}><Route size={18} /></a>
-        <button type="button" className={`icon-button${ownsClaim ? " is-active" : ""}`} aria-pressed={ownsClaim} title={claimTitle} aria-label={claimTitle} disabled={claimBusy || Boolean(blockedBy)} onClick={() => mutate(() => ownsClaim ? releasePostOfficeClaim(office.id) : claimPostOffice(office.id), `claim:${office.id}`)}><UserCheck size={18} /></button>
-        <button type="button" className="icon-button" title={blockedBy ? `${blockedBy} is collecting from this post office` : "Collected"} aria-label={`Mark PO Box ${box.boxNumber} collected`} disabled={collectBusy || Boolean(blockedBy)} onClick={() => mutate(() => collectMailbox(box.id, box.updatedAt), box.id)}><Check size={18} /></button>
+        <a className="icon-button large-action-icon" href={appleMapsDirectionsUrl(office)} target="_blank" rel="noreferrer" title="Directions" aria-label={`Directions to ${office.name}`}><Navigation size={24} /></a>
+        <button type="button" className={`icon-button large-action-icon${ownsClaim ? " is-active" : ""}`} aria-pressed={ownsClaim} title={claimTitle} aria-label={claimTitle} disabled={claimBusy || Boolean(blockedBy)} onClick={() => mutate(() => ownsClaim ? releasePostOfficeClaim(office.id) : claimPostOffice(office.id), `claim:${office.id}`)}><CalendarCheck2 size={24} /></button>
+        <button type="button" className="icon-button large-action-icon" title={blockedBy ? `${blockedBy} is collecting from this post office` : "Collected"} aria-label={`Mark PO Box ${box.boxNumber} collected`} disabled={collectBusy || Boolean(blockedBy)} onClick={() => mutate(() => collectMailbox(box.id, box.updatedAt), box.id)}><CircleCheckBig size={24} /></button>
       </div>
     </div>
   );
@@ -1410,14 +1410,14 @@ function TeamMemberRow({
       <span className="team-status-text">{member.active ? "Active" : member.status === "INVITED" ? "Invited" : "Disabled"} · {member.role === "ADMIN" ? "Admin" : "Member"}</span>
       {canManage && (
         <div className="row-actions team-row-actions" aria-label={`Actions for ${member.displayName}`}>
-          <a className={`secondary icon-button${member.active ? "" : " is-disabled"}`} href={member.active ? `/?forgot-password=1&email=${encodeURIComponent(member.email)}` : undefined} title={member.active ? "Reset password" : "Reactivate user before resetting password"} aria-label={`Reset password for ${member.displayName}`} aria-disabled={!member.active}><KeyRound size={17} /></a>
-          <button type="button" className="icon-button" title="Edit user" aria-label={`Edit ${member.displayName}`} onClick={() => setEditing(true)}><Edit2 size={17} /></button>
+          <a className={`secondary icon-button large-action-icon${member.active ? "" : " is-disabled"}`} href={member.active ? `/?forgot-password=1&email=${encodeURIComponent(member.email)}` : undefined} title={member.active ? "Reset password" : "Reactivate user before resetting password"} aria-label={`Reset password for ${member.displayName}`} aria-disabled={!member.active}><KeyRound size={24} /></a>
+          <button type="button" className="icon-button large-action-icon" title="Edit user" aria-label={`Edit ${member.displayName}`} onClick={() => setEditing(true)}><UserPen size={24} /></button>
           {member.active ? (
-            <button type="button" className="icon-button" title="Disable user" aria-label={`Disable ${member.displayName}`} disabled={self} onClick={() => onSave(member.id, { expectedVersion: member.version, email: member.email, displayName: member.displayName, avatar: member.avatar, role: member.role, status: "DISABLED" })}><Ban size={17} /></button>
+            <button type="button" className="icon-button large-action-icon" title="Disable user" aria-label={`Disable ${member.displayName}`} disabled={self} onClick={() => onSave(member.id, { expectedVersion: member.version, email: member.email, displayName: member.displayName, avatar: member.avatar, role: member.role, status: "DISABLED" })}><UserRoundX size={24} /></button>
           ) : (
-            <button type="button" className="icon-button" title="Reactivate user" aria-label={`Reactivate ${member.displayName}`} disabled={self} onClick={() => onSave(member.id, { expectedVersion: member.version, email: member.email, displayName: member.displayName, avatar: member.avatar, role: member.role, status: "ACTIVE" })}><UserCheck size={17} /></button>
+            <button type="button" className="icon-button large-action-icon" title="Reactivate user" aria-label={`Reactivate ${member.displayName}`} disabled={self} onClick={() => onSave(member.id, { expectedVersion: member.version, email: member.email, displayName: member.displayName, avatar: member.avatar, role: member.role, status: "ACTIVE" })}><UserRoundCheck size={24} /></button>
           )}
-          <button type="button" className="icon-button danger" title="Delete user" aria-label={`Delete ${member.displayName}`} disabled={self} onClick={() => onDelete(member)}><Trash2 size={17} /></button>
+          <button type="button" className="icon-button large-action-icon danger" title="Delete user" aria-label={`Delete ${member.displayName}`} disabled={self} onClick={() => onDelete(member)}><Trash2 size={24} /></button>
         </div>
       )}
     </div>

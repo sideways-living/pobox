@@ -1,4 +1,4 @@
-export const appVersion = "0.13.25";
+export const appVersion = "0.13.26";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.26-larger-action-icons",
+    version: "0.13.26",
+    releasedAt: "2026-09-14T16:00:00.000Z",
+    title: "Clearer collection and team actions",
+    summary: "Collection and team actions now use larger, consistently boxed icons. Collection controls stay in one horizontal row on desktop, with clearer symbols for directions, collection plans and completed pickups.",
+    audience: "ALL"
+  },
   {
     id: "0.13.25-web-native-choice-mac-parity",
     version: "0.13.25",
