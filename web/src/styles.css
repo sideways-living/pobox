@@ -782,6 +782,21 @@ input, select {
   grid-row: 2;
 }
 
+@media (min-width: 681px) {
+  .team-member:not(.editable-row) > .user-avatar {
+    width: 88px;
+    height: 88px;
+    flex-basis: 88px;
+    align-self: center;
+    justify-self: center;
+    font-size: 2.1rem;
+  }
+
+  .team-member:not(.editable-row) > .team-member-copy {
+    align-self: center;
+  }
+}
+
 .mobile-member-name {
   display: none;
 }

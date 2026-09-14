@@ -1598,8 +1598,8 @@ struct MacTeamMemberRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 14) {
-                MacUserAvatar(avatar: member.avatar, name: member.displayName)
+            HStack(alignment: .center, spacing: 18) {
+                MacUserAvatar(avatar: member.avatar, name: member.displayName, size: 92)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(member.displayName)
                         .font(.headline)
@@ -1607,67 +1607,68 @@ struct MacTeamMemberRow: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text("\(member.active ? "Active" : member.status.capitalized) - \(member.role.capitalized)")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(member.active ? PoboxTheme.green : .secondary)
-            }
+                VStack(alignment: .trailing, spacing: 10) {
+                    Text("\(member.active ? "Active" : member.status.capitalized) - \(member.role.capitalized)")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(member.active ? PoboxTheme.green : .secondary)
 
-            if canManage {
-                HStack(spacing: 8) {
-                    Button {
-                        openPasswordReset(for: member.email)
-                    } label: {
-                        MacActionIcon(systemName: "key.fill")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .disabled(!member.active)
-                    .help(member.active ? "Reset password" : "Reactivate this user before resetting their password")
+                    if canManage {
+                        HStack(spacing: 8) {
+                            Button {
+                                openPasswordReset(for: member.email)
+                            } label: {
+                                MacActionIcon(systemName: "key.fill")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.large)
+                            .disabled(!member.active)
+                            .help(member.active ? "Reset password" : "Reactivate this user before resetting their password")
 
-                    Button {
-                        displayName = member.displayName
-                        email = member.email
-                        avatar = member.avatar ?? ""
-                        role = member.role
-                        status = member.status
-                        editing.toggle()
-                    } label: {
-                        MacActionIcon(systemName: "square.and.pencil")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .help("Edit user")
+                            Button {
+                                displayName = member.displayName
+                                email = member.email
+                                avatar = member.avatar ?? ""
+                                role = member.role
+                                status = member.status
+                                editing.toggle()
+                            } label: {
+                                MacActionIcon(systemName: "square.and.pencil")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.large)
+                            .help("Edit user")
 
-                    Button {
-                        Task {
-                            await updateUser(member, member.email, member.displayName, member.avatar ?? "", member.role, member.active ? "DISABLED" : "ACTIVE")
+                            Button {
+                                Task {
+                                    await updateUser(member, member.email, member.displayName, member.avatar ?? "", member.role, member.active ? "DISABLED" : "ACTIVE")
+                                }
+                            } label: {
+                                MacActionIcon(systemName: member.active ? "person.crop.circle.badge.minus" : "person.crop.circle.badge.plus")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.large)
+                            .disabled(member.id == currentUserId)
+                            .help(member.active ? "Disable user" : "Reactivate user")
+
+                            Button(role: .destructive) {
+                                confirmDelete = true
+                            } label: {
+                                MacActionIcon(systemName: "trash.fill")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.large)
+                            .tint(.red)
+                            .disabled(member.id == currentUserId)
+                            .help("Delete user")
                         }
-                    } label: {
-                        MacActionIcon(systemName: member.active ? "person.crop.circle.badge.minus" : "person.crop.circle.badge.plus")
+                    } else {
+                        Text("An administrator manages team access.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .disabled(member.id == currentUserId)
-                    .help(member.active ? "Disable user" : "Reactivate user")
-
-                    Button(role: .destructive) {
-                        confirmDelete = true
-                    } label: {
-                        MacActionIcon(systemName: "trash.fill")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .tint(.red)
-                    .disabled(member.id == currentUserId)
-                    .help("Delete user")
-
-                    Spacer()
                 }
-            } else {
-                Text("An administrator manages team access.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
+            .frame(minHeight: 100)
 
             if editing {
                 VStack(alignment: .leading, spacing: 10) {

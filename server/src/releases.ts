@@ -1,4 +1,4 @@
-export const appVersion = "0.13.26";
+export const appVersion = "0.13.27";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.27-team-profile-alignment",
+    version: "0.13.27",
+    releasedAt: "2026-09-14T16:30:00.000Z",
+    title: "Larger team profiles",
+    summary: "Team profile images and emoji are now twice as large on desktop. Names and email addresses are vertically centred beside them so each team member is easier to scan.",
+    audience: "ALL"
+  },
   {
     id: "0.13.26-larger-action-icons",
     version: "0.13.26",
