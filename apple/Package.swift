@@ -12,6 +12,11 @@ let package = Package(
     ],
     targets: [
         .target(name: "PoboxWatchShared", path: "Shared/Sources/PoboxWatchShared"),
-        .testTarget(name: "PoboxWatchSharedTests", dependencies: ["PoboxWatchShared"], path: "Tests")
+        .testTarget(
+            name: "PoboxWatchSharedTests",
+            dependencies: ["PoboxWatchShared"],
+            path: "Tests",
+            exclude: ["LocationReminderPolicyTests 2.swift"]
+        )
     ]
 )

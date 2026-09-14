@@ -184,7 +184,6 @@ function App() {
         returnUrl.searchParams.set("expiresAt", handoff.expiresAt);
         const link = returnUrl.toString();
         setNativeReturnLink(link);
-        window.location.href = link;
         return;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to return to the native app.");
@@ -220,6 +219,21 @@ function App() {
       setChangeNoticeError(err instanceof Error ? err.message : "Unable to save that you have seen these updates. Please try again.");
     } finally {
       setDismissingNotice(false);
+    }
+  }
+
+  async function continueOnWeb() {
+    setNativeReturnLink(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("nativeReturn");
+    url.searchParams.delete("nativeChallenge");
+    url.searchParams.delete("email");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    try {
+      const changes = await loadAppChanges();
+      if (changes.changes.length > 0) setChangeNotice(changes);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load app changes.");
     }
   }
 
@@ -331,7 +345,7 @@ function App() {
           refresh={refresh}
           setError={setError}
         />
-        {nativeReturnLink && <NativeReturnModal returnLink={nativeReturnLink} />}
+        {nativeReturnLink && <NativeReturnModal returnLink={nativeReturnLink} onContinueWeb={() => void continueOnWeb()} />}
         {changeNotice && <ChangeNoticeModal notice={changeNotice} onClose={dismissChangeNotice} error={changeNoticeError} busy={dismissingNotice} />}
       </section>
     </main>
@@ -469,13 +483,16 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
   );
 }
 
-function NativeReturnModal({ returnLink }: { returnLink: string }) {
+function NativeReturnModal({ returnLink, onContinueWeb }: { returnLink: string; onContinueWeb: () => void }) {
   return (
-    <div className="modal-backdrop">
-      <section className="modal-card">
-        <h2>Return to the app</h2>
-        <p>Your account is signed in. Open pobox.watch to finish signing in on this device.</p>
-        <a className="primary native-return-button" href={returnLink}>Open pobox.watch App</a>
+    <div className="modal-backdrop" role="presentation">
+      <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="native-return-title">
+        <h2 id="native-return-title">Where would you like to continue?</h2>
+        <p>Your account is signed in. You can return to the pobox.watch app or keep using the website.</p>
+        <div className="row-actions">
+          <a className="primary native-return-button" href={returnLink}>Open pobox.watch App</a>
+          <button type="button" className="secondary" onClick={onContinueWeb}>Continue on Web</button>
+        </div>
       </section>
     </div>
   );

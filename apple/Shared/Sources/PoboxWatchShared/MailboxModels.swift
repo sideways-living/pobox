@@ -201,13 +201,15 @@ public struct UpdateUserInput: Codable, Sendable {
     public let expectedVersion: String?
     public let email: String?
     public let displayName: String?
+    public let avatar: String?
     public let role: String?
     public let status: String?
 
-    public init(email: String? = nil, displayName: String? = nil, role: String? = nil, status: String? = nil, expectedVersion: String? = nil) {
+    public init(email: String? = nil, displayName: String? = nil, avatar: String? = nil, role: String? = nil, status: String? = nil, expectedVersion: String? = nil) {
         self.expectedVersion = expectedVersion
         self.email = email
         self.displayName = displayName
+        self.avatar = avatar
         self.role = role
         self.status = status
     }

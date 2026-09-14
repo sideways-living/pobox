@@ -1,4 +1,4 @@
-export const appVersion = "0.13.24";
+export const appVersion = "0.13.25";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.25-web-native-choice-mac-parity",
+    version: "0.13.25",
+    releasedAt: "2026-09-14T15:30:00.000Z",
+    title: "Choose where to continue after sign-in",
+    summary: "Signing in on the website no longer opens the Mac app automatically. When sign-in starts from an app, choose whether to return to it or continue on the web. The Mac app also has clearer team controls and profile images.",
+    audience: "ALL"
+  },
   {
     id: "0.13.24-mobile-team-directory",
     version: "0.13.24",

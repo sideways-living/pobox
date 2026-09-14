@@ -188,6 +188,16 @@ public actor PoboxWatchAPIClient {
         return try decoder.decode(TeamMember.self, from: data)
     }
 
+    public func updateProfileAvatar(workspaceId: String, avatar: String) async throws {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/profile")
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(["avatar": avatar])
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+    }
+
     public func deleteUser(workspaceId: String, userId: String) async throws {
         let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/team/users/\(userId)")
         var request = URLRequest(url: url)

@@ -1,6 +1,7 @@
 import SwiftUI
 import PoboxWatchShared
 import AppKit
+import UniformTypeIdentifiers
 
 @main
 struct PoboxWatchMacOSApp: App {
@@ -227,13 +228,20 @@ final class MacMailboxViewModel: ObservableObject {
         }
     }
 
-    func updateUser(_ member: TeamMember, email: String, displayName: String, role: String, status: String) async {
+    func updateUser(_ member: TeamMember, email: String, displayName: String, avatar: String, role: String, status: String) async {
         await run {
             _ = try await client.updateUser(
                 workspaceId: workspaceId,
                 userId: member.id,
-                input: UpdateUserInput(email: email, displayName: displayName, role: role, status: status, expectedVersion: member.version)
+                input: UpdateUserInput(email: email, displayName: displayName, avatar: avatar, role: role, status: status, expectedVersion: member.version)
             )
+            try await loadWorkspace()
+        }
+    }
+
+    func updateProfileAvatar(_ avatar: String) async {
+        await run {
+            try await client.updateProfileAvatar(workspaceId: workspaceId, avatar: avatar)
             try await loadWorkspace()
         }
     }
@@ -627,8 +635,8 @@ struct MacOverviewView: View {
         case "Team":
             MacTeamView(snapshot: model.snapshot, members: model.members) { email, displayName, password, role in
                 await model.createUser(email: email, displayName: displayName, password: password, role: role)
-            } updateUser: { member, email, displayName, role, status in
-                await model.updateUser(member, email: email, displayName: displayName, role: role, status: status)
+            } updateUser: { member, email, displayName, avatar, role, status in
+                await model.updateUser(member, email: email, displayName: displayName, avatar: avatar, role: role, status: status)
             } deleteUser: { member in
                 await model.deleteUser(member)
             }
@@ -641,6 +649,8 @@ struct MacOverviewView: View {
                 await model.createPostOffice(name: name, address: address, phone: phone, latitude: latitude, longitude: longitude, geofenceRadius: radius)
             }, createMailbox: { postOfficeId, boxNumber in
                 await model.createMailbox(postOfficeId: postOfficeId, boxNumber: boxNumber)
+            }, updateProfileAvatar: { avatar in
+                await model.updateProfileAvatar(avatar)
             })
         default:
             MacEmptyStateView(title: item, subtitle: "No information is available for this section.")
@@ -1342,15 +1352,12 @@ struct MacTeamView: View {
     let snapshot: MailboxDashboardSnapshot?
     let members: [TeamMember]
     let createUser: (String, String, String, String) async -> Void
-    let updateUser: (TeamMember, String, String, String, String) async -> Void
+    let updateUser: (TeamMember, String, String, String, String, String) async -> Void
     let deleteUser: (TeamMember) async -> Void
 
     var body: some View {
         MacPage(title: "Team", subtitle: "Users with access to this pobox.watch workspace.") {
-            MacInfoRow(title: snapshot?.currentUser.displayName ?? "Unknown user", detail: snapshot?.currentUser.email ?? "No email loaded", systemImage: "person.crop.circle", tint: .blue)
-            MacInfoRow(title: "Role", detail: snapshot?.currentUser.role ?? "Unknown", systemImage: "person.badge.key", tint: .purple)
-
-            MacPanel(title: "Members", aside: "\(members.filter { $0.deletedAt == nil }.count) users") {
+            MacPanel(title: "Team Directory", aside: "\(members.filter { $0.deletedAt == nil }.count) users") {
                 if !members.contains(where: { $0.deletedAt == nil }) {
                     MacEmptyStateView(title: "No team list loaded", subtitle: "Refresh after signing in to load the workspace members.")
                 } else {
@@ -1371,10 +1378,19 @@ struct MacTeamView: View {
                     Text("No deleted users.").foregroundStyle(.secondary)
                 }
                 ForEach(members.filter { $0.deletedAt != nil }) { member in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(member.displayName).font(.headline)
-                        Text(member.email).foregroundStyle(.secondary)
-                        Text("Deleted").foregroundStyle(.secondary)
+                    HStack(spacing: 12) {
+                        MacUserAvatar(avatar: member.avatar, name: member.displayName)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(member.displayName).font(.headline)
+                            Text(member.email).foregroundStyle(.secondary)
+                            Text("Deleted \(displayDate(member.deletedAt))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text("Deleted")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -1395,9 +1411,15 @@ struct MacSettingsView: View {
     let searchPostOfficeLocations: (String) async -> Void
     let createPostOffice: (String, String, String?, Double, Double, Int) async -> Void
     let createMailbox: (String, String) async -> Void
+    let updateProfileAvatar: (String) async -> Void
 
     var body: some View {
         MacPage(title: "Settings", subtitle: "Configuration for this native pobox.watch client.") {
+            MacProfileAvatarPanel(
+                name: snapshot?.currentUser.displayName ?? "User",
+                initialAvatar: snapshot?.currentUser.avatar ?? "",
+                save: updateProfileAvatar
+            )
             MacInfoRow(title: "Server", detail: "https://pobox.watch", systemImage: "network", tint: .blue)
             MacInfoRow(title: "Workspace", detail: snapshot?.workspace.name ?? "Unknown", systemImage: "building.2", tint: PoboxTheme.green)
             MacInfoRow(title: "Security", detail: "Passkey and authenticator setup is mandatory. Use the web app to add passkeys and manage setup.", systemImage: "key.fill", tint: PoboxTheme.orange)
@@ -1417,6 +1439,103 @@ struct MacSettingsView: View {
             }
             .buttonStyle(.borderedProminent)
         }
+    }
+}
+
+private struct MacProfileAvatarPanel: View {
+    let name: String
+    let initialAvatar: String
+    let save: (String) async -> Void
+    @State private var avatar: String
+    @State private var saving = false
+
+    init(name: String, initialAvatar: String, save: @escaping (String) async -> Void) {
+        self.name = name
+        self.initialAvatar = initialAvatar
+        self.save = save
+        _avatar = State(initialValue: initialAvatar)
+    }
+
+    var body: some View {
+        MacPanel(title: "Profile Image", aside: "Emoji or photo") {
+            HStack(alignment: .top, spacing: 16) {
+                MacUserAvatar(avatar: avatar, name: name, size: 64)
+                VStack(alignment: .leading, spacing: 10) {
+                    MacAvatarEditor(value: $avatar)
+                    HStack {
+                        Button {
+                            saving = true
+                            Task {
+                                await save(avatar)
+                                saving = false
+                            }
+                        } label: {
+                            Label(saving ? "Saving" : "Save Profile Image", systemImage: "square.and.arrow.down")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(saving || avatar == initialAvatar)
+
+                        if !avatar.isEmpty {
+                            Button("Remove") { avatar = "" }
+                        }
+                    }
+                }
+            }
+        }
+        .task(id: initialAvatar) { avatar = initialAvatar }
+    }
+}
+
+private struct MacAvatarEditor: View {
+    @Binding var value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("Emoji", text: $value)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 260)
+            HStack {
+                Button {
+                    if let selected = chooseAvatarImage() { value = selected }
+                } label: {
+                    Label("Choose Photo", systemImage: "photo")
+                }
+                Text("Use one emoji or choose a square photo.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+private struct MacUserAvatar: View {
+    let avatar: String?
+    let name: String
+    var size: CGFloat = 46
+
+    var body: some View {
+        Group {
+            if let image = avatarImage(avatar) {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Text(displayValue)
+                    .font(size > 50 ? .title : .headline)
+            }
+        }
+        .frame(width: size, height: size)
+        .background(PoboxTheme.sky)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(PoboxTheme.border))
+        .accessibilityLabel("\(name) profile image")
+    }
+
+    private var displayValue: String {
+        guard let avatar, !avatar.isEmpty else {
+            return name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
+        }
+        return avatar
     }
 }
 
@@ -1464,55 +1583,78 @@ struct MacTeamMemberRow: View {
     let member: TeamMember
     let currentUserId: String?
     let canManage: Bool
-    let updateUser: (TeamMember, String, String, String, String) async -> Void
+    let updateUser: (TeamMember, String, String, String, String, String) async -> Void
     let deleteUser: (TeamMember) async -> Void
     @State private var editing = false
     @State private var confirmDelete = false
     @State private var displayName = ""
     @State private var email = ""
+    @State private var avatar = ""
     @State private var role = "MEMBER"
     @State private var status = "ACTIVE"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 14) {
-                Image(systemName: member.active ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.xmark")
-                    .foregroundStyle(member.active ? .green : .gray)
-                    .frame(width: 22)
+                MacUserAvatar(avatar: member.avatar, name: member.displayName)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(member.displayName)
                         .font(.headline)
-                    Text("\(member.email) - \(member.role) - \(member.status)")
+                    Text(member.email)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                if canManage {
+                Text("\(member.active ? "Active" : member.status.capitalized) - \(member.role.capitalized)")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(member.active ? PoboxTheme.green : .secondary)
+            }
+
+            if canManage {
+                HStack(spacing: 8) {
+                    Button {
+                        openPasswordReset(for: member.email)
+                    } label: {
+                        Image(systemName: "key")
+                    }
+                    .disabled(!member.active)
+                    .help(member.active ? "Reset password" : "Reactivate this user before resetting their password")
+
                     Button {
                         displayName = member.displayName
                         email = member.email
+                        avatar = member.avatar ?? ""
                         role = member.role
                         status = member.status
                         editing.toggle()
                     } label: {
-                        Label("Edit", systemImage: "pencil")
+                        Image(systemName: "pencil")
                     }
-                    Button(member.active ? "Disable" : "Reactivate") {
+                    .help("Edit user")
+
+                    Button {
                         Task {
-                            await updateUser(member, member.email, member.displayName, member.role, member.active ? "DISABLED" : "ACTIVE")
+                            await updateUser(member, member.email, member.displayName, member.avatar ?? "", member.role, member.active ? "DISABLED" : "ACTIVE")
                         }
+                    } label: {
+                        Image(systemName: member.active ? "person.slash" : "person.badge.plus")
                     }
                     .disabled(member.id == currentUserId)
+                    .help(member.active ? "Disable user" : "Reactivate user")
+
                     Button(role: .destructive) {
                         confirmDelete = true
                     } label: {
-                        Label("Delete", systemImage: "trash")
+                        Image(systemName: "trash")
                     }
                     .disabled(member.id == currentUserId)
-                } else {
-                    Text("Admin required")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    .help("Delete user")
+
+                    Spacer()
                 }
+            } else {
+                Text("An administrator manages team access.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             if editing {
@@ -1521,6 +1663,7 @@ struct MacTeamMemberRow: View {
                         .textFieldStyle(.roundedBorder)
                     TextField("Email", text: $email)
                         .textFieldStyle(.roundedBorder)
+                    MacAvatarEditor(value: $avatar)
                     Picker("Role", selection: $role) {
                         Text("Member").tag("MEMBER")
                         Text("Admin").tag("ADMIN")
@@ -1536,7 +1679,7 @@ struct MacTeamMemberRow: View {
                     .disabled(member.id == currentUserId)
                     Button {
                         Task {
-                            await updateUser(member, email, displayName, role, status)
+                            await updateUser(member, email, displayName, avatar, role, status)
                             editing = false
                         }
                     } label: {
@@ -1551,6 +1694,7 @@ struct MacTeamMemberRow: View {
         .task(id: member.id) {
             displayName = member.displayName
             email = member.email
+            avatar = member.avatar ?? ""
             role = member.role
             status = member.status
         }
@@ -1935,6 +2079,54 @@ private func openAppleMaps(_ office: PostOffice) {
 
 private func openAppleMapsDirections(_ office: PostOffice) {
     NSWorkspace.shared.open(postOfficeDirectionsURL(name: office.name, address: office.address, latitude: office.latitude, longitude: office.longitude))
+}
+
+private func openPasswordReset(for email: String) {
+    var components = URLComponents(string: "https://pobox.watch/")
+    components?.queryItems = [
+        URLQueryItem(name: "forgot-password", value: "1"),
+        URLQueryItem(name: "email", value: email)
+    ]
+    if let url = components?.url { NSWorkspace.shared.open(url) }
+}
+
+private func avatarImage(_ avatar: String?) -> NSImage? {
+    guard let avatar,
+          avatar.hasPrefix("data:image/"),
+          let comma = avatar.firstIndex(of: ","),
+          let data = Data(base64Encoded: String(avatar[avatar.index(after: comma)...]))
+    else { return nil }
+    return NSImage(data: data)
+}
+
+@MainActor
+private func chooseAvatarImage() -> String? {
+    let panel = NSOpenPanel()
+    panel.allowedContentTypes = [.image]
+    panel.allowsMultipleSelection = false
+    panel.canChooseDirectories = false
+    guard panel.runModal() == .OK,
+          let url = panel.url,
+          let source = NSImage(contentsOf: url)
+    else { return nil }
+
+    let size = NSSize(width: 256, height: 256)
+    let target = NSImage(size: size)
+    target.lockFocus()
+    NSColor.clear.setFill()
+    NSRect(origin: .zero, size: size).fill()
+    let sourceSize = source.size
+    let scale = max(size.width / sourceSize.width, size.height / sourceSize.height)
+    let drawSize = NSSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
+    let drawOrigin = NSPoint(x: (size.width - drawSize.width) / 2, y: (size.height - drawSize.height) / 2)
+    source.draw(in: NSRect(origin: drawOrigin, size: drawSize), from: .zero, operation: .copy, fraction: 1)
+    target.unlockFocus()
+
+    guard let tiff = target.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiff),
+          let data = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.78])
+    else { return nil }
+    return "data:image/jpeg;base64,\(data.base64EncodedString())"
 }
 
 private func hasWaitingItem(_ mailbox: Mailbox) -> Bool {
