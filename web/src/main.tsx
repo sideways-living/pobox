@@ -275,7 +275,7 @@ function App() {
     <main className="app-shell">
       <aside className="sidebar" ref={sidebarRef}>
         <div className="sidebar-header">
-          <div className="brand"><img src="/icons/icon-192.png" alt="" />pobox.watch</div>
+          <div className="brand"><span className="brand-icon"><img src="/icons/icon-192.png" alt="" />{snapshot.outstandingMailboxCount > 0 && <span className="brand-badge" role="status" aria-label={`${snapshot.outstandingMailboxCount} boxes needing collection`}>{snapshot.outstandingMailboxCount}</span>}</span>pobox.watch</div>
           <button ref={menuButtonRef} type="button" className="mobile-menu-toggle" aria-label={menuOpen ? "Close menu" : "Open menu"} title={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} aria-controls="header-menu" onClick={() => setMenuOpen(open => !open)}>{menuOpen ? <X size={23} /> : <Menu size={23} />}</button>
         </div>
         <div id="header-menu" className={`sidebar-menu${menuOpen ? " is-open" : ""}`}>

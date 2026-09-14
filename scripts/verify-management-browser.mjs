@@ -26,8 +26,11 @@ try {
   const waiting = page.locator(".mailbox-row").filter({ hasText: "PO Box 1234" });
   assert.match(await waiting.innerText(), /Mail and parcel waiting/);
   assert.match(await waiting.innerText(), /Parcel Detected/);
+  assert.equal(await page.locator(".brand-badge").innerText(), "1");
+  assert.equal(await page.locator(".brand-badge").getAttribute("aria-label"), "1 boxes needing collection");
   await waiting.getByRole("button", { name: "Mark Collected" }).click();
   await waiting.getByText(/Collected/).waitFor();
+  assert.equal(await page.locator(".brand-badge").count(), 0);
   assert.doesNotMatch(await waiting.innerText(), /Detected/);
   const add = page.locator("section.panel").filter({ has: page.getByRole("heading", { name: "Add Post Office", exact: true }) });
   const search = add.getByLabel("Search suburb, postcode, post office name, or street");

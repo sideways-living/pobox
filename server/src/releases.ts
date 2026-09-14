@@ -1,4 +1,4 @@
-export const appVersion = "0.13.13";
+export const appVersion = "0.13.14";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.14-collection-badge",
+    version: "0.13.14",
+    releasedAt: "2026-09-14T03:00:00.000Z",
+    title: "Collection count on the app icon",
+    summary: "The header icon now shows how many boxes need collection. Each box counts once, even when both mail and parcels are waiting. The badge clears when nothing needs collecting.",
+    audience: "ALL"
+  },
   {
     id: "0.13.13-mobile-menu",
     version: "0.13.13",

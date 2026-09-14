@@ -53,6 +53,25 @@ button:disabled {
 
 .sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .mobile-menu-toggle, .mobile-account { display: none; }
+.brand-icon { position: relative; display: inline-flex; flex: 0 0 32px; width: 32px; height: 32px; }
+.brand-badge {
+  position: absolute;
+  top: -8px;
+  right: -7px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #19232b;
+  border-radius: 999px;
+  background: #c62828;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
 
 .brand.large {
   font-size: 1.8rem;

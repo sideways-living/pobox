@@ -372,7 +372,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.13.13;
+				MARKETING_VERSION = 0.13.14;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch.macos";
 				PRODUCT_NAME = "pobox.watch";
 				SUPPORTED_PLATFORMS = "macosx";
@@ -396,7 +396,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.13.13;
+				MARKETING_VERSION = 0.13.14;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch.macos";
 				PRODUCT_NAME = "pobox.watch";
 				SUPPORTED_PLATFORMS = "macosx";
@@ -422,7 +422,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.13.13;
+				MARKETING_VERSION = 0.13.14;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch.macos.shared";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -449,7 +449,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.13.13;
+				MARKETING_VERSION = 0.13.14;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.sidewaysliving.poboxwatch.macos.shared";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
