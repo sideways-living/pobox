@@ -1,4 +1,4 @@
-export const appVersion = "0.13.31";
+export const appVersion = "0.13.32";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.32-mac-appearance-access",
+    version: "0.13.32",
+    releasedAt: "2026-09-14T19:00:00.000Z",
+    title: "Mac appearance controls",
+    summary: "Choose Auto, Light or Dark appearance from the Mac app's Settings page or the standard pobox.watch Settings window. Your choice is saved on this Mac.",
+    audience: "ALL"
+  },
   {
     id: "0.13.31-collection-feedback",
     version: "0.13.31",

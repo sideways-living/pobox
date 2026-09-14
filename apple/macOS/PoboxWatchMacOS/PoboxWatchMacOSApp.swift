@@ -17,6 +17,7 @@ struct PoboxWatchMacOSApp: App {
 @MainActor
 final class PoboxWatchMacOSAppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
+    private var settingsWindow: NSWindow?
     private let model = MacMailboxViewModel()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -39,10 +40,37 @@ final class PoboxWatchMacOSAppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         self.window = window
+        DispatchQueue.main.async { [weak self] in
+            self?.installSettingsMenuAction()
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+
+    private func installSettingsMenuAction() {
+        guard let settingsItem = NSApp.mainMenu?.items.first?.submenu?.items.first(where: { $0.keyEquivalent == "," }) else { return }
+        settingsItem.target = self
+        settingsItem.action = #selector(showSettingsWindow)
+    }
+
+    @objc private func showSettingsWindow() {
+        if settingsWindow == nil {
+            let preferences = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 460, height: 220),
+                styleMask: [.titled, .closable],
+                backing: .buffered,
+                defer: false
+            )
+            preferences.title = "pobox.watch Settings"
+            preferences.isReleasedWhenClosed = false
+            preferences.contentView = NSHostingView(rootView: MacPreferencesView().tint(PoboxTheme.blue))
+            preferences.center()
+            settingsWindow = preferences
+        }
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
@@ -399,9 +427,9 @@ private enum MacAppearancePreference: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .system: "Automatic"
-        case .light: "Daytime"
-        case .dark: "Nighttime"
+        case .system: "Auto"
+        case .light: "Light"
+        case .dark: "Dark"
         }
     }
 
@@ -411,6 +439,51 @@ private enum MacAppearancePreference: String, CaseIterable, Identifiable {
         case .light: .light
         case .dark: .dark
         }
+    }
+}
+
+private struct MacAppearancePicker: View {
+    @AppStorage("macAppearancePreference") private var appearancePreference = MacAppearancePreference.system.rawValue
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("Appearance", selection: $appearancePreference) {
+                ForEach(MacAppearancePreference.allCases) { preference in
+                    Text(preference.title).tag(preference.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            Text(appearancePreference == MacAppearancePreference.system.rawValue
+                 ? "Auto follows your Mac's current appearance."
+                 : "This appearance stays selected until you change it.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: 480, alignment: .leading)
+    }
+}
+
+private struct MacPreferencesView: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 12) {
+                Image(systemName: "circle.lefthalf.filled")
+                    .font(.title2)
+                    .foregroundStyle(PoboxTheme.green)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Appearance")
+                        .font(.headline)
+                    Text("Choose how pobox.watch looks on this Mac.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            MacAppearancePicker()
+        }
+        .padding(24)
+        .frame(width: 420)
     }
 }
 
@@ -1484,7 +1557,6 @@ struct MacSettingsView: View {
     let createPostOffice: (String, String, String?, Double, Double, Int) async -> Void
     let createMailbox: (String, String) async -> Void
     let updateProfileAvatar: (String) async -> Void
-    @AppStorage("macAppearancePreference") private var appearancePreference = MacAppearancePreference.system.rawValue
 
     var body: some View {
         MacPage(title: "Settings", subtitle: "Configuration for this native pobox.watch client.") {
@@ -1494,22 +1566,7 @@ struct MacSettingsView: View {
                 save: updateProfileAvatar
             )
             MacPanel(title: "Appearance", aside: "Mac") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Picker("Appearance", selection: $appearancePreference) {
-                        ForEach(MacAppearancePreference.allCases) { preference in
-                            Text(preference.title).tag(preference.rawValue)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-
-                    Text(appearancePreference == MacAppearancePreference.system.rawValue
-                         ? "Automatic follows your Mac's current appearance."
-                         : "This appearance stays selected until you change it.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: 480, alignment: .leading)
+                MacAppearancePicker()
             }
             MacInfoRow(title: "Server", detail: "https://pobox.watch", systemImage: "network", tint: .blue)
             MacInfoRow(title: "Workspace", detail: snapshot?.workspace.name ?? "Unknown", systemImage: "building.2", tint: PoboxTheme.green)
