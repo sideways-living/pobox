@@ -609,6 +609,7 @@ export class PrismaStore implements AppStore {
           workspaceId: office.collectionClaim.workspaceId,
           userId: office.collectionClaim.claimedBy,
           displayName: office.collectionClaim.user.profile?.displayName ?? office.collectionClaim.user.email,
+          avatar: office.collectionClaim.user.profile?.avatar ?? undefined,
           claimedAt: office.collectionClaim.claimedAt.toISOString(),
           expiresAt: office.collectionClaim.expiresAt.toISOString()
         } : undefined,
@@ -799,12 +800,13 @@ export class PrismaStore implements AppStore {
     return this.toCollectionEvent(event);
   }
 
-  private toCollectionClaim(row: { postOfficeId: string; workspaceId: string; claimedBy: string; claimedAt: Date; expiresAt: Date; user: { email: string; profile: { displayName: string } | null } }): CollectionClaim {
+  private toCollectionClaim(row: { postOfficeId: string; workspaceId: string; claimedBy: string; claimedAt: Date; expiresAt: Date; user: { email: string; profile: { displayName: string; avatar: string | null } | null } }): CollectionClaim {
     return {
       postOfficeId: row.postOfficeId,
       workspaceId: row.workspaceId,
       userId: row.claimedBy,
       displayName: row.user.profile?.displayName ?? row.user.email,
+      avatar: row.user.profile?.avatar ?? undefined,
       claimedAt: row.claimedAt.toISOString(),
       expiresAt: row.expiresAt.toISOString()
     };

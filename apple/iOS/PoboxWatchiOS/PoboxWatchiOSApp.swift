@@ -773,6 +773,12 @@ private struct iPhoneCollectionQueueRow: View {
         .help(claimActionLabel)
         .accessibilityLabel(claimActionLabel)
         .accessibilityValue(ownsClaim ? "On" : "Off")
+        .overlay(alignment: .topTrailing) {
+            if let claim = office.collectionClaim {
+                iPhoneClaimAvatarBadge(claim: claim)
+                    .offset(x: 7, y: -7)
+            }
+        }
 
         Button {
             Task { await model.collect(mailbox) }
@@ -940,15 +946,29 @@ private struct iPhoneCollectionClaimControl: View {
                     .disabled(model.busyMailboxId == "claim:\(office.id)")
                     .accessibilityValue("On")
                     .accessibilityHint("Tap again to cancel your collection plan")
+                    .overlay(alignment: .topTrailing) {
+                        iPhoneClaimAvatarBadge(claim: activeClaim)
+                            .offset(x: 7, y: -7)
+                    }
                     Text("until 3:00 am tomorrow")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             } else {
                 HStack(spacing: 10) {
-                    Label("\(activeClaim.displayName) is collecting until 3:00 am tomorrow", systemImage: "person.badge.clock")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    Button {} label: {
+                        Label("\(activeClaim.displayName) is collecting", systemImage: "person.badge.clock")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.gray)
+                    .disabled(true)
+                    .overlay(alignment: .topTrailing) {
+                        iPhoneClaimAvatarBadge(claim: activeClaim)
+                            .offset(x: 7, y: -7)
+                    }
+                    Text("until 3:00 am tomorrow")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Spacer()
                     if model.snapshot?.currentUser.role == "ADMIN" {
                         Button("Cancel") { Task { await model.releaseClaim(office) } }
@@ -1540,6 +1560,7 @@ private struct iPhoneTeamAvatar: View {
     let avatar: String?
     let name: String
     let active: Bool
+    var size: CGFloat = 46
 
     var body: some View {
         Group {
@@ -1557,7 +1578,7 @@ private struct iPhoneTeamAvatar: View {
                 fallback
             }
         }
-        .frame(width: 46, height: 46)
+        .frame(width: size, height: size)
         .background((active ? PoboxTheme.blue : Color.secondary).opacity(0.14), in: Circle())
         .clipShape(Circle())
         .overlay(Circle().stroke(PoboxTheme.border))
@@ -1566,7 +1587,7 @@ private struct iPhoneTeamAvatar: View {
 
     private var fallback: some View {
         Text(avatar.flatMap { $0.isEmpty || $0.hasPrefix("data:image/") || $0.hasPrefix("https://") ? nil : $0 } ?? iPhoneInitials(name))
-            .font(.headline)
+            .font(size < 30 ? .system(size: 9, weight: .bold) : .headline)
             .foregroundStyle(active ? PoboxTheme.blue : .secondary)
     }
 
@@ -1580,6 +1601,19 @@ private struct iPhoneTeamAvatar: View {
         let encoded = String(avatar[avatar.index(after: comma)...])
         guard let data = Data(base64Encoded: encoded) else { return nil }
         return UIImage(data: data)
+    }
+}
+
+private struct iPhoneClaimAvatarBadge: View {
+    let claim: PostOfficeCollectionClaim
+
+    var body: some View {
+        iPhoneTeamAvatar(avatar: claim.avatar, name: claim.displayName, active: true, size: 22)
+            .background(.background, in: Circle())
+            .overlay(Circle().stroke(Color(uiColor: .systemBackground), lineWidth: 2))
+            .shadow(color: .black.opacity(0.2), radius: 3, y: 2)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 

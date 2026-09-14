@@ -91,6 +91,7 @@ public struct PostOfficeCollectionClaim: Codable, Sendable {
     public let workspaceId: String
     public let userId: String
     public let displayName: String
+    public let avatar: String?
     public let claimedAt: String
     public let expiresAt: String
 }

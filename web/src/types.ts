@@ -34,6 +34,7 @@ export interface CollectionClaim {
   workspaceId: string;
   userId: string;
   displayName: string;
+  avatar?: string;
   claimedAt: string;
   expiresAt: string;
 }

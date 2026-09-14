@@ -32,11 +32,12 @@ describe("post office collection claims", () => {
   it("shows the collector to everyone and blocks competing collection", async () => {
     const daniel = await session("daniel@example.com");
     const sarah = await session("sarah@example.com");
+    await store.updateProfile(daniel, "ws_company", "🧑🏻‍💼");
     await addWaitingMail();
 
     const claim = await store.claimPostOffice(daniel, "ws_company", "po_melbourne_gpo");
-    expect(claim).toMatchObject({ userId: "usr_daniel", displayName: "Daniel" });
-    expect((await store.dashboard(sarah, "ws_company")).postOffices.find((office) => office.id === "po_melbourne_gpo")?.collectionClaim).toMatchObject({ userId: "usr_daniel" });
+    expect(claim).toMatchObject({ userId: "usr_daniel", displayName: "Daniel", avatar: "🧑🏻‍💼" });
+    expect((await store.dashboard(sarah, "ws_company")).postOffices.find((office) => office.id === "po_melbourne_gpo")?.collectionClaim).toMatchObject({ userId: "usr_daniel", avatar: "🧑🏻‍💼" });
     await expect(store.claimPostOffice(sarah, "ws_company", "po_melbourne_gpo")).rejects.toThrow("Daniel is already collecting");
     await expect(store.collectMailbox(sarah, "ws_company", "box_1234", "IPHONE")).rejects.toThrow("Daniel is collecting");
 

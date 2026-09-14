@@ -657,6 +657,7 @@ export class MemoryStore implements AppStore {
       workspaceId,
       userId: session.userId,
       displayName: user.displayName,
+      avatar: user.avatar,
       claimedAt: now.toISOString(),
       expiresAt: collectionClaimExpiresAt(now).toISOString()
     };

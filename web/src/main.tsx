@@ -46,7 +46,7 @@ import {
 } from "./api";
 
 type MutateAction = (action: () => Promise<void>, busyId?: string, confirmCollection?: boolean) => Promise<void>;
-import type { AppChangesResponse, CollectionHistoryEvent, DashboardSnapshot, Mailbox, MailHistoryEvent, MemberStatus, PostOffice, PostOfficeDirectoryStatus, PostOfficeLocationResult, ReviewItem, SecurityStatus, TeamMember, TotpSetup } from "./types";
+import type { AppChangesResponse, CollectionClaim, CollectionHistoryEvent, DashboardSnapshot, Mailbox, MailHistoryEvent, MemberStatus, PostOffice, PostOfficeDirectoryStatus, PostOfficeLocationResult, ReviewItem, SecurityStatus, TeamMember, TotpSetup } from "./types";
 import "./styles.css";
 
 type Section = "Overview" | "Mailboxes" | "Map" | "History" | "Needs Review" | "Team" | "Settings";
@@ -732,7 +732,7 @@ function CollectionQueueRow({ office, box, currentUser, busyId, mutate }: {
       </div>
       <div className="collection-queue-actions" aria-label={`Actions for PO Box ${box.boxNumber}`}>
         <a className="icon-button large-action-icon" href={appleMapsDirectionsUrl(office)} target="_blank" rel="noreferrer" title="Directions" aria-label={`Directions to ${office.name}`}><Navigation size={24} /></a>
-        <button type="button" className={`icon-button large-action-icon${ownsClaim ? " is-active" : ""}`} aria-pressed={ownsClaim} title={claimTitle} aria-label={claimTitle} disabled={claimBusy || Boolean(blockedBy)} onClick={() => mutate(() => ownsClaim ? releasePostOfficeClaim(office.id) : claimPostOffice(office.id), `claim:${office.id}`)}><CalendarCheck2 size={24} /></button>
+        <button type="button" className={`icon-button large-action-icon${ownsClaim ? " is-active" : ""}${claim ? " has-claim" : ""}`} aria-pressed={ownsClaim} title={claimTitle} aria-label={claimTitle} disabled={claimBusy || Boolean(blockedBy)} onClick={() => mutate(() => ownsClaim ? releasePostOfficeClaim(office.id) : claimPostOffice(office.id), `claim:${office.id}`)}><CalendarCheck2 size={24} />{claim && <ClaimantAvatarBadge claim={claim} />}</button>
         <button type="button" className="icon-button large-action-icon" title={blockedBy ? `${blockedBy} is collecting from this post office` : "Collected"} aria-label={`Mark PO Box ${box.boxNumber} collected`} disabled={collectBusy || Boolean(blockedBy)} onClick={() => mutate(() => collectMailbox(box.id, box.updatedAt), box.id, true)}><CircleCheckBig size={24} /></button>
       </div>
     </div>
@@ -1036,16 +1036,27 @@ function CollectionClaimControl({ office, currentUser, busy, mutate, compact = f
   if (ownsClaim) {
     return (
       <div className="collection-claim own">
-        <button type="button" aria-pressed="true" className="secondary collection-plan-button collection-plan-button-active" title="Select again to cancel your collection plan" disabled={busy} onClick={() => mutate(() => releasePostOfficeClaim(office.id), `claim:${office.id}`)}><UserCheck size={16} />{busy ? "Saving..." : "I'm collecting today"}</button>
+        <button type="button" aria-pressed="true" className="secondary collection-plan-button collection-plan-button-active has-claim" title="Select again to cancel your collection plan" disabled={busy} onClick={() => mutate(() => releasePostOfficeClaim(office.id), `claim:${office.id}`)}><UserCheck size={16} />{busy ? "Saving..." : "I'm collecting today"}<ClaimantAvatarBadge claim={claim} /></button>
         <small>until {expiry} tomorrow</small>
       </div>
     );
   }
   return (
     <div className="collection-claim">
-      <span><UserCheck size={16} /><strong>{claim.displayName} is collecting</strong><small>until {expiry} tomorrow</small></span>
+      <button type="button" aria-pressed="false" className="secondary collection-plan-button collection-plan-button-claimed has-claim" title={`${claim.displayName} is collecting from this post office`} disabled><UserCheck size={16} />{claim.displayName} is collecting<ClaimantAvatarBadge claim={claim} /></button>
+      <small>until {expiry} tomorrow</small>
       {currentUser.role === "ADMIN" && <button type="button" className="icon-button" title="Cancel collection plan as administrator" aria-label={`Cancel collection plan for ${office.name}`} disabled={busy} onClick={() => mutate(() => releasePostOfficeClaim(office.id), `claim:${office.id}`)}><X size={15} /></button>}
     </div>
+  );
+}
+
+function ClaimantAvatarBadge({ claim }: { claim: CollectionClaim }) {
+  const image = avatarIsImage(claim.avatar);
+  const initials = claim.displayName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "?";
+  return (
+    <span className="claim-avatar-badge" title={`${claim.displayName} is collecting`} aria-label={`${claim.displayName} profile image`}>
+      {image ? <img src={claim.avatar} alt="" referrerPolicy="no-referrer" /> : <span aria-hidden="true">{claim.avatar || initials}</span>}
+    </span>
   );
 }
 

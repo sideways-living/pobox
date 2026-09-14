@@ -1,4 +1,4 @@
-export const appVersion = "0.13.32";
+export const appVersion = "0.13.33";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.33-collector-profile-badges",
+    version: "0.13.33",
+    releasedAt: "2026-09-14T19:30:00.000Z",
+    title: "See who is collecting",
+    summary: "When someone plans to collect mail, their profile photo, emoji or initials now appears on the collection button for everyone. This makes it easier to see who is already heading to that post office.",
+    audience: "ALL"
+  },
   {
     id: "0.13.32-mac-appearance-access",
     version: "0.13.32",

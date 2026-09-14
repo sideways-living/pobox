@@ -968,6 +968,12 @@ private struct MacCollectionQueueRow: View {
                 .help(claimActionLabel)
                 .accessibilityLabel(claimActionLabel)
                 .accessibilityValue(ownsClaim ? "On" : "Off")
+                .overlay(alignment: .topTrailing) {
+                    if let claim = office.collectionClaim {
+                        MacClaimAvatarBadge(claim: claim)
+                            .offset(x: 9, y: -9)
+                    }
+                }
 
                 Button {
                     Task { await collect(mailbox) }
@@ -1130,12 +1136,26 @@ private struct MacCollectionClaimControl: View {
                     .disabled(busy)
                     .help("Select again to cancel your collection plan")
                     .accessibilityValue("On")
+                    .overlay(alignment: .topTrailing) {
+                        MacClaimAvatarBadge(claim: activeClaim)
+                            .offset(x: 8, y: -8)
+                    }
                     Text("until 3:00 am tomorrow")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    Label("\(activeClaim.displayName) is collecting until 3:00 am tomorrow", systemImage: "person.badge.clock")
-                        .font(.callout.weight(.semibold))
+                    Button {} label: {
+                        Label("\(activeClaim.displayName) is collecting", systemImage: "person.badge.clock")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.gray)
+                    .disabled(true)
+                    .overlay(alignment: .topTrailing) {
+                        MacClaimAvatarBadge(claim: activeClaim)
+                            .offset(x: 8, y: -8)
+                    }
+                    Text("until 3:00 am tomorrow")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
                     if currentUser?.role == "ADMIN" {
@@ -2238,6 +2258,19 @@ private struct MacActionIcon: View {
         Image(systemName: systemName)
             .font(.system(size: 44, weight: .semibold))
             .frame(width: 60, height: 60)
+    }
+}
+
+private struct MacClaimAvatarBadge: View {
+    let claim: PostOfficeCollectionClaim
+
+    var body: some View {
+        MacUserAvatar(avatar: claim.avatar, name: claim.displayName, size: 25)
+            .background(Color(nsColor: .windowBackgroundColor), in: Circle())
+            .overlay(Circle().stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 2))
+            .shadow(color: .black.opacity(0.24), radius: 3, y: 2)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
