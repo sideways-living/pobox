@@ -1389,26 +1389,27 @@ struct iPhoneTeamMemberRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                Text(String(member.displayName.prefix(1)).uppercased())
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(width: 38, height: 38)
-                    .background(member.active ? PoboxTheme.blue : Color.secondary, in: Circle())
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(member.displayName)
-                        .font(.headline)
-                    Text(member.email)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    HStack(spacing: 6) {
-                        iPhoneTextBadge(text: member.status.capitalized, tint: member.active ? PoboxTheme.green : .secondary)
-                        iPhoneTextBadge(text: member.role.capitalized, tint: PoboxTheme.blue)
-                    }
-                }
+            HStack(alignment: .top) {
+                iPhoneTeamAvatar(avatar: member.avatar, name: member.displayName, active: member.active)
+                Spacer()
+                Text("\(memberStatus) · \(member.role.capitalized)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(member.active ? PoboxTheme.green : .secondary)
+                    .multilineTextAlignment(.trailing)
             }
+            Text(iPhoneCompactPersonName(member.displayName))
+                .font(.headline)
+            Text(member.email)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             if canManage {
-                HStack {
+                HStack(spacing: 9) {
+                    Link(destination: passwordResetURL) {
+                        Image(systemName: "key.fill")
+                    }
+                    .disabled(!member.active)
+                    .help(member.active ? "Reset password" : "Reactivate user before resetting password")
+                    .accessibilityLabel("Reset password for \(member.displayName)")
                     Button {
                         displayName = member.displayName
                         email = member.email
@@ -1418,6 +1419,7 @@ struct iPhoneTeamMemberRow: View {
                     } label: {
                         Image(systemName: "pencil")
                     }
+                    .help("Edit")
                     .accessibilityLabel("Edit \(member.displayName)")
                     Button {
                         Task {
@@ -1427,6 +1429,7 @@ struct iPhoneTeamMemberRow: View {
                         Image(systemName: member.active ? "person.slash" : "person.badge.plus")
                     }
                     .disabled(member.id == currentUserId)
+                    .help(member.active ? "Disable" : "Reactivate")
                     .accessibilityLabel(member.active ? "Disable \(member.displayName)" : "Reactivate \(member.displayName)")
                     Button(role: .destructive) {
                         confirmDelete = true
@@ -1434,6 +1437,7 @@ struct iPhoneTeamMemberRow: View {
                         Image(systemName: "trash")
                     }
                     .disabled(member.id == currentUserId)
+                    .help("Delete")
                     .accessibilityLabel("Delete \(member.displayName)")
                 }
                 .buttonStyle(.bordered)
@@ -1485,6 +1489,77 @@ struct iPhoneTeamMemberRow: View {
             Text("This disables their pobox.watch access and keeps historical audit records.")
         }
     }
+
+    private var memberStatus: String {
+        member.active ? "Active" : member.status == "INVITED" ? "Invited" : "Disabled"
+    }
+
+    private var passwordResetURL: URL {
+        var components = URLComponents(string: "https://pobox.watch/")!
+        components.queryItems = [
+            URLQueryItem(name: "forgot-password", value: "1"),
+            URLQueryItem(name: "email", value: member.email)
+        ]
+        return components.url!
+    }
+}
+
+private struct iPhoneTeamAvatar: View {
+    let avatar: String?
+    let name: String
+    let active: Bool
+
+    var body: some View {
+        Group {
+            if let image = embeddedImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else if let imageURL {
+                AsyncImage(url: imageURL) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    fallback
+                }
+            } else {
+                fallback
+            }
+        }
+        .frame(width: 46, height: 46)
+        .background((active ? PoboxTheme.blue : Color.secondary).opacity(0.14), in: Circle())
+        .clipShape(Circle())
+        .overlay(Circle().stroke(PoboxTheme.border))
+        .accessibilityLabel("\(name) profile image")
+    }
+
+    private var fallback: some View {
+        Text(avatar.flatMap { $0.isEmpty || $0.hasPrefix("data:image/") || $0.hasPrefix("https://") ? nil : $0 } ?? iPhoneInitials(name))
+            .font(.headline)
+            .foregroundStyle(active ? PoboxTheme.blue : .secondary)
+    }
+
+    private var imageURL: URL? {
+        guard let avatar, avatar.hasPrefix("https://") else { return nil }
+        return URL(string: avatar)
+    }
+
+    private var embeddedImage: UIImage? {
+        guard let avatar, avatar.hasPrefix("data:image/"), let comma = avatar.firstIndex(of: ",") else { return nil }
+        let encoded = String(avatar[avatar.index(after: comma)...])
+        guard let data = Data(base64Encoded: encoded) else { return nil }
+        return UIImage(data: data)
+    }
+}
+
+private func iPhoneCompactPersonName(_ name: String) -> String {
+    let parts = name.split(whereSeparator: \.isWhitespace)
+    guard let first = parts.first else { return "Unknown user" }
+    guard let last = parts.last, parts.count > 1, let initial = last.first else { return String(first) }
+    return "\(first) \(String(initial).uppercased())."
+}
+
+private func iPhoneInitials(_ name: String) -> String {
+    name.split(whereSeparator: \.isWhitespace).prefix(2).compactMap(\.first).map { String($0).uppercased() }.joined()
 }
 
 struct iPhoneSettingsView: View {

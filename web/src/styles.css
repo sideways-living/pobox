@@ -741,7 +741,8 @@ input, select {
 
 .team-member {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
+  grid-template-columns: auto minmax(220px, 1fr) auto;
+  grid-template-rows: auto auto;
   align-items: center;
   gap: 12px;
   padding: 12px;
@@ -754,9 +755,35 @@ input, select {
   color: #606f7c;
 }
 
+.team-member-copy,
 .team-identity > div {
   display: grid;
   gap: 3px;
+}
+
+.team-member > .user-avatar {
+  grid-column: 1;
+  grid-row: 1 / 3;
+}
+
+.team-member-copy {
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+
+.team-member > .team-status-text {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+}
+
+.team-row-actions {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.mobile-member-name {
+  display: none;
 }
 
 .team-identity {
@@ -769,6 +796,12 @@ input, select {
   display: grid;
   justify-items: end;
   gap: 7px !important;
+}
+
+.team-member.editable-row,
+.deleted-team-member {
+  grid-template-columns: minmax(220px, 1fr) auto;
+  grid-template-rows: auto;
 }
 
 .team-status-text {
@@ -1493,8 +1526,48 @@ a.icon-button {
   }
 
   .team-member {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto auto;
     align-items: stretch;
+  }
+
+  .team-member > .user-avatar {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+  }
+
+  .team-member > .team-status-text {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    align-self: center;
+    text-align: right;
+  }
+
+  .team-member-copy {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .team-row-actions {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-content: flex-start;
+  }
+
+  .desktop-member-name {
+    display: none;
+  }
+
+  .mobile-member-name {
+    display: inline;
+  }
+
+  .team-member.editable-row,
+  .deleted-team-member {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
   }
 
   .team-controls,

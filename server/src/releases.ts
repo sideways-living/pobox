@@ -1,4 +1,4 @@
-export const appVersion = "0.13.23";
+export const appVersion = "0.13.24";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.24-mobile-team-directory",
+    version: "0.13.24",
+    releasedAt: "2026-09-14T13:00:00.000Z",
+    title: "A clearer team directory on mobile",
+    summary: "Team members are easier to scan on a phone, with their profile image, shortened name, email, access status and user actions arranged consistently.",
+    audience: "ALL"
+  },
   {
     id: "0.13.23-collection-queue-details",
     version: "0.13.23",

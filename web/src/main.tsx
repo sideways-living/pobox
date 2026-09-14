@@ -1283,7 +1283,7 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
           {deletedMembers.length === 0 ? <p className="muted-line">No deleted users.</p> : (
             <div className="team-list">
               {deletedMembers.map((member) => (
-                <div className="team-member" key={member.id}>
+                <div className="team-member deleted-team-member" key={member.id}>
                   <div className="team-identity"><UserAvatar avatar={member.avatar} name={member.displayName} /><div><strong>{member.displayName}</strong><span>{member.email}</span><small>Deleted {new Date(member.deletedAt!).toLocaleString("en-AU")}</small></div></div>
                   <StatusPill tone="muted">Deleted</StatusPill>
                 </div>
@@ -1385,31 +1385,32 @@ function TeamMemberRow({
 
   return (
     <div className="team-member">
-      <div className="team-identity">
-        <UserAvatar avatar={member.avatar} name={member.displayName} />
-        <div>
-          <strong>{member.displayName}</strong>
-          <span>{member.email}</span>
-        </div>
+      <UserAvatar avatar={member.avatar} name={member.displayName} />
+      <div className="team-member-copy">
+        <strong><span className="desktop-member-name">{member.displayName}</span><span className="mobile-member-name">{compactPersonName(member.displayName)}</span></strong>
+        <span>{member.email}</span>
       </div>
+      <span className="team-status-text">{member.active ? "Active" : member.status === "INVITED" ? "Invited" : "Disabled"} · {member.role === "ADMIN" ? "Admin" : "Member"}</span>
       {canManage && (
-        <div className="team-controls">
-          <span className="team-status-text">{member.active ? "Active" : member.status === "INVITED" ? "Invited" : "Disabled"} · {member.role === "ADMIN" ? "Admin" : "Member"}</span>
-          <div className="row-actions" aria-label={`Actions for ${member.displayName}`}>
-            <button type="button" className="icon-button" title="Edit user" aria-label={`Edit ${member.displayName}`} onClick={() => setEditing(true)}><Edit2 size={17} /></button>
-            <a className={`secondary icon-button${member.active ? "" : " is-disabled"}`} href={member.active ? `/?forgot-password=1&email=${encodeURIComponent(member.email)}` : undefined} title={member.active ? "Reset password" : "Reactivate user before resetting password"} aria-label={`Reset password for ${member.displayName}`} aria-disabled={!member.active}><KeyRound size={17} /></a>
-            {member.active ? (
-              <button type="button" className="icon-button" title="Disable user" aria-label={`Disable ${member.displayName}`} disabled={self} onClick={() => onSave(member.id, { expectedVersion: member.version, email: member.email, displayName: member.displayName, avatar: member.avatar, role: member.role, status: "DISABLED" })}><Ban size={17} /></button>
-            ) : (
-              <button type="button" className="icon-button" title="Reactivate user" aria-label={`Reactivate ${member.displayName}`} disabled={self} onClick={() => onSave(member.id, { expectedVersion: member.version, email: member.email, displayName: member.displayName, avatar: member.avatar, role: member.role, status: "ACTIVE" })}><UserCheck size={17} /></button>
-            )}
-            <button type="button" className="icon-button danger" title="Delete user" aria-label={`Delete ${member.displayName}`} disabled={self} onClick={() => onDelete(member)}><Trash2 size={17} /></button>
-          </div>
+        <div className="row-actions team-row-actions" aria-label={`Actions for ${member.displayName}`}>
+          <a className={`secondary icon-button${member.active ? "" : " is-disabled"}`} href={member.active ? `/?forgot-password=1&email=${encodeURIComponent(member.email)}` : undefined} title={member.active ? "Reset password" : "Reactivate user before resetting password"} aria-label={`Reset password for ${member.displayName}`} aria-disabled={!member.active}><KeyRound size={17} /></a>
+          <button type="button" className="icon-button" title="Edit user" aria-label={`Edit ${member.displayName}`} onClick={() => setEditing(true)}><Edit2 size={17} /></button>
+          {member.active ? (
+            <button type="button" className="icon-button" title="Disable user" aria-label={`Disable ${member.displayName}`} disabled={self} onClick={() => onSave(member.id, { expectedVersion: member.version, email: member.email, displayName: member.displayName, avatar: member.avatar, role: member.role, status: "DISABLED" })}><Ban size={17} /></button>
+          ) : (
+            <button type="button" className="icon-button" title="Reactivate user" aria-label={`Reactivate ${member.displayName}`} disabled={self} onClick={() => onSave(member.id, { expectedVersion: member.version, email: member.email, displayName: member.displayName, avatar: member.avatar, role: member.role, status: "ACTIVE" })}><UserCheck size={17} /></button>
+          )}
+          <button type="button" className="icon-button danger" title="Delete user" aria-label={`Delete ${member.displayName}`} disabled={self} onClick={() => onDelete(member)}><Trash2 size={17} /></button>
         </div>
       )}
-      {!canManage && <span className="team-status-text">{member.active ? "Active" : "Disabled"} · {member.role === "ADMIN" ? "Admin" : "Member"}</span>}
     </div>
   );
+}
+
+function compactPersonName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return parts[0] || "Unknown user";
+  return `${parts[0]} ${parts.at(-1)![0]!.toUpperCase()}.`;
 }
 
 function UserAvatar({ avatar, name, large = false }: { avatar?: string; name: string; large?: boolean }) {

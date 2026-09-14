@@ -56,6 +56,7 @@ public struct CurrentUser: Codable, Identifiable, Sendable {
     public let id: String
     public let email: String
     public let displayName: String
+    public let avatar: String?
     public let role: String
 }
 
@@ -65,6 +66,7 @@ public struct TeamMember: Codable, Identifiable, Sendable {
     public let id: String
     public let email: String
     public let displayName: String
+    public let avatar: String?
     public let role: String
     public let status: String
     public let active: Bool
