@@ -318,14 +318,6 @@ function App() {
 
         {error && <div className="alert">{error}</div>}
 
-        <section className="summary-band">
-          <MetricCard value={snapshot.outstandingMailboxCount} label="Boxes needing collection" />
-          <MetricCard value={snapshot.postOffices.length} label="Tracked post offices" />
-          <MetricCard value={snapshot.postOffices.length} label="Post offices" />
-          <MetricCard value={reviewItems.length} label="Needs review" />
-          <MetricCard value={snapshot.currentUser.role} label="Access level" />
-        </section>
-
         <SectionView
           section={section}
           snapshot={snapshot}
@@ -345,15 +337,6 @@ function App() {
 
 function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
   return <button className={active ? "nav-item active" : "nav-item"} onClick={onClick}>{icon}{label}</button>;
-}
-
-function MetricCard({ value, label }: { value: React.ReactNode; label: string }) {
-  return (
-    <div className="metric-card">
-      <span className="metric">{value}</span>
-      <span className="metric-label">{label}</span>
-    </div>
-  );
 }
 
 function SectionView({
@@ -984,7 +967,7 @@ function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
   return (
     <div className="page-grid map-page">
       <section className="page-main">
-        <Panel title="Apple Maps Collection View" aside={activeOffice ? `${activeOffice.latitude.toFixed(4)}, ${activeOffice.longitude.toFixed(4)}` : undefined}>
+        <Panel title="Collection Map" aside={activeOffice ? `${activeOffice.latitude.toFixed(4)}, ${activeOffice.longitude.toFixed(4)}` : undefined}>
           {activeOffice ? (
             <div className="apple-map-board" aria-label="Post office map overview">
               <div className="map-board-copy">
@@ -1013,7 +996,7 @@ function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
             <DetailRow label="Tracked locations" value={String(snapshot.postOffices.length)} />
             <DetailRow label="Boxes mapped" value={String(totalMailboxes(snapshot))} />
             <DetailRow label="Needs collection" value={String(snapshot.outstandingMailboxCount)} />
-            <DetailRow label="Map provider" value="Apple Maps" />
+            <DetailRow label="Map provider" value="Apple Maps with OpenStreetMap fallback" />
           </div>
         </Panel>
         <Panel title="Priority Stops">
@@ -1095,12 +1078,13 @@ function AppleMapPanel({ offices, activeOffice, isAdmin }: { offices: PostOffice
     return (
       <MapFallback
         offices={offices}
-        message={isAdmin ? "Interactive Apple Maps need VITE_MAPKIT_TOKEN set before the production build. Apple Maps links remain available." : undefined}
+        activeOffice={activeOffice}
+        message={isAdmin ? "Apple Maps is not configured. OpenStreetMap is being used temporarily." : undefined}
       />
     );
   }
   if (mapStatus === "failed") {
-    return <MapFallback offices={offices} message={isAdmin ? "Apple Maps could not load. Check the map token, allowed website origins, and network access. Location links remain available." : undefined} />;
+    return <MapFallback offices={offices} activeOffice={activeOffice} message={isAdmin ? "Apple Maps could not load. OpenStreetMap is being used temporarily; check the MapKit token and allowed website origins." : undefined} />;
   }
 
   return (
@@ -1112,31 +1096,41 @@ function AppleMapPanel({ offices, activeOffice, isAdmin }: { offices: PostOffice
             Loading Apple Maps...
           </div>
         ) : (
-          <MapFallback offices={offices} />
+          <MapFallback offices={offices} activeOffice={activeOffice} />
         )
       )}
     </div>
   );
 }
 
-function MapFallback({ offices, message }: { offices: PostOffice[]; message?: string }) {
+function MapFallback({ offices, activeOffice, message }: { offices: PostOffice[]; activeOffice: PostOffice; message?: string }) {
   return (
-    <div className="map-board-grid map-fallback">
-      {message && <p>{message}</p>}
-      {offices.map((office) => {
-        const waiting = office.mailboxes.filter(hasWaitingItem).length;
-        return (
-          <a
-            href={appleMapsUrl(office)}
-            key={office.id}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`${office.name}, ${waiting > 0 ? `${waiting} waiting` : "clear"}`}
-          >
-            <MapPin size={18} /><span>{office.name}</span><span>{waiting > 0 ? `${waiting} waiting` : "Clear"}</span>
-          </a>
-        );
-      })}
+    <div className="map-fallback">
+      {message && <p className="map-fallback-notice">{message}</p>}
+      <iframe
+        className="osm-map-frame"
+        src={openStreetMapEmbedUrl(offices, activeOffice)}
+        title={`OpenStreetMap showing ${activeOffice.name}`}
+        loading="lazy"
+        referrerPolicy="strict-origin-when-cross-origin"
+      />
+      <div className="map-fallback-links">
+        {offices.map((office) => {
+          const waiting = office.mailboxes.filter(hasWaitingItem).length;
+          return (
+            <a
+              href={appleMapsUrl(office)}
+              key={office.id}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`${office.name}, ${waiting > 0 ? `${waiting} waiting` : "clear"}`}
+            >
+              <MapPin size={18} /><span>{office.name}</span><span>{waiting > 0 ? `${waiting} waiting` : "Clear"}</span>
+            </a>
+          );
+        })}
+      </div>
+      <a className="osm-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">Map data © OpenStreetMap contributors</a>
     </div>
   );
 }
@@ -2159,6 +2153,25 @@ function appleMapsUrl(office: PostOffice) {
     q: validMapCoordinate(office) ? office.name : `${office.name} ${office.address}`
   });
   return `https://maps.apple.com/?${params.toString()}`;
+}
+
+function openStreetMapEmbedUrl(offices: PostOffice[], activeOffice: PostOffice) {
+  const located = offices.filter(validMapCoordinate);
+  const latitudes = located.map(office => office.latitude);
+  const longitudes = located.map(office => office.longitude);
+  const latitudePadding = Math.max((Math.max(...latitudes) - Math.min(...latitudes)) * 0.15, 0.02);
+  const longitudePadding = Math.max((Math.max(...longitudes) - Math.min(...longitudes)) * 0.15, 0.02);
+  const params = new URLSearchParams({
+    bbox: [
+      Math.min(...longitudes) - longitudePadding,
+      Math.min(...latitudes) - latitudePadding,
+      Math.max(...longitudes) + longitudePadding,
+      Math.max(...latitudes) + latitudePadding
+    ].join(","),
+    layer: "mapnik",
+    marker: `${activeOffice.latitude},${activeOffice.longitude}`
+  });
+  return `https://www.openstreetmap.org/export/embed.html?${params.toString()}`;
 }
 
 function validMapCoordinate(office: PostOffice) {

@@ -93,6 +93,7 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
         fontSrc: ["'self'", "https:", "data:"],
         formAction: ["'self'"],
         frameAncestors: ["'self'"],
+        frameSrc: ["'self'", "https://www.openstreetmap.org"],
         imgSrc: ["'self'", "data:", "blob:", "https:", "https://*.apple-mapkit.com", "https://cdn.apple-mapkit.com"],
         objectSrc: ["'none'"],
         scriptSrc: ["'self'", "'wasm-unsafe-eval'", "https://cdn.apple-mapkit.com"],

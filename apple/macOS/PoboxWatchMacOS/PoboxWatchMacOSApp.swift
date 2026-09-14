@@ -598,12 +598,6 @@ struct MacOverviewDashboardView: View {
 
     var body: some View {
         MacPage(title: snapshot?.workspace.name ?? "Overview", subtitle: signedInText) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-                MacMetricCard(value: "\(snapshot?.outstandingMailboxCount ?? 0)", label: "Boxes needing collection", systemImage: "tray.full.fill", tint: PoboxTheme.orange)
-                MacMetricCard(value: "\(snapshot?.postOffices.count ?? 0)", label: "Post office locations", systemImage: "building.2", tint: .blue)
-                MacMetricCard(value: "\(reviewItems.count)", label: "Review queue items", systemImage: "exclamationmark.triangle.fill", tint: .red)
-            }
-
             MacPanel(title: "Collection Queue", aside: "\(waitingMailboxes.count) waiting") {
                 if waitingMailboxes.isEmpty {
                     MacEmptyStateView(title: "Nothing waiting", subtitle: "All shared boxes are currently clear.")
@@ -1569,28 +1563,6 @@ struct MacOfficeRow: View {
         } message: {
             Text("This also removes its boxes from active pobox.watch views.")
         }
-    }
-}
-
-struct MacMetricCard: View {
-    let value: String
-    let label: String
-    let systemImage: String
-    let tint: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: systemImage)
-                .foregroundStyle(tint)
-            Text(value)
-                .font(.system(size: 34, weight: .bold))
-            Text(label)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

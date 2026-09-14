@@ -201,34 +201,6 @@ h3 {
   white-space: nowrap;
 }
 
-.summary-band {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr)) minmax(260px, auto);
-  align-items: stretch;
-  gap: 16px;
-  background: #eef3f8;
-  padding: 16px;
-  border-radius: 8px;
-  margin-bottom: 18px;
-}
-
-.metric-card {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.metric {
-  font-size: 2.25rem;
-  font-weight: 850;
-  line-height: 1;
-}
-
-.metric-label {
-  color: #46534e;
-  font-size: 0.88rem;
-}
-
 .layout-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
@@ -975,9 +947,16 @@ input, select {
   gap: 12px;
   padding: 14px;
   background: #f6f8f7;
+  border: 1px solid rgba(20, 51, 41, 0.12);
+  border-radius: 8px;
 }
 
-.map-fallback a {
+.map-fallback-links {
+  display: grid;
+  gap: 8px;
+}
+
+.map-fallback-links a {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1006,12 +985,7 @@ input, select {
   border-color: #efc1b6;
 }
 
-.map-fallback p {
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  top: 14px;
-  z-index: 1;
+.map-fallback-notice {
   margin: 0;
   padding: 12px;
   color: #516170;
@@ -1020,6 +994,20 @@ input, select {
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid #d7dfe7;
   border-radius: 8px;
+}
+
+.osm-map-frame {
+  width: 100%;
+  height: 320px;
+  border: 0;
+  border-radius: 6px;
+  background: #dfe7df;
+}
+
+.osm-attribution {
+  justify-self: end;
+  color: #516170;
+  font-size: 0.78rem;
 }
 
 .map-point {
@@ -1321,7 +1309,7 @@ input, select {
     padding: 18px;
   }
 
-  .topbar, .topbar-actions, .summary-band, .mailbox, .panel-heading, .office-title, .map-card-footer {
+  .topbar, .topbar-actions, .mailbox, .panel-heading, .office-title, .map-card-footer {
     align-items: stretch;
     flex-direction: column;
   }
@@ -1339,10 +1327,6 @@ input, select {
 
   .map-board-copy {
     grid-template-columns: 1fr;
-  }
-
-  .summary-band {
-    display: none;
   }
 
   .post-office-summary {

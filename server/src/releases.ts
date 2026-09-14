@@ -1,4 +1,4 @@
-export const appVersion = "0.13.15";
+export const appVersion = "0.13.17";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,22 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.17-openstreetmap-fallback",
+    version: "0.13.17",
+    releasedAt: "2026-09-14T06:00:00.000Z",
+    title: "Maps remain available",
+    summary: "When Apple Maps is unavailable, the website now shows a temporary OpenStreetMap view. Apple Maps links remain available for directions.",
+    audience: "ALL"
+  },
+  {
+    id: "0.13.16-remove-summary-banner",
+    version: "0.13.16",
+    releasedAt: "2026-09-14T05:00:00.000Z",
+    title: "More room for your post offices",
+    summary: "The summary banner has been removed from the desktop website and Mac app, matching the simpler mobile layout. The collection badge and counts within individual pages remain available.",
+    audience: "ALL"
+  },
   {
     id: "0.13.15-iphone-menu",
     version: "0.13.15",

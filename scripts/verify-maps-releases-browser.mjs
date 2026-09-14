@@ -12,6 +12,7 @@ try {
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.route("https://cdn.apple-mapkit.com/**", route => route.fulfill({ contentType: "application/javascript", body: "/* isolated MapKit transport fixture */" }));
+    await page.route("https://www.openstreetmap.org/export/embed.html?*", route => route.fulfill({ contentType: "text/html", body: "<!doctype html><title>OpenStreetMap fixture</title>" }));
     // Only Apple transport is simulated. App HTTP, CSP, releases and UI are real.
     await page.addInitScript(() => {
       const kit = new EventTarget();
@@ -30,7 +31,8 @@ try {
     await page.route("**/auth/login", route => route.fulfill({ json: { ok: true } }));
     const base = "http://127.0.0.1:4189/api/v1/workspaces/ws_company/app/changes";
     const before = await (await context.request.get(base)).json();
-    await page.goto("http://127.0.0.1:4189");
+    const appResponse = await page.goto("http://127.0.0.1:4189");
+    assert.match(appResponse?.headers()["content-security-policy"] ?? "", /frame-src 'self' https:\/\/www\.openstreetmap\.org/);
     await page.getByRole("button", { name: "Use Password to Set Up Security" }).click();
     await page.getByLabel("Email", { exact: true }).fill(admin ? "daniel@example.com" : "john@example.com");
     await page.getByLabel("Password", { exact: true }).fill("fixture");
@@ -55,12 +57,16 @@ try {
       assert.ok(first.latitude < 0 && first.longitude > 100);
       await page.evaluate(() => window.mapkit.dispatchEvent(new Event("configuration-error")));
       await page.locator(".map-fallback").waitFor();
-      assert.equal(await page.getByText(/Check the map token/).count(), admin ? 1 : 0);
+      assert.equal(await page.getByText(/OpenStreetMap is being used temporarily/).count(), admin ? 1 : 0);
     } else {
       await page.locator(".map-fallback").waitFor();
-      assert.equal(await page.getByText(/VITE_MAPKIT_TOKEN/).count(), admin ? 1 : 0);
+      assert.equal(await page.getByText(/OpenStreetMap is being used temporarily/).count(), admin ? 1 : 0);
     }
     assert.ok(await page.locator(".map-fallback a[href^='https://maps.apple.com']").count() > 0);
+    const fallbackMap = page.locator("iframe[src^='https://www.openstreetmap.org/export/embed.html?']");
+    await fallbackMap.waitFor();
+    assert.match(await fallbackMap.getAttribute("src"), /marker=-37/);
+    assert.equal(await page.getByRole("link", { name: "Map data © OpenStreetMap contributors" }).count(), 1);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.deepEqual(errors, []);
     await page.screenshot({ path: `/tmp/pobox-maps-${admin ? "admin" : "member"}-${missing ? "missing" : "error"}.png`, fullPage: true });

@@ -67,7 +67,7 @@ try {
   await page.screenshot({ path: "/tmp/pobox-management-mobile.png", fullPage: true });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.setViewportSize({ width: 1440, height: 1000 });
-  assert.equal(await page.locator(".summary-band").isVisible(), true);
+  assert.equal(await page.locator(".summary-band").count(), 0);
   await boxEdit.getByRole("button", { name: "Save", exact: true }).click();
   await office.getByText("PO Box 503", { exact: true }).waitFor();
   await page.route("**/post-offices/*", (route) => route.fulfill({ status: 503, json: { error: "Temporary save failure" } }), { times: 1 });
