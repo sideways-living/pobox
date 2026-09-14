@@ -63,7 +63,12 @@ final class MacMailboxViewModel: ObservableObject {
     @Published var password = ""
     @Published var twoFactorCode = ""
     @Published var twoFactorChallengeId: String?
-    @Published var snapshot: MailboxDashboardSnapshot?
+    @Published var snapshot: MailboxDashboardSnapshot? {
+        didSet {
+            let count = snapshot?.outstandingMailboxCount ?? 0
+            NSApp.dockTile.badgeLabel = count > 0 ? String(count) : nil
+        }
+    }
     @Published var releaseNotice: ReleaseNotice?
     @Published var reviewItems: [ReviewItem] = []
     @Published var members: [TeamMember] = []
@@ -724,6 +729,8 @@ private struct MacSidebarBrand: View {
                                 .offset(x: 5, y: -4)
                         }
                     }
+                    .accessibilityLabel("pobox.watch")
+                    .accessibilityValue(waitingCount > 0 ? "\(waitingCount) mailboxes need collection" : "No mailboxes need collection")
                 VStack(alignment: .leading, spacing: 2) {
                     Text("pobox.watch")
                         .font(.headline)
@@ -2142,8 +2149,8 @@ private struct MacActionIcon: View {
 
     var body: some View {
         Image(systemName: systemName)
-            .font(.system(size: 22, weight: .semibold))
-            .frame(width: 30, height: 30)
+            .font(.system(size: 44, weight: .semibold))
+            .frame(width: 60, height: 60)
     }
 }
 

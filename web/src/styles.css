@@ -873,6 +873,20 @@ input, select {
   padding: 0;
 }
 
+@media (min-width: 681px) {
+  .icon-button.large-action-icon,
+  .collection-queue-actions .icon-button.large-action-icon {
+    width: 72px;
+    min-width: 72px;
+    height: 72px;
+  }
+
+  .icon-button.large-action-icon svg {
+    width: 48px;
+    height: 48px;
+  }
+}
+
 .icon-button.danger {
   border-color: #d65d4f;
   color: #a73524;

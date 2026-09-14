@@ -1,4 +1,4 @@
-export const appVersion = "0.13.28";
+export const appVersion = "0.13.29";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.29-mac-badges-larger-actions",
+    version: "0.13.29",
+    releasedAt: "2026-09-14T17:30:00.000Z",
+    title: "Collection count on your Mac",
+    summary: "The Mac app now shows the number of PO boxes needing collection on both its sidebar logo and Dock icon. Collection and Team action icons are also twice as large.",
+    audience: "ALL"
+  },
   {
     id: "0.13.28-mac-appearance-setting",
     version: "0.13.28",
