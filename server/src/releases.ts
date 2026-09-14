@@ -1,4 +1,4 @@
-export const appVersion = "0.13.27";
+export const appVersion = "0.13.28";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.28-mac-appearance-setting",
+    version: "0.13.28",
+    releasedAt: "2026-09-14T17:00:00.000Z",
+    title: "Choose your Mac appearance",
+    summary: "The Mac app can now use a daytime or nighttime appearance, or change automatically to match your Mac. Choose the option in Settings under Appearance.",
+    audience: "ALL"
+  },
   {
     id: "0.13.27-team-profile-alignment",
     version: "0.13.27",

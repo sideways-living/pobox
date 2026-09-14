@@ -365,46 +365,78 @@ final class MacMailboxViewModel: ObservableObject {
     }
 }
 
+private enum MacAppearancePreference: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system: "Automatic"
+        case .light: "Daytime"
+        case .dark: "Nighttime"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+}
+
 struct MacRootView: View {
     @StateObject private var model: MacMailboxViewModel
+    @AppStorage("macAppearancePreference") private var appearancePreference = MacAppearancePreference.system.rawValue
 
     init(model: MacMailboxViewModel = MacMailboxViewModel()) {
         _model = StateObject(wrappedValue: model)
     }
 
     var body: some View {
-        if model.snapshot == nil {
-            MacLoginView(model: model)
-        } else {
-           MacOverviewView(model: model)
-                .sheet(item: $model.releaseNotice) { notice in
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("What's New").font(.title2.bold())
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 16) {
-                                ForEach(notice.changes) { change in
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(change.title).font(.headline)
-                                        Text(change.summary)
+        Group {
+            if model.snapshot == nil {
+                MacLoginView(model: model)
+            } else {
+               MacOverviewView(model: model)
+                    .sheet(item: $model.releaseNotice) { notice in
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("What's New").font(.title2.bold())
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 16) {
+                                    ForEach(notice.changes) { change in
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(change.title).font(.headline)
+                                            Text(change.summary)
+                                        }
                                     }
                                 }
                             }
+                            if let error = model.errorMessage { Text(error).foregroundStyle(.red) }
+                            Button("Got It") { Task { await model.dismissReleaseNotes() } }
+                                .disabled(model.isLoading)
                         }
-                        if let error = model.errorMessage { Text(error).foregroundStyle(.red) }
-                        Button("Got It") { Task { await model.dismissReleaseNotes() } }
-                            .disabled(model.isLoading)
+                        .padding(24)
+                        .frame(minWidth: 280, idealWidth: 560, maxWidth: 640, minHeight: 360, idealHeight: 520)
+                        .interactiveDismissDisabled()
                     }
-                    .padding(24)
-                    .frame(minWidth: 280, idealWidth: 560, maxWidth: 640, minHeight: 360, idealHeight: 520)
-                    .interactiveDismissDisabled()
-                }
-                .task(id: model.snapshot?.currentUser.id) {
-                    while !Task.isCancelled {
-                        do { try await Task.sleep(for: .seconds(30)) } catch { return }
-                        if !model.isLoading { await model.refresh() }
+                    .task(id: model.snapshot?.currentUser.id) {
+                        while !Task.isCancelled {
+                            do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                            if !model.isLoading { await model.refresh() }
+                        }
                     }
-                }
+            }
         }
+        .preferredColorScheme(selectedAppearance.colorScheme)
+    }
+
+    private var selectedAppearance: MacAppearancePreference {
+        MacAppearancePreference(rawValue: appearancePreference) ?? .system
     }
 }
 
@@ -1415,6 +1447,7 @@ struct MacSettingsView: View {
     let createPostOffice: (String, String, String?, Double, Double, Int) async -> Void
     let createMailbox: (String, String) async -> Void
     let updateProfileAvatar: (String) async -> Void
+    @AppStorage("macAppearancePreference") private var appearancePreference = MacAppearancePreference.system.rawValue
 
     var body: some View {
         MacPage(title: "Settings", subtitle: "Configuration for this native pobox.watch client.") {
@@ -1423,6 +1456,24 @@ struct MacSettingsView: View {
                 initialAvatar: snapshot?.currentUser.avatar ?? "",
                 save: updateProfileAvatar
             )
+            MacPanel(title: "Appearance", aside: "Mac") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("Appearance", selection: $appearancePreference) {
+                        ForEach(MacAppearancePreference.allCases) { preference in
+                            Text(preference.title).tag(preference.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+
+                    Text(appearancePreference == MacAppearancePreference.system.rawValue
+                         ? "Automatic follows your Mac's current appearance."
+                         : "This appearance stays selected until you change it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: 480, alignment: .leading)
+            }
             MacInfoRow(title: "Server", detail: "https://pobox.watch", systemImage: "network", tint: .blue)
             MacInfoRow(title: "Workspace", detail: snapshot?.workspace.name ?? "Unknown", systemImage: "building.2", tint: PoboxTheme.green)
             MacInfoRow(title: "Security", detail: "Passkey and authenticator setup is mandatory. Use the web app to add passkeys and manage setup.", systemImage: "key.fill", tint: PoboxTheme.orange)
