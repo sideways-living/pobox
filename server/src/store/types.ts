@@ -6,7 +6,7 @@ import type {
 } from "@simplewebauthn/server";
 import type { LctrPostOfficeLocation } from "../lctr/postOfficeLookup.js";
 import type { PostOfficeDirectoryStatus } from "../lctr/postOfficeDirectory.js";
-import type { CollectionEvent, CollectionSource, DashboardSnapshot, Mailbox, MemberStatus, PostOffice, Role, Session, WorkspaceMember } from "../domain.js";
+import type { CollectionClaim, CollectionEvent, CollectionSource, DashboardSnapshot, Mailbox, MemberStatus, PostOffice, Role, Session, WorkspaceMember } from "../domain.js";
 import type { AppChange } from "../releases.js";
 
 export class ForbiddenError extends Error {}
@@ -169,6 +169,8 @@ export interface AppStore {
   acknowledgeMail(workspaceId: string, provider: string, messageId: string): Promise<void>;
   failMailAcknowledgement(workspaceId: string, provider: string, messageId: string, reason: string): Promise<void>;
   collectMailbox(session: Session, workspaceId: string, mailboxId: string, source: CollectionSource, expectedUpdatedAt?: string): Promise<CollectionEvent>;
+  claimPostOffice(session: Session, workspaceId: string, postOfficeId: string): Promise<CollectionClaim>;
+  releasePostOfficeClaim(session: Session, workspaceId: string, postOfficeId: string): Promise<void>;
   listMembers(session: Session, workspaceId: string): Promise<TeamMemberSummary[]>;
   listReviewItems(session: Session, workspaceId: string): Promise<ReviewItem[]>;
   resolveReviewItem(session: Session, workspaceId: string, reviewItemId: string, mailboxId: string, newMailbox?: { postOfficeId: string; boxNumber: string }): Promise<IncomingMailResult>;

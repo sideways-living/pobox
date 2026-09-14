@@ -51,6 +51,7 @@ model User {
   recoveryCodes     RecoveryCode[]
   passwordResets    PasswordReset[]
   collectedEvents   CollectionEvent[]
+  collectionClaims  CollectionClaim[]
   devices           Device[]
   passkeyCredentials PasskeyCredential[]
 }
@@ -128,6 +129,7 @@ model Workspace {
   mailboxes               Mailbox[]
   mailEvents              MailEvent[]
   collectionEvents        CollectionEvent[]
+  collectionClaims        CollectionClaim[]
   emailConnections        EmailConnection[]
   parsingRules            ParsingRule[]
   devices                 Device[]
@@ -182,8 +184,23 @@ model PostOffice {
   updatedAt       DateTime  @updatedAt
   workspace       Workspace @relation(fields: [workspaceId], references: [id])
   mailboxes       Mailbox[]
+  collectionClaim CollectionClaim?
 
   @@index([workspaceId])
+}
+
+model CollectionClaim {
+  postOfficeId String     @id
+  workspaceId  String
+  claimedBy    String
+  claimedAt    DateTime   @default(now())
+  expiresAt    DateTime
+  postOffice   PostOffice @relation(fields: [postOfficeId], references: [id], onDelete: Cascade)
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [claimedBy], references: [id])
+
+  @@index([workspaceId, expiresAt])
+  @@index([claimedBy])
 }
 
 model PostOfficeDirectory {

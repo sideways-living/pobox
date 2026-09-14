@@ -177,6 +177,22 @@ export async function collectMailbox(mailboxId: string, expectedUpdatedAt: strin
   if (!response.ok) throw new Error(await errorMessage(response));
 }
 
+export async function claimPostOffice(postOfficeId: string): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/post-offices/${postOfficeId}/collection-claim`, {
+    method: "POST",
+    credentials: "include"
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+}
+
+export async function releasePostOfficeClaim(postOfficeId: string): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/post-offices/${postOfficeId}/collection-claim`, {
+    method: "DELETE",
+    credentials: "include"
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+}
+
 export async function loadMembers(): Promise<TeamMember[]> {
   const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/team/members`, { credentials: "include" });
   if (!response.ok) throw new Error(await errorMessage(response));

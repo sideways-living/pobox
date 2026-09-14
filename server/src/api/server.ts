@@ -327,6 +327,22 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     return event;
   });
 
+  app.post("/api/v1/workspaces/:workspaceId/post-offices/:postOfficeId/collection-claim", async (request) => {
+    const { workspaceId, postOfficeId } = request.params as { workspaceId: string; postOfficeId: string };
+    const session = await securedSession(request, workspaceId);
+    const claim = await store.claimPostOffice(session, workspaceId, postOfficeId);
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
+    return claim;
+  });
+
+  app.delete("/api/v1/workspaces/:workspaceId/post-offices/:postOfficeId/collection-claim", async (request, reply) => {
+    const { workspaceId, postOfficeId } = request.params as { workspaceId: string; postOfficeId: string };
+    const session = await securedSession(request, workspaceId);
+    await store.releasePostOfficeClaim(session, workspaceId, postOfficeId);
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
+    return reply.code(204).send();
+  });
+
   app.post("/api/v1/workspaces/:workspaceId/team/invitations", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };
     const body = inviteSchema.parse(request.body);

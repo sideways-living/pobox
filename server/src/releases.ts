@@ -1,4 +1,4 @@
-export const appVersion = "0.13.20";
+export const appVersion = "0.13.21";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.21-collection-plans",
+    version: "0.13.21",
+    releasedAt: "2026-09-14T10:00:00.000Z",
+    title: "Coordinate today's mail collection",
+    summary: "Choose I'll collect today at a post office so everyone can see who is going. The plan clears after collection or automatically at 3:00 am the next day, and every waiting PO box has a clear Collected button.",
+    audience: "ALL"
+  },
   {
     id: "0.13.20-mac-collection-overview",
     version: "0.13.20",

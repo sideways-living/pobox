@@ -69,7 +69,17 @@ public struct PostOffice: Codable, Identifiable, Sendable {
     public let longitude: Double
     public let geofenceRadius: Int
     public let active: Bool
+    public var collectionClaim: PostOfficeCollectionClaim? = nil
     public let mailboxes: [Mailbox]
+}
+
+public struct PostOfficeCollectionClaim: Codable, Sendable {
+    public let postOfficeId: String
+    public let workspaceId: String
+    public let userId: String
+    public let displayName: String
+    public let claimedAt: String
+    public let expiresAt: String
 }
 
 public struct Mailbox: Codable, Identifiable, Sendable {

@@ -11,6 +11,7 @@ import {
   beginPasskeyAuthentication,
   beginPasskeyRegistration,
   beginTotpSetup,
+  claimPostOffice,
   collectMailbox,
   confirmTotpSetup,
   createMailbox,
@@ -33,6 +34,7 @@ import {
   markReviewItemResolved,
   registerPasskey,
   realtimeUrl,
+  releasePostOfficeClaim,
   resolveReviewItem,
   searchPostOfficeLocations,
   syncPostOfficeDirectory,
@@ -637,9 +639,10 @@ function OverviewSection({ snapshot, busyId, mutate }: { snapshot: DashboardSnap
                       </div>
                       <a className="text-link" href={appleMapsUrl(office)} target="_blank" rel="noreferrer"><Route size={16} />Directions</a>
                     </div>
+                    <CollectionClaimControl office={office} currentUser={snapshot.currentUser} busy={busyId === `claim:${office.id}`} mutate={mutate} />
                     <div className="mailbox-list">
                       {waiting.map((box) => (
-                        <MailboxRow key={box.id} box={box} busy={busyId === box.id} onCollect={() => mutate(() => collectMailbox(box.id, box.updatedAt), box.id)} />
+                        <MailboxRow key={box.id} box={box} busy={busyId === box.id} blockedBy={office.collectionClaim?.userId !== snapshot.currentUser.id ? office.collectionClaim?.displayName : undefined} onCollect={() => mutate(() => collectMailbox(box.id, box.updatedAt), box.id)} />
                       ))}
                     </div>
                   </article>
@@ -774,6 +777,7 @@ function MailboxSection({
               filter={filter}
               busyId={busyId}
               mutate={mutate}
+              currentUser={snapshot.currentUser}
               canManage={canManage}
               onSaveOffice={saveOffice}
               onDeleteOffice={removeOffice}
@@ -819,6 +823,7 @@ function OfficeSection({
   filter,
   busyId,
   mutate,
+  currentUser,
   canManage,
   onSaveOffice,
   onDeleteOffice,
@@ -830,6 +835,7 @@ function OfficeSection({
   filter: MailboxFilter;
   busyId: string | null;
   mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>;
+  currentUser: DashboardSnapshot["currentUser"];
   canManage: boolean;
   onSaveOffice: (officeId: string, input: { expectedUpdatedAt: string; name: string; address: string; phone?: string; latitude: number; longitude: number; geofenceRadius: number }) => Promise<boolean>;
   onDeleteOffice: (office: PostOffice) => Promise<void>;
@@ -899,6 +905,7 @@ function OfficeSection({
             <StatusPill tone={waiting > 0 ? "warning" : "ok"}>{waiting > 0 ? `${waiting} waiting` : "Clear"}</StatusPill>
             {mailWaiting > 0 && <StatusPill tone="warning">{mailWaiting} mail</StatusPill>}
             {parcelWaiting > 0 && <StatusPill tone="info">{parcelWaiting} parcel</StatusPill>}
+            {waiting > 0 && <CollectionClaimControl office={office} currentUser={currentUser} busy={busyId === `claim:${office.id}`} mutate={mutate} compact />}
             <a className="text-link" href={appleMapsUrl(office)} target="_blank" rel="noreferrer"><ExternalLink size={15} />Apple Maps</a>
             {canManage && (
               <div className="row-actions">
@@ -921,6 +928,7 @@ function OfficeSection({
             key={box.id}
             box={box}
             busy={busyId === box.id}
+            blockedBy={office.collectionClaim?.userId !== currentUser.id ? office.collectionClaim?.displayName : undefined}
             onCollect={() => mutate(() => collectMailbox(box.id, box.updatedAt), box.id)}
             postOffices={postOffices}
             canManage={canManage}
@@ -942,6 +950,27 @@ function OfficeSection({
         )}
       </div>
     </article>
+  );
+}
+
+function CollectionClaimControl({ office, currentUser, busy, mutate, compact = false }: {
+  office: PostOffice;
+  currentUser: DashboardSnapshot["currentUser"];
+  busy: boolean;
+  mutate: (action: () => Promise<void>, busyId?: string) => Promise<void>;
+  compact?: boolean;
+}) {
+  const claim = office.collectionClaim;
+  const ownsClaim = claim?.userId === currentUser.id;
+  const expiry = claim ? new Date(claim.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "3:00 am";
+  if (!claim) {
+    return <button type="button" className={compact ? "secondary collection-plan-button" : "primary collection-plan-button"} disabled={busy} onClick={() => mutate(() => claimPostOffice(office.id), `claim:${office.id}`)}><UserCheck size={16} />{busy ? "Saving..." : "I'll collect today"}</button>;
+  }
+  return (
+    <div className={`collection-claim${ownsClaim ? " own" : ""}`}>
+      <span><UserCheck size={16} /><strong>{ownsClaim ? "You're collecting" : `${claim.displayName} is collecting`}</strong><small>until {expiry} tomorrow</small></span>
+      {(ownsClaim || currentUser.role === "ADMIN") && <button type="button" className="icon-button" title="Cancel collection plan" aria-label={`Cancel collection plan for ${office.name}`} disabled={busy} onClick={() => mutate(() => releasePostOfficeClaim(office.id), `claim:${office.id}`)}><X size={15} /></button>}
+    </div>
   );
 }
 
@@ -2025,6 +2054,7 @@ function Panel({ title, aside, children }: { title: string; aside?: string; chil
 function MailboxRow({
   box,
   busy,
+  blockedBy,
   onCollect,
   table = false,
   postOffices = [],
@@ -2034,6 +2064,7 @@ function MailboxRow({
 }: {
   box: Mailbox;
   busy: boolean;
+  blockedBy?: string;
   onCollect: () => void;
   table?: boolean;
   postOffices?: PostOffice[];
@@ -2096,7 +2127,7 @@ function MailboxRow({
         <StatusPill tone={hasWaitingItem(box) ? "warning" : "ok"}>{status}</StatusPill>
         <span>{lastEventText}</span>
         <div className="row-actions">
-          {hasWaitingItem(box) && <button disabled={busy} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button>}
+          {hasWaitingItem(box) && <button disabled={busy || Boolean(blockedBy)} title={blockedBy ? `${blockedBy} is collecting from this post office` : undefined} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button>}
           {canManage && (
             <>
               <button type="button" className="icon-button" title="Edit PO box" onClick={() => { setBoxVersion(box.updatedAt); setPostOfficeId(box.postOfficeId); setBoxNumber(box.boxNumber); setEditing(true); }}><Edit2 size={16} /></button>
@@ -2115,7 +2146,7 @@ function MailboxRow({
         <span>{status}</span>
         <small>{lastEventText}</small>
       </div>
-      {hasWaitingItem(box) && <button disabled={busy} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button>}
+      {hasWaitingItem(box) && <button disabled={busy || Boolean(blockedBy)} title={blockedBy ? `${blockedBy} is collecting from this post office` : undefined} onClick={onCollect}>{busy ? "Saving" : "Mark Collected"}</button>}
     </div>
   );
 }

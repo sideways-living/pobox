@@ -48,6 +48,16 @@ export interface PostOffice {
   longitude: number;
   geofenceRadius: number;
   active: boolean;
+  collectionClaim?: CollectionClaim;
+}
+
+export interface CollectionClaim {
+  postOfficeId: string;
+  workspaceId: string;
+  userId: string;
+  displayName: string;
+  claimedAt: string;
+  expiresAt: string;
 }
 
 export interface Mailbox {

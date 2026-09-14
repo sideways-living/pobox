@@ -116,6 +116,24 @@ final class iPhoneMailboxViewModel: ObservableObject {
         }
     }
 
+    func claim(_ office: PostOffice) async {
+        busyMailboxId = "claim:\(office.id)"
+        defer { busyMailboxId = nil }
+        await run {
+            try await client.claimPostOffice(workspaceId: workspaceId, postOfficeId: office.id)
+            try await loadWorkspace()
+        }
+    }
+
+    func releaseClaim(_ office: PostOffice) async {
+        busyMailboxId = "claim:\(office.id)"
+        defer { busyMailboxId = nil }
+        await run {
+            try await client.releasePostOfficeClaim(workspaceId: workspaceId, postOfficeId: office.id)
+            try await loadWorkspace()
+        }
+    }
+
     func logout() async {
         loadGeneration += 1
         await run {
@@ -614,22 +632,30 @@ struct iPhoneDashboardView: View {
 struct iPhoneOverviewList: View {
     @ObservedObject var model: iPhoneMailboxViewModel
 
-    private var waitingMailboxes: [Mailbox] {
-        model.snapshot?.postOffices.flatMap(\.mailboxes).filter(hasWaitingItem) ?? []
+    private var waitingOffices: [PostOffice] {
+        model.snapshot?.postOffices.filter { $0.mailboxes.contains(where: hasWaitingItem) } ?? []
     }
 
     var body: some View {
         List {
             if model.snapshot != nil {
                 Section("Collection Queue") {
-                    if waitingMailboxes.isEmpty {
+                    if waitingOffices.isEmpty {
                         Label("All shared boxes are clear", systemImage: "checkmark.circle")
-                    } else {
-                        ForEach(waitingMailboxes) { mailbox in
-                            iPhoneMailboxRow(mailbox: mailbox, busy: model.busyMailboxId == mailbox.id) {
+                    }
+                }
+                ForEach(waitingOffices) { office in
+                    Section {
+                        iPhoneCollectionClaimControl(model: model, office: office)
+                        ForEach(office.mailboxes.filter(hasWaitingItem)) { mailbox in
+                            iPhoneMailboxRow(mailbox: mailbox, busy: model.busyMailboxId == mailbox.id, collectionBlocked: office.collectionClaim?.userId != nil && office.collectionClaim?.userId != model.snapshot?.currentUser.id) {
                                 await model.collect(mailbox)
                             }
                         }
+                    } header: {
+                        Label(office.name, systemImage: "building.2.fill")
+                    } footer: {
+                        Text(office.address)
                     }
                 }
 
@@ -657,11 +683,14 @@ struct iPhoneMailboxList: View {
         List {
             ForEach(model.snapshot?.postOffices ?? []) { office in
                 Section {
+                    if office.mailboxes.contains(where: hasWaitingItem) {
+                        iPhoneCollectionClaimControl(model: model, office: office)
+                    }
                     Link(destination: appleMapsURL(for: office)) {
                         Label("Open \(office.name) in Apple Maps", systemImage: "map")
                     }
                     ForEach(office.mailboxes) { mailbox in
-                        iPhoneMailboxRow(mailbox: mailbox, busy: model.busyMailboxId == mailbox.id, postOffices: model.snapshot?.postOffices ?? [], collect: {
+                        iPhoneMailboxRow(mailbox: mailbox, busy: model.busyMailboxId == mailbox.id, collectionBlocked: office.collectionClaim?.userId != nil && office.collectionClaim?.userId != model.snapshot?.currentUser.id, postOffices: model.snapshot?.postOffices ?? [], collect: {
                             await model.collect(mailbox)
                         }, updateMailbox: { box, postOfficeId, boxNumber in
                             await model.updateMailbox(box, postOfficeId: postOfficeId, boxNumber: boxNumber)
@@ -691,6 +720,7 @@ struct iPhoneMailboxList: View {
 struct iPhoneMailboxRow: View {
     let mailbox: Mailbox
     let busy: Bool
+    var collectionBlocked = false
     var postOffices: [PostOffice] = []
     let collect: () async -> Void
     var updateMailbox: ((Mailbox, String, String) async -> Void)?
@@ -722,12 +752,11 @@ struct iPhoneMailboxRow: View {
                         if busy {
                             ProgressView()
                         } else {
-                            Image(systemName: "checkmark")
+                            Label("Collected", systemImage: "checkmark.circle")
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.circle)
-                    .disabled(busy)
+                    .disabled(busy || collectionBlocked)
                     .accessibilityLabel("Mark collected")
                 }
             }
@@ -775,6 +804,35 @@ struct iPhoneMailboxRow: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes the PO box from active pobox.watch views.")
+        }
+    }
+}
+
+private struct iPhoneCollectionClaimControl: View {
+    @ObservedObject var model: iPhoneMailboxViewModel
+    let office: PostOffice
+
+    private var ownsClaim: Bool { office.collectionClaim?.userId == model.snapshot?.currentUser.id }
+
+    var body: some View {
+        if let activeClaim = office.collectionClaim {
+            HStack(spacing: 10) {
+                Label(ownsClaim ? "You're collecting until 3:00 am tomorrow" : "\(activeClaim.displayName) is collecting until 3:00 am tomorrow", systemImage: "person.badge.clock")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(ownsClaim ? PoboxTheme.green : PoboxTheme.blue)
+                Spacer()
+                if ownsClaim || model.snapshot?.currentUser.role == "ADMIN" {
+                    Button("Cancel") { Task { await model.releaseClaim(office) } }
+                        .disabled(model.busyMailboxId == "claim:\(office.id)")
+                }
+            }
+        } else {
+            Button {
+                Task { await model.claim(office) }
+            } label: {
+                Label("I'll collect today", systemImage: "person.badge.clock")
+            }
+            .disabled(model.busyMailboxId == "claim:\(office.id)")
         }
     }
 }

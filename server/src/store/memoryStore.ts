@@ -14,6 +14,7 @@ import { challengeFromClientData, webAuthnConfig } from "../auth/webauthn.js";
 import type {
   AuthChallenge,
   AuditEvent,
+  CollectionClaim,
   CollectionEvent,
   CollectionSource,
   DashboardSnapshot,
@@ -25,6 +26,7 @@ import type {
   Workspace,
   WorkspaceMember
 } from "../domain.js";
+import { collectionClaimExpiresAt } from "../collectionClaims.js";
 import { parseMailNotification } from "../parser/mailParser.js";
 import { mailText } from "../parser/mailText.js";
 import type { PostOfficeDirectoryStatus } from "../lctr/postOfficeDirectory.js";
@@ -92,6 +94,7 @@ export class MemoryStore implements AppStore {
   mailboxes = new Map<string, Mailbox>();
   mailEvents = new Map<string, MailEvent>();
   collectionEvents = new Map<string, CollectionEvent>();
+  collectionClaims = new Map<string, CollectionClaim>();
   auditEvents = new Map<string, AuditEvent>();
   private mailAcknowledgements = new Map<string, { workspaceId: string; provider: string; messageId: string; acknowledged: boolean; nextAttemptAt: number }>();
   sessions = new Map<string, Session>();
@@ -465,6 +468,7 @@ export class MemoryStore implements AppStore {
       .filter((office) => office.workspaceId === workspaceId && office.active)
       .map((office) => ({
         ...office,
+        collectionClaim: this.activeCollectionClaim(office.id),
         mailboxes: [...this.mailboxes.values()].filter((box) => box.postOfficeId === office.id && box.active)
       }));
     const history = [
@@ -590,6 +594,8 @@ export class MemoryStore implements AppStore {
     await this.requireMember(session, workspaceId);
     const mailbox = this.mailboxes.get(mailboxId);
     if (!mailbox || mailbox.workspaceId !== workspaceId || !mailbox.active) throw new NotFoundError("PO box not found.");
+    const claim = this.activeCollectionClaim(mailbox.postOfficeId);
+    if (claim && claim.userId !== session.userId) throw new ConflictError(`${claim.displayName} is collecting from this post office.`);
     if (expectedUpdatedAt && expectedUpdatedAt !== mailbox.updatedAt) throw new ConflictError("This PO box changed. Refresh before collecting.");
     if (!mailbox.mailWaiting && !mailbox.parcelWaiting) {
       const existing = [...this.collectionEvents.values()]
@@ -619,7 +625,54 @@ export class MemoryStore implements AppStore {
       updatedAt: now
     });
     this.audit(session.userId, workspaceId, "mailbox.collected", "mailbox", mailbox.id, { source });
+    const stillWaiting = [...this.mailboxes.values()].some((box) => box.postOfficeId === mailbox.postOfficeId && box.active && box.id !== mailbox.id && (box.mailWaiting || box.parcelWaiting));
+    if (!stillWaiting) this.collectionClaims.delete(mailbox.postOfficeId);
     return event;
+  }
+
+  private activeCollectionClaim(postOfficeId: string): CollectionClaim | undefined {
+    const claim = this.collectionClaims.get(postOfficeId);
+    if (claim && new Date(claim.expiresAt).getTime() <= Date.now()) {
+      this.collectionClaims.delete(postOfficeId);
+      return undefined;
+    }
+    return claim;
+  }
+
+  async claimPostOffice(session: Session, workspaceId: string, postOfficeId: string): Promise<CollectionClaim> {
+    await this.requireMember(session, workspaceId);
+    const office = this.postOffices.get(postOfficeId);
+    if (!office || office.workspaceId !== workspaceId || !office.active) throw new NotFoundError("Post office not found.");
+    if (![...this.mailboxes.values()].some((box) => box.postOfficeId === postOfficeId && box.active && (box.mailWaiting || box.parcelWaiting))) {
+      throw new ConflictError("This post office has no mail or parcels waiting.");
+    }
+    const existing = this.activeCollectionClaim(postOfficeId);
+    if (existing?.userId === session.userId) return existing;
+    if (existing) throw new ConflictError(`${existing.displayName} is already collecting from this post office.`);
+    const user = this.users.get(session.userId);
+    if (!user) throw new NotFoundError("User not found.");
+    const now = new Date();
+    const claim: CollectionClaim = {
+      postOfficeId,
+      workspaceId,
+      userId: session.userId,
+      displayName: user.displayName,
+      claimedAt: now.toISOString(),
+      expiresAt: collectionClaimExpiresAt(now).toISOString()
+    };
+    this.collectionClaims.set(postOfficeId, claim);
+    this.audit(session.userId, workspaceId, "post_office.collection_claimed", "post_office", postOfficeId, { expiresAt: claim.expiresAt });
+    return claim;
+  }
+
+  async releasePostOfficeClaim(session: Session, workspaceId: string, postOfficeId: string): Promise<void> {
+    const member = await this.requireMember(session, workspaceId);
+    const existing = this.activeCollectionClaim(postOfficeId);
+    if (!existing) return;
+    if (existing.workspaceId !== workspaceId) throw new NotFoundError("Post office not found.");
+    if (existing.userId !== session.userId && member.role !== "ADMIN") throw new ForbiddenError("Only the collector or an admin can cancel this plan.");
+    this.collectionClaims.delete(postOfficeId);
+    this.audit(session.userId, workspaceId, "post_office.collection_claim_released", "post_office", postOfficeId, { claimedBy: existing.userId });
   }
 
   async listMembers(session: Session, workspaceId: string): Promise<TeamMemberSummary[]> {
@@ -967,6 +1020,7 @@ export class MemoryStore implements AppStore {
     const office = this.postOffices.get(postOfficeId);
     if (!office || office.workspaceId !== workspaceId || !office.active) throw new NotFoundError("Post office not found.");
     this.postOffices.set(postOfficeId, { ...office, active: false });
+    this.collectionClaims.delete(postOfficeId);
     for (const mailbox of [...this.mailboxes.values()].filter((box) => box.workspaceId === workspaceId && box.postOfficeId === postOfficeId)) {
       this.mailboxes.set(mailbox.id, { ...mailbox, active: false });
     }

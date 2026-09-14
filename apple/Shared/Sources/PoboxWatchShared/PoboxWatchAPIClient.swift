@@ -150,6 +150,22 @@ public actor PoboxWatchAPIClient {
         try validate(response, data: data)
     }
 
+    public func claimPostOffice(workspaceId: String, postOfficeId: String) async throws {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/post-offices/\(postOfficeId)/collection-claim")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+    }
+
+    public func releasePostOfficeClaim(workspaceId: String, postOfficeId: String) async throws {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/post-offices/\(postOfficeId)/collection-claim")
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+    }
+
     public func createUser(workspaceId: String, input: CreateUserInput) async throws -> TeamMember {
         let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/team/users")
         var request = URLRequest(url: url)

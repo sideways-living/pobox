@@ -160,6 +160,24 @@ final class MacMailboxViewModel: ObservableObject {
         }
     }
 
+    func claim(_ office: PostOffice) async {
+        busyMailboxId = "claim:\(office.id)"
+        defer { busyMailboxId = nil }
+        await run {
+            try await client.claimPostOffice(workspaceId: workspaceId, postOfficeId: office.id)
+            try await loadWorkspace()
+        }
+    }
+
+    func releaseClaim(_ office: PostOffice) async {
+        busyMailboxId = "claim:\(office.id)"
+        defer { busyMailboxId = nil }
+        await run {
+            try await client.releasePostOfficeClaim(workspaceId: workspaceId, postOfficeId: office.id)
+            try await loadWorkspace()
+        }
+    }
+
     func logout() async {
         loadGeneration += 1
         await run {
@@ -560,10 +578,20 @@ struct MacOverviewView: View {
     private func detailView(for item: String) -> some View {
         switch item {
         case "Overview":
-            MacOverviewDashboardView(snapshot: model.snapshot, reviewItems: model.reviewItems)
+            MacOverviewDashboardView(snapshot: model.snapshot, reviewItems: model.reviewItems, busyId: model.busyMailboxId, collect: { mailbox in
+                await model.collect(mailbox)
+            }, claim: { office in
+                await model.claim(office)
+            }, releaseClaim: { office in
+                await model.releaseClaim(office)
+            })
         case "Post Offices":
             MacMailboxListView(snapshot: model.snapshot, busyMailboxId: model.busyMailboxId, collect: { mailbox in
                 await model.collect(mailbox)
+            }, claim: { office in
+                await model.claim(office)
+            }, releaseClaim: { office in
+                await model.releaseClaim(office)
             }, updateMailbox: { mailbox, postOfficeId, boxNumber in
                 await model.updateMailbox(mailbox, postOfficeId: postOfficeId, boxNumber: boxNumber)
             }, deleteMailbox: { mailbox in
@@ -683,6 +711,10 @@ private struct MacSidebarBrand: View {
 struct MacOverviewDashboardView: View {
     let snapshot: MailboxDashboardSnapshot?
     let reviewItems: [ReviewItem]
+    let busyId: String?
+    let collect: (Mailbox) async -> Void
+    let claim: (PostOffice) async -> Void
+    let releaseClaim: (PostOffice) async -> Void
 
     private var waitingMailboxes: [Mailbox] {
         snapshot?.postOffices.flatMap(\.mailboxes).filter(hasWaitingItem) ?? []
@@ -695,8 +727,11 @@ struct MacOverviewDashboardView: View {
                     MacEmptyStateView(title: "Nothing waiting", subtitle: "All shared boxes are currently clear.")
                 } else {
                     ForEach(snapshot?.postOffices ?? []) { office in
+                        if office.mailboxes.contains(where: hasWaitingItem) {
+                            MacCollectionClaimControl(office: office, currentUser: snapshot?.currentUser, busy: busyId == "claim:\(office.id)", claim: claim, releaseClaim: releaseClaim)
+                        }
                         ForEach(office.mailboxes.filter(hasWaitingItem)) { mailbox in
-                            MacCollectionQueueRow(office: office, mailbox: mailbox)
+                            MacCollectionQueueRow(office: office, mailbox: mailbox, busy: busyId == mailbox.id, collectionBlocked: office.collectionClaim?.userId != nil && office.collectionClaim?.userId != snapshot?.currentUser.id, collect: collect)
                         }
                     }
                 }
@@ -721,6 +756,9 @@ struct MacOverviewDashboardView: View {
 private struct MacCollectionQueueRow: View {
     let office: PostOffice
     let mailbox: Mailbox
+    let busy: Bool
+    let collectionBlocked: Bool
+    let collect: (Mailbox) async -> Void
 
     var body: some View {
         HStack(spacing: 14) {
@@ -737,6 +775,13 @@ private struct MacCollectionQueueRow: View {
             }
 
             Spacer()
+
+            Button {
+                Task { await collect(mailbox) }
+            } label: {
+                Label("Collected", systemImage: "checkmark.circle")
+            }
+            .disabled(busy || collectionBlocked)
 
             Button {
                 openAppleMaps(office)
@@ -758,6 +803,8 @@ struct MacMailboxListView: View {
     let snapshot: MailboxDashboardSnapshot?
     let busyMailboxId: String?
     let collect: (Mailbox) async -> Void
+    let claim: (PostOffice) async -> Void
+    let releaseClaim: (PostOffice) async -> Void
     let updateMailbox: (Mailbox, String, String) async -> Void
     let deleteMailbox: (Mailbox) async -> Void
 
@@ -765,6 +812,9 @@ struct MacMailboxListView: View {
         MacPage(title: "Post Offices", subtitle: "Post offices with their assigned boxes.") {
             ForEach(snapshot?.postOffices ?? []) { office in
                 MacPanel(title: office.name, aside: office.address) {
+                    if office.mailboxes.contains(where: hasWaitingItem) {
+                        MacCollectionClaimControl(office: office, currentUser: snapshot?.currentUser, busy: busyMailboxId == "claim:\(office.id)", claim: claim, releaseClaim: releaseClaim)
+                    }
                     if office.mailboxes.isEmpty {
                         MacEmptyStateView(title: "No PO box assigned", subtitle: "This post office can be deleted or given a PO box.")
                     } else {
@@ -773,6 +823,7 @@ struct MacMailboxListView: View {
                                 mailbox: mailbox,
                                 postOffices: snapshot?.postOffices ?? [],
                                 busy: busyMailboxId == mailbox.id,
+                                collectionBlocked: office.collectionClaim?.userId != nil && office.collectionClaim?.userId != snapshot?.currentUser.id,
                                 collect: collect,
                                 updateMailbox: updateMailbox,
                                 deleteMailbox: deleteMailbox
@@ -789,6 +840,7 @@ struct MacMailboxManageRow: View {
     let mailbox: Mailbox
     let postOffices: [PostOffice]
     let busy: Bool
+    let collectionBlocked: Bool
     let collect: (Mailbox) async -> Void
     let updateMailbox: (Mailbox, String, String) async -> Void
     let deleteMailbox: (Mailbox) async -> Void
@@ -815,9 +867,9 @@ struct MacMailboxManageRow: View {
                     Button {
                         Task { await collect(mailbox) }
                     } label: {
-                        Label("Collect", systemImage: "checkmark.circle")
+                        Label("Collected", systemImage: "checkmark.circle")
                     }
-                    .disabled(busy)
+                    .disabled(busy || collectionBlocked)
                 }
                 Button {
                     postOfficeId = mailbox.postOfficeId
@@ -865,6 +917,38 @@ struct MacMailboxManageRow: View {
         } message: {
             Text("This removes the PO box from active pobox.watch views.")
         }
+    }
+}
+
+private struct MacCollectionClaimControl: View {
+    let office: PostOffice
+    let currentUser: CurrentUser?
+    let busy: Bool
+    let claim: (PostOffice) async -> Void
+    let releaseClaim: (PostOffice) async -> Void
+
+    private var ownsClaim: Bool { office.collectionClaim?.userId == currentUser?.id }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if let activeClaim = office.collectionClaim {
+                Label(ownsClaim ? "You're collecting until 3:00 am tomorrow" : "\(activeClaim.displayName) is collecting until 3:00 am tomorrow", systemImage: "person.badge.clock")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(ownsClaim ? PoboxTheme.green : PoboxTheme.blue)
+                Spacer()
+                if ownsClaim || currentUser?.role == "ADMIN" {
+                    Button("Cancel plan") { Task { await releaseClaim(office) } }
+                        .disabled(busy)
+                }
+            } else {
+                Button { Task { await claim(office) } } label: {
+                    Label("I'll collect today", systemImage: "person.badge.clock")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(busy)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

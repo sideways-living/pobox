@@ -18,6 +18,7 @@ import type { LctrPostOfficeLocation } from "../lctr/postOfficeLookup.js";
 import { appVersion, changesAfterVersion, compareVersions, isReleaseVersion } from "../releases.js";
 import type {
   AuditEvent,
+  CollectionClaim,
   CollectionEvent,
   CollectionSource,
   DashboardSnapshot,
@@ -29,6 +30,7 @@ import type {
   Workspace,
   WorkspaceMember
 } from "../domain.js";
+import { collectionClaimExpiresAt } from "../collectionClaims.js";
 import { parseMailNotification } from "../parser/mailParser.js";
 import { mailText } from "../parser/mailText.js";
 import type {
@@ -576,7 +578,10 @@ export class PrismaStore implements AppStore {
       this.prisma.postOffice.findMany({
         where: { workspaceId, active: true },
         orderBy: { name: "asc" },
-        include: { mailboxes: { where: { active: true }, orderBy: { boxNumber: "asc" } } }
+        include: {
+          mailboxes: { where: { active: true }, orderBy: { boxNumber: "asc" } },
+          collectionClaim: { include: { user: { include: { profile: true } } } }
+        }
       }),
       this.prisma.mailEvent.findMany({ where: { workspaceId }, orderBy: { processedAt: "desc" }, take: 50 }),
       this.prisma.collectionEvent.findMany({ where: { workspaceId }, orderBy: { collectedAt: "desc" }, take: 50 })
@@ -599,6 +604,14 @@ export class PrismaStore implements AppStore {
       outstandingMailboxCount: await this.outstandingMailboxCount(workspaceId),
       postOffices: offices.map((office: (typeof offices)[number]) => ({
         ...this.toPostOffice(office),
+        collectionClaim: office.collectionClaim && office.collectionClaim.expiresAt > new Date() ? {
+          postOfficeId: office.collectionClaim.postOfficeId,
+          workspaceId: office.collectionClaim.workspaceId,
+          userId: office.collectionClaim.claimedBy,
+          displayName: office.collectionClaim.user.profile?.displayName ?? office.collectionClaim.user.email,
+          claimedAt: office.collectionClaim.claimedAt.toISOString(),
+          expiresAt: office.collectionClaim.expiresAt.toISOString()
+        } : undefined,
         mailboxes: office.mailboxes.map(this.toMailbox)
       })),
       history
@@ -742,6 +755,15 @@ export class PrismaStore implements AppStore {
     await this.requireMember(session, workspaceId);
     const event = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await this.lockManagement(tx, workspaceId, session, false);
+      const target = await tx.mailbox.findFirst({ where: { id: mailboxId, workspaceId, active: true } });
+      if (!target) throw new NotFoundError("PO box not found.");
+      const claim = await tx.collectionClaim.findUnique({
+        where: { postOfficeId: target.postOfficeId },
+        include: { user: { include: { profile: true } } }
+      });
+      if (claim && claim.expiresAt > new Date() && claim.claimedBy !== session.userId) {
+        throw new ConflictError(`${claim.user.profile?.displayName ?? claim.user.email} is collecting from this post office.`);
+      }
       const updated = await tx.mailbox.updateMany({
         where: { id: mailboxId, workspaceId, active: true, ...(expectedUpdatedAt ? { updatedAt: new Date(expectedUpdatedAt) } : {}), OR: [{ mailWaiting: true }, { parcelWaiting: true }] },
         data: { mailWaiting: false, parcelWaiting: false, lastCollectedAt: new Date(), lastCollectedBy: session.userId }
@@ -768,9 +790,66 @@ export class PrismaStore implements AppStore {
           metadata: { source }
         }
       });
+      const stillWaiting = await tx.mailbox.count({
+        where: { postOfficeId: target.postOfficeId, active: true, OR: [{ mailWaiting: true }, { parcelWaiting: true }] }
+      });
+      if (!stillWaiting) await tx.collectionClaim.deleteMany({ where: { postOfficeId: target.postOfficeId } });
       return collection;
     });
     return this.toCollectionEvent(event);
+  }
+
+  private toCollectionClaim(row: { postOfficeId: string; workspaceId: string; claimedBy: string; claimedAt: Date; expiresAt: Date; user: { email: string; profile: { displayName: string } | null } }): CollectionClaim {
+    return {
+      postOfficeId: row.postOfficeId,
+      workspaceId: row.workspaceId,
+      userId: row.claimedBy,
+      displayName: row.user.profile?.displayName ?? row.user.email,
+      claimedAt: row.claimedAt.toISOString(),
+      expiresAt: row.expiresAt.toISOString()
+    };
+  }
+
+  async claimPostOffice(session: Session, workspaceId: string, postOfficeId: string): Promise<CollectionClaim> {
+    await this.requireMember(session, workspaceId);
+    const row = await this.prisma.$transaction(async (tx) => {
+      await this.lockManagement(tx, workspaceId, session, false);
+      const office = await tx.postOffice.findFirst({ where: { id: postOfficeId, workspaceId, active: true } });
+      if (!office) throw new NotFoundError("Post office not found.");
+      const waiting = await tx.mailbox.count({ where: { postOfficeId, active: true, OR: [{ mailWaiting: true }, { parcelWaiting: true }] } });
+      if (!waiting) throw new ConflictError("This post office has no mail or parcels waiting.");
+      const existing = await tx.collectionClaim.findUnique({ where: { postOfficeId }, include: { user: { include: { profile: true } } } });
+      if (existing && existing.expiresAt > new Date()) {
+        if (existing.claimedBy === session.userId) return existing;
+        throw new ConflictError(`${existing.user.profile?.displayName ?? existing.user.email} is already collecting from this post office.`);
+      }
+      const expiresAt = collectionClaimExpiresAt();
+      const claim = await tx.collectionClaim.upsert({
+        where: { postOfficeId },
+        create: { postOfficeId, workspaceId, claimedBy: session.userId, expiresAt },
+        update: { workspaceId, claimedBy: session.userId, claimedAt: new Date(), expiresAt },
+        include: { user: { include: { profile: true } } }
+      });
+      await this.audit(session.userId, workspaceId, "post_office.collection_claimed", "post_office", postOfficeId, { expiresAt: expiresAt.toISOString() }, tx);
+      return claim;
+    });
+    return this.toCollectionClaim(row);
+  }
+
+  async releasePostOfficeClaim(session: Session, workspaceId: string, postOfficeId: string): Promise<void> {
+    const member = await this.requireMember(session, workspaceId);
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockManagement(tx, workspaceId, session, false);
+      const existing = await tx.collectionClaim.findUnique({ where: { postOfficeId } });
+      if (!existing || existing.expiresAt <= new Date()) {
+        await tx.collectionClaim.deleteMany({ where: { postOfficeId, workspaceId } });
+        return;
+      }
+      if (existing.workspaceId !== workspaceId) throw new NotFoundError("Post office not found.");
+      if (existing.claimedBy !== session.userId && member.role !== "ADMIN") throw new ForbiddenError("Only the collector or an admin can cancel this plan.");
+      await tx.collectionClaim.delete({ where: { postOfficeId } });
+      await this.audit(session.userId, workspaceId, "post_office.collection_claim_released", "post_office", postOfficeId, { claimedBy: existing.claimedBy }, tx);
+    });
   }
 
   async listMembers(session: Session, workspaceId: string): Promise<TeamMemberSummary[]> {
@@ -1174,6 +1253,7 @@ export class PrismaStore implements AppStore {
       await this.lockManagement(tx, workspaceId, session);
       const offices = await tx.$queryRaw<Array<{ id: string; name: string }>>`SELECT id, name FROM "PostOffice" WHERE id = ${postOfficeId} AND "workspaceId" = ${workspaceId} AND active = true FOR UPDATE`;
       if (!offices.length) throw new NotFoundError("Post office not found.");
+      await tx.collectionClaim.deleteMany({ where: { postOfficeId, workspaceId } });
       await tx.mailbox.updateMany({ where: { workspaceId, postOfficeId }, data: { active: false } });
       await tx.postOffice.update({ where: { id: postOfficeId }, data: { active: false } });
       await this.audit(session.userId, workspaceId, "post_office.deleted", "post_office", postOfficeId, { name: offices[0].name, action: "archived_history_and_pending_review_preserved" }, tx);

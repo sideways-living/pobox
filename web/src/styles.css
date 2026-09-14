@@ -287,6 +287,39 @@ h3 {
   gap: 12px;
 }
 
+.collection-plan-button {
+  width: fit-content;
+}
+
+.collection-claim {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 6px 8px;
+  border: 1px solid #bdd0df;
+  border-radius: 6px;
+  background: #eef6fb;
+  color: #23485f;
+}
+
+.collection-claim.own {
+  border-color: #9bcbb0;
+  background: #eef8f2;
+  color: #215a3a;
+}
+
+.collection-claim > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.collection-claim small {
+  color: inherit;
+  font-weight: 500;
+}
+
 .mailbox {
   display: flex;
   justify-content: space-between;
