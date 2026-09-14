@@ -718,15 +718,15 @@ private struct MacSidebarBrand: View {
             HStack(spacing: 12) {
                 Image(nsImage: NSApp.applicationIconImage)
                     .resizable()
-                    .frame(width: 46, height: 46)
+                    .frame(width: 92, height: 92)
                     .overlay(alignment: .topTrailing) {
                         if waitingCount > 0 {
                             Text("\(waitingCount)")
-                                .font(.caption2.bold())
+                                .font(.title3.bold())
                                 .foregroundStyle(.white)
-                                .frame(minWidth: 18, minHeight: 18)
+                                .frame(minWidth: 36, minHeight: 36)
                                 .background(.red, in: Capsule())
-                                .offset(x: 5, y: -4)
+                                .offset(x: 10, y: -8)
                         }
                     }
                     .accessibilityLabel("pobox.watch")

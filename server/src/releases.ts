@@ -1,4 +1,4 @@
-export const appVersion = "0.13.29";
+export const appVersion = "0.13.30";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.30-larger-mac-logo",
+    version: "0.13.30",
+    releasedAt: "2026-09-14T18:00:00.000Z",
+    title: "A clearer Mac app header",
+    summary: "The pobox.watch logo and its collection-count badge are now twice as large at the top of the Mac app sidebar.",
+    audience: "ALL"
+  },
   {
     id: "0.13.29-mac-badges-larger-actions",
     version: "0.13.29",
