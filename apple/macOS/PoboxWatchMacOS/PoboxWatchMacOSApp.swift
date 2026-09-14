@@ -689,51 +689,68 @@ struct MacOverviewDashboardView: View {
     }
 
     var body: some View {
-        MacPage(title: snapshot?.workspace.name ?? "Overview", subtitle: signedInText) {
+        MacPage(title: collectionHeading, subtitle: signedInText) {
             MacPanel(title: "Collection Queue", aside: "\(waitingMailboxes.count) waiting") {
                 if waitingMailboxes.isEmpty {
                     MacEmptyStateView(title: "Nothing waiting", subtitle: "All shared boxes are currently clear.")
                 } else {
-                    ForEach(waitingMailboxes) { mailbox in
-                        MacInfoRow(
-                            title: mailbox.name,
-                            detail: mailboxStatusLine(mailbox),
-                            systemImage: mailbox.parcelWaiting ? "shippingbox.fill" : "tray.full.fill",
-                            tint: mailbox.parcelWaiting ? PoboxTheme.blue : PoboxTheme.orange
-                        )
+                    ForEach(snapshot?.postOffices ?? []) { office in
+                        ForEach(office.mailboxes.filter(hasWaitingItem)) { mailbox in
+                            MacCollectionQueueRow(office: office, mailbox: mailbox)
+                        }
                     }
                 }
             }
+        }
+    }
 
-            if let nextOffice = snapshot?.postOffices.first(where: { $0.mailboxes.contains(where: hasWaitingItem) }) {
-                MacPanel(title: "Next Location", aside: "Apple Maps") {
-                    HStack(spacing: 12) {
-                        Image(systemName: "map.fill")
-                            .foregroundStyle(.blue)
-                            .frame(width: 24)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(nextOffice.name)
-                                .font(.headline)
-                            Text(nextOffice.address)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button {
-                            openAppleMaps(nextOffice)
-                        } label: {
-                            Label("Open in Apple Maps", systemImage: "arrow.up.right.square")
-                        }
-                    }
-                    .padding(14)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-                }
-            }
+    private var collectionHeading: String {
+        switch waitingMailboxes.count {
+        case 0: "All up to date, no mail to collect"
+        case 1: "1 Mailbox to collect"
+        default: "\(waitingMailboxes.count) Mailboxes to collect"
         }
     }
 
     private var signedInText: String {
         guard let snapshot else { return "Loading live pobox.watch data." }
         return "Signed in as \(snapshot.currentUser.displayName)."
+    }
+}
+
+private struct MacCollectionQueueRow: View {
+    let office: PostOffice
+    let mailbox: Mailbox
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: mailbox.parcelWaiting ? "shippingbox.fill" : "envelope.fill")
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(mailbox.parcelWaiting ? PoboxTheme.blue : PoboxTheme.orange, in: RoundedRectangle(cornerRadius: 7))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(office.name)
+                    .font(.headline)
+                Text("PO Box \(mailbox.boxNumber)")
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button {
+                openAppleMaps(office)
+            } label: {
+                Image(systemName: "map.fill")
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.bordered)
+            .help("Open \(office.name) in Apple Maps")
+            .accessibilityLabel("Open \(office.name) in Apple Maps")
+        }
+        .padding(14)
+        .background(PoboxTheme.surface, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(PoboxTheme.border))
     }
 }
 

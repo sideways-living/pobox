@@ -1,4 +1,4 @@
-export const appVersion = "0.13.19";
+export const appVersion = "0.13.20";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.20-mac-collection-overview",
+    version: "0.13.20",
+    releasedAt: "2026-09-14T09:00:00.000Z",
+    title: "A clearer Mac collection queue",
+    summary: "The Mac app now shows how many PO boxes need collection at the top of Overview. Each waiting item shows its post office and PO Box number, with a direct Apple Maps button.",
+    audience: "ALL"
+  },
   {
     id: "0.13.19-native-design-refresh",
     version: "0.13.19",
