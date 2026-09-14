@@ -345,42 +345,50 @@ struct iPhoneLoginView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Sign in with your passkey")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Image("HeaderIcon")
+                            .resizable()
+                            .frame(width: 80, height: 80)
+                            .accessibilityHidden(true)
+                        Text("pobox.watch")
+                            .font(.largeTitle.bold())
+                        Text(model.twoFactorChallengeId == nil ? "Sign in with your passkey" : "Enter your authenticator code")
                             .font(.title2.bold())
-                        Text("pobox.watch requires a passkey and authenticator 2FA for every account.")
+                        Text("Secure access to your shared post offices and collection queue.")
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.vertical, 6)
-                }
 
-                Section("Account") {
+                    VStack(alignment: .leading, spacing: 14) {
                     if model.twoFactorChallengeId == nil {
                         TextField("Email", text: $model.email)
                             .textContentType(.username)
                             .textInputAutocapitalization(.never)
                             .keyboardType(.emailAddress)
+                            .poboxLoginField()
 
                         if model.passwordMode {
                             SecureField("Password", text: $model.password)
                                 .textContentType(.password)
+                                .poboxLoginField()
                         }
                     } else {
                         TextField("Authenticator or recovery code", text: $model.twoFactorCode)
                             .textContentType(.oneTimeCode)
                             .keyboardType(.numberPad)
+                            .poboxLoginField()
                     }
-                }
 
-                Section {
                     if model.twoFactorChallengeId != nil {
                         Button {
                             Task { await model.verifySecondFactor() }
                         } label: {
                             Label("Verify Code", systemImage: "checkmark.shield")
+                                .frame(maxWidth: .infinity)
                         }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
                         .disabled(model.isLoading || model.twoFactorCode.isEmpty)
 
                         Button("Cancel") {
@@ -392,7 +400,10 @@ struct iPhoneLoginView: View {
                             Task { await model.signInWithPassword() }
                         } label: {
                             Label("Continue with Password", systemImage: "lock")
+                                .frame(maxWidth: .infinity)
                         }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
                         .disabled(model.isLoading || model.email.isEmpty || model.password.isEmpty)
 
                         Button {
@@ -406,34 +417,39 @@ struct iPhoneLoginView: View {
                             model.openPasskeySignIn()
                         } label: {
                             Label("Continue with Passkey", systemImage: "key.fill")
+                                .frame(maxWidth: .infinity)
                         }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
                         .disabled(model.isLoading || model.email.isEmpty)
 
-                        Link("Forgot Password?", destination: URL(string: "https://pobox.watch/?forgot-password=1")!)
                         Button("Use Password to Set Up Security") {
                             model.passwordMode = true
                         }
+                        Link("Forgot Password?", destination: URL(string: "https://pobox.watch/?forgot-password=1")!)
                     }
 
                     if model.isLoading {
                         ProgressView()
+                            .frame(maxWidth: .infinity)
                     }
-                }
+                    }
 
-                Section {
                     Text("Passkey sign-in opens pobox.watch in Safari and returns here automatically after your account is secure.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                }
 
-                if let errorMessage = model.errorMessage {
-                    Section {
-                        Text(errorMessage)
+                    if let errorMessage = model.errorMessage {
+                        Label(errorMessage, systemImage: "exclamationmark.circle.fill")
                             .foregroundStyle(.red)
                     }
                 }
+                .padding(24)
+                .frame(maxWidth: 560, alignment: .leading)
             }
-            .navigationTitle("pobox.watch")
+            .background(PoboxTheme.pageBackground)
+            .tint(PoboxTheme.blue)
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 }
@@ -574,9 +590,13 @@ struct iPhoneDashboardView: View {
                   .padding(.horizontal, 20)
                   .padding(.vertical, 8)
                   .frame(maxWidth: .infinity, alignment: .leading)
-                  .background(.background)
+                  .background(PoboxTheme.pageBackground)
           }
+          .toolbarBackground(PoboxTheme.ink, for: .navigationBar)
+          .toolbarBackground(.visible, for: .navigationBar)
+          .toolbarColorScheme(.dark, for: .navigationBar)
         }
+        .tint(PoboxTheme.blue)
         .overlay(alignment: .bottom) {
             if let errorMessage = model.errorMessage {
                 Text(errorMessage)
@@ -600,7 +620,7 @@ struct iPhoneOverviewList: View {
 
     var body: some View {
         List {
-            if let snapshot = model.snapshot {
+            if model.snapshot != nil {
                 Section("Collection Queue") {
                     if waitingMailboxes.isEmpty {
                         Label("All shared boxes are clear", systemImage: "checkmark.circle")
@@ -613,13 +633,9 @@ struct iPhoneOverviewList: View {
                     }
                 }
 
-                Section("Workspace") {
-                    iPhoneDetailRow(label: "Post offices", value: "\(snapshot.postOffices.count)")
-                    iPhoneDetailRow(label: "Boxes", value: "\(snapshot.postOffices.flatMap(\.mailboxes).count)")
-                    iPhoneDetailRow(label: "Needs review", value: "\(model.reviewItems.count)")
-                }
             }
         }
+        .iPhoneOperationalListStyle()
         .refreshable {
             await model.refresh()
         }
@@ -657,12 +673,15 @@ struct iPhoneMailboxList: View {
                         ContentUnavailableView("No PO box assigned", systemImage: "mail.stack", description: Text("This post office can be deleted or given a PO box."))
                     }
                 } header: {
-                    Text(office.name)
+                    Label(office.name, systemImage: "building.2.fill")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
                 } footer: {
                     Text(office.address)
                 }
             }
         }
+        .iPhoneOperationalListStyle()
         .refreshable {
             await model.refresh()
         }
@@ -695,6 +714,7 @@ struct iPhoneMailboxRow: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+                iPhoneStatusBadge(mailbox: mailbox)
                 if hasWaitingItem(mailbox) {
                     Button {
                         Task { await collect() }
@@ -702,10 +722,13 @@ struct iPhoneMailboxRow: View {
                         if busy {
                             ProgressView()
                         } else {
-                            Text("Collect")
+                            Image(systemName: "checkmark")
                         }
                     }
+                    .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.circle)
                     .disabled(busy)
+                    .accessibilityLabel("Mark collected")
                 }
             }
 
@@ -724,6 +747,7 @@ struct iPhoneMailboxRow: View {
                         Label("Delete", systemImage: "trash")
                     }
                 }
+                .buttonStyle(.borderless)
             }
 
             if editing {
@@ -766,6 +790,7 @@ struct iPhoneMapList: View {
                 iPhonePostOfficeSection(office: office, updatePostOffice: updatePostOffice, deletePostOffice: deletePostOffice)
             }
         }
+        .iPhoneOperationalListStyle()
     }
 }
 
@@ -889,6 +914,7 @@ struct iPhoneHistoryList: View {
                 }
             }
         }
+        .iPhoneOperationalListStyle()
     }
 
     private func title(for event: MailboxHistoryEvent) -> String {
@@ -956,6 +982,7 @@ struct iPhoneReviewList: View {
                 }
             }
         }
+        .iPhoneOperationalListStyle()
     }
 
     private func mailboxChoices(from snapshot: MailboxDashboardSnapshot?) -> [iPhoneMailboxChoice] {
@@ -1184,6 +1211,7 @@ struct iPhoneTeamView: View {
                 }
             }
         }
+        .iPhoneOperationalListStyle()
     }
 }
 
@@ -1202,11 +1230,24 @@ struct iPhoneTeamMemberRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(member.displayName)
-                .font(.headline)
-            Text("\(member.email) - \(member.role) - \(member.status)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                Text(String(member.displayName.prefix(1)).uppercased())
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(width: 38, height: 38)
+                    .background(member.active ? PoboxTheme.blue : Color.secondary, in: Circle())
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(member.displayName)
+                        .font(.headline)
+                    Text(member.email)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        iPhoneTextBadge(text: member.status.capitalized, tint: member.active ? PoboxTheme.green : .secondary)
+                        iPhoneTextBadge(text: member.role.capitalized, tint: PoboxTheme.blue)
+                    }
+                }
+            }
             if canManage {
                 HStack {
                     Button {
@@ -1216,21 +1257,28 @@ struct iPhoneTeamMemberRow: View {
                         status = member.status
                         editing.toggle()
                     } label: {
-                        Label("Edit", systemImage: "pencil")
+                        Image(systemName: "pencil")
                     }
-                    Button(member.active ? "Disable" : "Reactivate") {
+                    .accessibilityLabel("Edit \(member.displayName)")
+                    Button {
                         Task {
                             await updateUser(member, member.email, member.displayName, member.role, member.active ? "DISABLED" : "ACTIVE")
                         }
+                    } label: {
+                        Image(systemName: member.active ? "person.slash" : "person.badge.plus")
                     }
                     .disabled(member.id == currentUserId)
+                    .accessibilityLabel(member.active ? "Disable \(member.displayName)" : "Reactivate \(member.displayName)")
                     Button(role: .destructive) {
                         confirmDelete = true
                     } label: {
-                        Label("Delete", systemImage: "trash")
+                        Image(systemName: "trash")
                     }
                     .disabled(member.id == currentUserId)
+                    .accessibilityLabel("Delete \(member.displayName)")
                 }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.circle)
             } else {
                 Label("Admin required", systemImage: "lock")
                     .font(.caption)
@@ -1330,6 +1378,7 @@ struct iPhoneSettingsView: View {
                 }
             }
         }
+        .iPhoneOperationalListStyle()
     }
 }
 
@@ -1512,6 +1561,48 @@ struct iPhoneDetailRow: View {
             Text(value)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct iPhoneStatusBadge: View {
+    let mailbox: Mailbox
+
+    var body: some View {
+        Image(systemName: hasWaitingItem(mailbox) ? (mailbox.parcelWaiting ? "shippingbox.fill" : "envelope.fill") : "checkmark")
+            .font(.caption.bold())
+            .foregroundStyle(hasWaitingItem(mailbox) ? PoboxTheme.orange : PoboxTheme.green)
+            .frame(width: 30, height: 30)
+            .background((hasWaitingItem(mailbox) ? PoboxTheme.orange : PoboxTheme.green).opacity(0.12), in: Circle())
+            .accessibilityLabel(mailboxStatus(mailbox))
+    }
+}
+
+private struct iPhoneTextBadge: View {
+    let text: String
+    let tint: Color
+
+    var body: some View {
+        Text(text)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(tint.opacity(0.12), in: Capsule())
+    }
+}
+
+private extension View {
+    func iPhoneOperationalListStyle() -> some View {
+        scrollContentBackground(.hidden)
+            .background(PoboxTheme.pageBackground)
+            .listStyle(.insetGrouped)
+    }
+
+    func poboxLoginField() -> some View {
+        padding(.horizontal, 14)
+            .frame(minHeight: 50)
+            .background(PoboxTheme.surface, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(PoboxTheme.border))
     }
 }
 

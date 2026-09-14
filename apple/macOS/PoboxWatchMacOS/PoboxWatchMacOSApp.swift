@@ -386,33 +386,49 @@ struct MacLoginView: View {
     @ObservedObject var model: MacMailboxViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("pobox.watch")
-                    .font(.largeTitle.bold())
+        ZStack {
+            PoboxTheme.pageBackground
+                .ignoresSafeArea()
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 18) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .frame(width: 76, height: 76)
+                        .accessibilityHidden(true)
+                    Text("pobox.watch")
+                        .font(.system(size: 36, weight: .bold))
+                    Text("Know what is waiting before you visit the post office.")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: 340, alignment: .leading)
+                    Spacer()
+                    Label("Secure shared mailbox access", systemImage: "checkmark.shield.fill")
+                        .foregroundStyle(PoboxTheme.green)
+                }
+                .padding(44)
+                .frame(minWidth: 350, maxWidth: 430, maxHeight: .infinity, alignment: .topLeading)
+                .background(PoboxTheme.sky.opacity(0.55))
+
+                VStack(alignment: .leading, spacing: 20) {
                 Text(model.twoFactorChallengeId == nil ? "Sign in with your passkey" : "Enter your authenticator code")
-                    .font(.title3.weight(.semibold))
+                    .font(.title.bold())
                 Text("pobox.watch requires a passkey and authenticator 2FA for every account.")
                     .foregroundStyle(.secondary)
-            }
 
-            if model.twoFactorChallengeId == nil {
-                TextField("Email", text: $model.email)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 380)
-
-                if model.passwordMode {
-                    SecureField("Password", text: $model.password)
+                if model.twoFactorChallengeId == nil {
+                    TextField("Email", text: $model.email)
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 380)
-                }
-            } else {
-                TextField("Authenticator or recovery code", text: $model.twoFactorCode)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 380)
-            }
 
-            HStack(spacing: 10) {
+                    if model.passwordMode {
+                        SecureField("Password", text: $model.password)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                } else {
+                    TextField("Authenticator or recovery code", text: $model.twoFactorCode)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
                 if model.twoFactorChallengeId != nil {
                     Button {
                         Task { await model.verifySecondFactor() }
@@ -450,9 +466,11 @@ struct MacLoginView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(model.isLoading || model.email.isEmpty)
 
-                    Link("Forgot Password?", destination: URL(string: "https://pobox.watch/?forgot-password=1")!)
-                    Button("Use Password to Set Up Security") {
-                        model.passwordMode = true
+                    HStack(spacing: 16) {
+                        Link("Forgot Password?", destination: URL(string: "https://pobox.watch/?forgot-password=1")!)
+                        Button("Use Password to Set Up Security") {
+                            model.passwordMode = true
+                        }
                     }
                 }
 
@@ -460,23 +478,24 @@ struct MacLoginView: View {
                     ProgressView()
                         .controlSize(.small)
                 }
+                }
+
+                Text("Passkey sign-in opens pobox.watch in your browser and returns here automatically after your account is secure.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                if let errorMessage = model.errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.circle.fill")
+                        .foregroundStyle(.red)
+                }
+
+                Spacer()
             }
-
-            Text("Passkey sign-in opens pobox.watch in your browser and returns here automatically after your account is secure.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: 520, alignment: .leading)
-
-            if let errorMessage = model.errorMessage {
-                Text(errorMessage)
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: 520, alignment: .leading)
+            .padding(44)
+            .frame(minWidth: 430, maxWidth: 560, maxHeight: .infinity, alignment: .leading)
             }
-
-            Spacer()
         }
-        .padding(36)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .tint(PoboxTheme.blue)
     }
 }
 
@@ -487,28 +506,54 @@ struct MacOverviewView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(items, id: \.self, selection: $selection) { item in
-                Label(item, systemImage: icon(for: item))
+            List(selection: $selection) {
+                MacSidebarBrand(
+                    userName: model.snapshot?.currentUser.displayName ?? "",
+                    role: model.snapshot?.currentUser.role ?? "",
+                    waitingCount: model.snapshot?.outstandingMailboxCount ?? 0
+                )
+                .listRowInsets(EdgeInsets(top: 12, leading: 12, bottom: 16, trailing: 12))
+                .listRowSeparator(.hidden)
+
+                Section("Workspace") {
+                    ForEach(items, id: \.self) { item in
+                        Label(item, systemImage: icon(for: item))
+                            .tag(item)
+                            .fontWeight(selection == item ? .semibold : .regular)
+                    }
+                }
+
+                Section {
+                    Label("Live updates", systemImage: "dot.radiowaves.left.and.right")
+                        .foregroundStyle(PoboxTheme.green)
+                    Text("Refreshes every 30 seconds")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .navigationTitle("pobox.watch")
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 245, max: 280)
         } detail: {
             detailView(for: selection)
                 .toolbar {
                     Button {
                         Task { await model.refresh() }
                     } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
+                        Image(systemName: "arrow.clockwise")
                     }
                     .disabled(model.isLoading)
+                    .help("Refresh now")
 
                     Button {
                         Task { await model.logout() }
                     } label: {
-                        Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
                     }
                     .disabled(model.isLoading)
+                    .help("Log out")
                 }
         }
+        .tint(PoboxTheme.blue)
     }
 
     @ViewBuilder
@@ -588,6 +633,53 @@ struct MacOverviewView: View {
     }
 }
 
+private struct MacSidebarBrand: View {
+    let userName: String
+    let role: String
+    let waitingCount: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .frame(width: 46, height: 46)
+                    .overlay(alignment: .topTrailing) {
+                        if waitingCount > 0 {
+                            Text("\(waitingCount)")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.white)
+                                .frame(minWidth: 18, minHeight: 18)
+                                .background(.red, in: Capsule())
+                                .offset(x: 5, y: -4)
+                        }
+                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("pobox.watch")
+                        .font(.headline)
+                    if waitingCount > 0 {
+                        Text("\(waitingCount) to collect")
+                            .font(.caption)
+                            .foregroundStyle(PoboxTheme.orange)
+                    } else {
+                        Text("All boxes clear")
+                            .font(.caption)
+                            .foregroundStyle(PoboxTheme.green)
+                    }
+                }
+            }
+            if !userName.isEmpty {
+                Text(userName)
+                    .font(.callout.weight(.semibold))
+                Text(role.capitalized)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 struct MacOverviewDashboardView: View {
     let snapshot: MailboxDashboardSnapshot?
     let reviewItems: [ReviewItem]
@@ -605,9 +697,9 @@ struct MacOverviewDashboardView: View {
                     ForEach(waitingMailboxes) { mailbox in
                         MacInfoRow(
                             title: mailbox.name,
-                            detail: "PO Box \(mailbox.boxNumber)",
-                            systemImage: "tray.full.fill",
-                            tint: PoboxTheme.orange
+                            detail: mailboxStatusLine(mailbox),
+                            systemImage: mailbox.parcelWaiting ? "shippingbox.fill" : "tray.full.fill",
+                            tint: mailbox.parcelWaiting ? PoboxTheme.blue : PoboxTheme.orange
                         )
                     }
                 }
@@ -701,6 +793,7 @@ struct MacMailboxManageRow: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+                MacStatusBadge(mailbox: mailbox)
                 if hasWaitingItem(mailbox) {
                     Button {
                         Task { await collect(mailbox) }
@@ -744,8 +837,9 @@ struct MacMailboxManageRow: View {
                 }
             }
         }
-        .padding(12)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        .padding(14)
+        .background(PoboxTheme.surface, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(PoboxTheme.border))
         .confirmationDialog("Delete PO Box \(mailbox.boxNumber)?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete PO Box", role: .destructive) {
                 Task { await deleteMailbox(mailbox) }
@@ -1575,8 +1669,9 @@ struct MacInfoRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: systemImage)
-                .foregroundStyle(tint)
-                .frame(width: 22)
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(tint, in: RoundedRectangle(cornerRadius: 7))
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.headline)
@@ -1586,7 +1681,8 @@ struct MacInfoRow: View {
             Spacer()
         }
         .padding(14)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        .background(PoboxTheme.surface, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(PoboxTheme.border))
     }
 }
 
@@ -1615,6 +1711,7 @@ struct MacPanel<Content: View>: View {
             }
             content
         }
+        .padding(.bottom, 4)
         .frame(maxWidth: 840, alignment: .leading)
     }
 }
@@ -1645,6 +1742,7 @@ struct MacPage<Content: View>: View {
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(PoboxTheme.pageBackground)
     }
 }
 
@@ -1661,7 +1759,21 @@ struct MacEmptyStateView: View {
         }
         .frame(maxWidth: 720, alignment: .leading)
         .padding(14)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        .background(PoboxTheme.surface, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(PoboxTheme.border))
+    }
+}
+
+private struct MacStatusBadge: View {
+    let mailbox: Mailbox
+
+    var body: some View {
+        Text(mailboxStatus(mailbox))
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(hasWaitingItem(mailbox) ? PoboxTheme.orange : PoboxTheme.green)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background((hasWaitingItem(mailbox) ? PoboxTheme.orange : PoboxTheme.green).opacity(0.12), in: Capsule())
     }
 }
 

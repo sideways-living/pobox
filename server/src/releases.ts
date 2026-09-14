@@ -1,4 +1,4 @@
-export const appVersion = "0.13.18";
+export const appVersion = "0.13.19";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.19-native-design-refresh",
+    version: "0.13.19",
+    releasedAt: "2026-09-14T08:00:00.000Z",
+    title: "A clearer Mac and iPhone experience",
+    summary: "The Mac and iPhone apps now use the pobox.watch colours and app icon throughout, with clearer navigation, collection status, sign-in screens and team controls.",
+    audience: "ALL"
+  },
   {
     id: "0.13.18-team-avatars-actions",
     version: "0.13.18",
