@@ -440,34 +440,39 @@ struct iPhoneLoginView: View {
 
 struct iPhoneDashboardView: View {
     @ObservedObject var model: iPhoneMailboxViewModel
+    @State private var selection = "Overview"
+
+    private let destinations: [(String, String)] = [
+        ("Overview", "tray.full"), ("Post Offices", "mail.stack"),
+        ("Map", "map"), ("History", "clock"),
+        ("Activity", "list.bullet.rectangle"), ("Needs Review", "exclamationmark.triangle"),
+        ("Team", "person.2"), ("Settings", "gearshape")
+    ]
 
     var body: some View {
-        TabView {
-            iPhoneTab(title: "Overview", systemImage: "tray.full") {
+        NavigationStack {
+          Group {
+            switch selection {
+            case "Overview":
                 iPhoneOverviewList(model: model)
-            }
 
-            iPhoneTab(title: "Post Offices", systemImage: "mail.stack") {
+            case "Post Offices":
                 iPhoneMailboxList(model: model)
-            }
 
-            iPhoneTab(title: "Map", systemImage: "map") {
+            case "Map":
                 iPhoneMapList(snapshot: model.snapshot, updatePostOffice: { office, name, address, phone, latitude, longitude, radius in
                     await model.updatePostOffice(office, name: name, address: address, phone: phone, latitude: latitude, longitude: longitude, geofenceRadius: radius)
                 }, deletePostOffice: { office in
                     await model.deletePostOffice(office)
                 })
-            }
 
-            iPhoneTab(title: "History", systemImage: "clock") {
+            case "History":
                 iPhoneHistoryList(snapshot: model.snapshot, mode: .history)
-            }
 
-            iPhoneTab(title: "Activity", systemImage: "list.bullet.rectangle") {
+            case "Activity":
                 iPhoneHistoryList(snapshot: model.snapshot, mode: .activity)
-            }
 
-            iPhoneTab(title: "Needs Review", systemImage: "exclamationmark.triangle") {
+            case "Needs Review":
                 iPhoneReviewList(
                     snapshot: model.snapshot,
                     reviewItems: model.reviewItems,
@@ -484,9 +489,8 @@ struct iPhoneDashboardView: View {
                         await model.dismissReviewItem(item)
                     }
                 )
-            }
 
-            iPhoneTab(title: "Team", systemImage: "person.2") {
+            case "Team":
                 iPhoneTeamView(snapshot: model.snapshot, members: model.members, createUser: { email, displayName, password, role in
                     await model.createUser(email: email, displayName: displayName, password: password, role: role)
                 }, updateUser: { member, email, displayName, role, status in
@@ -494,9 +498,8 @@ struct iPhoneDashboardView: View {
                 }, deleteUser: { member in
                     await model.deleteUser(member)
                 })
-            }
 
-            iPhoneTab(title: "Settings", systemImage: "gearshape") {
+            default:
                 iPhoneSettingsView(snapshot: model.snapshot, logout: {
                     await model.logout()
                 }, locationResults: model.postOfficeLocationResults, searchPostOfficeLocations: { query in
@@ -507,6 +510,72 @@ struct iPhoneDashboardView: View {
                     await model.createMailbox(postOfficeId: postOfficeId, boxNumber: boxNumber)
                 })
             }
+          }
+          .navigationTitle(selection)
+          .navigationBarTitleDisplayMode(.inline)
+          .toolbar {
+              ToolbarItem(placement: .principal) {
+                  HStack(spacing: 10) {
+                      Image("HeaderIcon")
+                          .resizable()
+                          .frame(width: 32, height: 32)
+                          .overlay(alignment: .topTrailing) {
+                              if let count = model.snapshot?.outstandingMailboxCount, count > 0 {
+                                  Text("\(count)")
+                                      .font(.system(size: 11, weight: .bold))
+                                      .foregroundStyle(.white)
+                                      .padding(.horizontal, 5)
+                                      .frame(minWidth: 20, minHeight: 20)
+                                      .background(.red, in: Capsule())
+                                      .offset(x: 7, y: -5)
+                                      .accessibilityLabel("\(count) boxes needing collection")
+                              }
+                          }
+                      Text("pobox.watch").font(.headline)
+                  }
+              }
+              ToolbarItem(placement: .topBarTrailing) {
+                  Menu {
+                      Section("Navigate") {
+                          ForEach(destinations, id: \.0) { title, symbol in
+                              Button { selection = title } label: {
+                                  Label(title, systemImage: selection == title ? "checkmark" : symbol)
+                              }
+                          }
+                      }
+                      Section("Signed in") {
+                          Text(model.snapshot?.currentUser.displayName ?? "")
+                          Text(model.snapshot?.currentUser.email ?? "")
+                          Label("Refreshes every 30 seconds", systemImage: "arrow.clockwise")
+                          Button {
+                              Task { await model.refresh() }
+                          } label: {
+                              Label("Refresh Now", systemImage: "arrow.clockwise")
+                          }
+                          .disabled(model.isLoading)
+                          Button(role: .destructive) {
+                              Task { await model.logout() }
+                          } label: {
+                              Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
+                          }
+                          .disabled(model.isLoading)
+                      }
+                  } label: {
+                      Image(systemName: "line.3.horizontal")
+                          .frame(width: 44, height: 44)
+                  }
+                  .accessibilityLabel("Open menu")
+                  .accessibilityHint("Navigation, account and logout")
+              }
+          }
+          .safeAreaInset(edge: .top, alignment: .leading, spacing: 0) {
+              Text(selection)
+                  .font(.title2.bold())
+                  .padding(.horizontal, 20)
+                  .padding(.vertical, 8)
+                  .frame(maxWidth: .infinity, alignment: .leading)
+                  .background(.background)
+          }
         }
         .overlay(alignment: .bottom) {
             if let errorMessage = model.errorMessage {
@@ -522,20 +591,6 @@ struct iPhoneDashboardView: View {
     }
 }
 
-struct iPhoneTab<Content: View>: View {
-    let title: String
-    let systemImage: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        NavigationStack {
-            content
-                .navigationTitle(title == "Overview" ? "pobox.watch" : title)
-        }
-        .tabItem { Label(title, systemImage: systemImage) }
-    }
-}
-
 struct iPhoneOverviewList: View {
     @ObservedObject var model: iPhoneMailboxViewModel
 
@@ -546,19 +601,6 @@ struct iPhoneOverviewList: View {
     var body: some View {
         List {
             if let snapshot = model.snapshot {
-                Section {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("\(snapshot.outstandingMailboxCount)")
-                            .font(.system(size: 46, weight: .bold))
-                        Text(snapshot.outstandingMailboxCount == 1 ? "Box needs checking" : "Boxes need checking")
-                            .foregroundStyle(.secondary)
-                        Text("Signed in as \(snapshot.currentUser.displayName)")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 8)
-                }
-
                 Section("Collection Queue") {
                     if waitingMailboxes.isEmpty {
                         Label("All shared boxes are clear", systemImage: "checkmark.circle")

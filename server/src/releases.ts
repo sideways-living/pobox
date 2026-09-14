@@ -1,4 +1,4 @@
-export const appVersion = "0.13.14";
+export const appVersion = "0.13.15";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.15-iphone-menu",
+    version: "0.13.15",
+    releasedAt: "2026-09-14T04:00:00.000Z",
+    title: "A simpler iPhone menu",
+    summary: "The updated iPhone app uses the same header style as the website, with a collection count on the app icon. Open the top-right menu to change pages, view your account, refresh or log out. Install the updated iPhone app to see these changes.",
+    audience: "ALL"
+  },
   {
     id: "0.13.14-collection-badge",
     version: "0.13.14",
