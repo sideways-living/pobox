@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import { load as loadMapKit } from "@apple/mapkit-loader";
 import type { Annotation, Map as AppleMap } from "@apple/mapkit-loader";
-import { AlertTriangle, Bell, Check, Clock, Edit2, ExternalLink, KeyRound, LogIn, LogOut, Mail, MapPin, Package, Plus, RefreshCw, Route, Save, Shield, Trash2, Users, X } from "lucide-react";
+import { AlertTriangle, Bell, Check, Clock, Edit2, ExternalLink, KeyRound, LogIn, LogOut, Mail, MapPin, Menu, Package, Plus, RefreshCw, Route, Save, Shield, Trash2, Users, X } from "lucide-react";
 import {
   authenticatePasskey,
   beginNativeHandoff,
@@ -65,6 +65,21 @@ function loginEmailFromLocation() {
 }
 
 function App() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const outside = (event: PointerEvent) => {
+      if (!sidebarRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setMenuOpen(false); menuButtonRef.current?.focus(); }
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape); };
+  }, [menuOpen]);
   const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get("reset-password"));
   useEffect(() => {
     const receiveResetLink = () => {
@@ -258,9 +273,13 @@ function App() {
 
   return (
     <main className="app-shell">
-      <aside className="sidebar">
-        <div className="brand"><Mail size={22} />pobox.watch</div>
-        <nav>
+      <aside className="sidebar" ref={sidebarRef}>
+        <div className="sidebar-header">
+          <div className="brand"><img src="/icons/icon-192.png" alt="" />pobox.watch</div>
+          <button ref={menuButtonRef} type="button" className="mobile-menu-toggle" aria-label={menuOpen ? "Close menu" : "Open menu"} title={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} aria-controls="header-menu" onClick={() => setMenuOpen(open => !open)}>{menuOpen ? <X size={23} /> : <Menu size={23} />}</button>
+        </div>
+        <div id="header-menu" className={`sidebar-menu${menuOpen ? " is-open" : ""}`}>
+        <nav aria-label="Main navigation" onClick={() => { if (menuOpen) { setMenuOpen(false); menuButtonRef.current?.focus(); } }}>
           <NavItem icon={<Bell size={17} />} label="Overview" active={section === "Overview"} onClick={() => setSection("Overview")} />
           <NavItem icon={<Mail size={17} />} label="Post Offices" active={section === "Mailboxes"} onClick={() => setSection("Mailboxes")} />
           <NavItem icon={<MapPin size={17} />} label="Map" active={section === "Map"} onClick={() => setSection("Map")} />
@@ -269,6 +288,13 @@ function App() {
           <NavItem icon={<Users size={17} />} label="Team" active={section === "Team"} onClick={() => setSection("Team")} />
           <NavItem icon={<Shield size={17} />} label="Settings" active={section === "Settings"} onClick={() => setSection("Settings")} />
         </nav>
+        <div className="mobile-account" aria-label="Signed-in account">
+          <strong>{snapshot.currentUser.displayName}</strong>
+          <span>{snapshot.currentUser.email}</span>
+          <div className={connected ? "live is-live" : "live"}>{connected ? "Live" : "Live connection unavailable"}</div>
+          <button type="button" className="secondary logout-button" onClick={() => { setMenuOpen(false); void handleLogout(); }}><LogOut size={17} />Log Out</button>
+        </div>
+        </div>
       </aside>
       <section className="content">
         <header className="topbar">
@@ -556,7 +582,7 @@ function MandatorySecuritySetup({
   return (
     <main className="login-shell">
       <section className="login-panel setup-panel">
-        <div className="brand large"><Mail size={26} />pobox.watch</div>
+        <div className="brand large"><img src="/icons/icon-192.png" alt="" />pobox.watch</div>
         <div className="login-copy">
           <p className="workspace">Security setup required</p>
           <h1>Finish securing your account</h1>

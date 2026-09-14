@@ -46,6 +46,7 @@ try {
       await page.getByRole("button", { name: "Got It" }).waitFor({ state: "hidden" });
       assert.equal((await (await context.request.get(base)).json()).changes.length, 0);
     }
+    if (!admin) await page.getByRole("button", { name: "Open menu", exact: true }).click();
     await page.getByRole("button", { name: "Map", exact: true }).click();
     await page.screenshot({ path: "/tmp/pobox-map-debug.png", fullPage: true });
     if (!missing) {

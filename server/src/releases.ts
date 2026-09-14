@@ -1,4 +1,4 @@
-export const appVersion = "0.13.12";
+export const appVersion = "0.13.13";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.13-mobile-menu",
+    version: "0.13.13",
+    releasedAt: "2026-09-14T02:00:00.000Z",
+    title: "A simpler mobile header",
+    summary: "The header now shows the pobox.watch app icon. On smaller screens, open the menu at the top right for navigation, your account, connection status and logout.",
+    audience: "ALL"
+  },
   {
     id: "0.13.12-mobile-summary",
     version: "0.13.12",

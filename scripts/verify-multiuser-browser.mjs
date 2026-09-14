@@ -37,7 +37,7 @@ try {
   await office.getByRole("button", { name: "Save", exact: true }).click();
   await admin.page.getByText("This post office changed. Cancel editing and reload before saving.", { exact: true }).waitFor();
   assert.equal(await office.getByLabel("Phone", { exact: true }).inputValue(), "My unsaved edit");
-  await member.page.getByText("john@example.com", { exact: true }).waitFor();
+  await member.page.locator(".topbar-actions").getByText("john@example.com", { exact: true }).waitFor();
   assert.equal(await member.page.getByTitle("Edit post office", { exact: true }).count(), 0);
   // Drop a socket while offline, mutate on the other client, then verify catch-up.
   await member.context.setOffline(true);
@@ -46,7 +46,7 @@ try {
   assert.equal(added.status(), 200);
   await member.context.setOffline(false);
   await member.page.getByRole("article", { name: "Reconnect Office", exact: true }).waitFor();
-  await member.page.getByText("john@example.com", { exact: true }).waitFor();
+  await member.page.locator(".topbar-actions").getByText("john@example.com", { exact: true }).waitFor();
   await member.page.screenshot({ path: "/tmp/pobox-multiuser-member.png", fullPage: true });
   assert.equal((await admin.context.request.delete(`${base}/team/users/usr_john`)).status(), 204);
   await member.page.getByRole("button", { name: "Continue with Passkey" }).waitFor();
