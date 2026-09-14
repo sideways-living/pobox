@@ -727,11 +727,16 @@ struct MacOverviewDashboardView: View {
                     MacEmptyStateView(title: "Nothing waiting", subtitle: "All shared boxes are currently clear.")
                 } else {
                     ForEach(snapshot?.postOffices ?? []) { office in
-                        if office.mailboxes.contains(where: hasWaitingItem) {
-                            MacCollectionClaimControl(office: office, currentUser: snapshot?.currentUser, busy: busyId == "claim:\(office.id)", claim: claim, releaseClaim: releaseClaim)
-                        }
                         ForEach(office.mailboxes.filter(hasWaitingItem)) { mailbox in
-                            MacCollectionQueueRow(office: office, mailbox: mailbox, busy: busyId == mailbox.id, collectionBlocked: office.collectionClaim?.userId != nil && office.collectionClaim?.userId != snapshot?.currentUser.id, collect: collect)
+                            MacCollectionQueueRow(
+                                office: office,
+                                mailbox: mailbox,
+                                currentUser: snapshot?.currentUser,
+                                busyId: busyId,
+                                collect: collect,
+                                claim: claim,
+                                releaseClaim: releaseClaim
+                            )
                         }
                     }
                 }
@@ -756,42 +761,72 @@ struct MacOverviewDashboardView: View {
 private struct MacCollectionQueueRow: View {
     let office: PostOffice
     let mailbox: Mailbox
-    let busy: Bool
-    let collectionBlocked: Bool
+    let currentUser: CurrentUser?
+    let busyId: String?
     let collect: (Mailbox) async -> Void
+    let claim: (PostOffice) async -> Void
+    let releaseClaim: (PostOffice) async -> Void
+
+    private var ownsClaim: Bool { office.collectionClaim?.userId == currentUser?.id }
+    private var blockedBy: String? { ownsClaim ? nil : office.collectionClaim?.displayName }
+    private var detectedText: String { "Mail detected \(displayDate(latestWaitingDetection(mailbox)))" }
+    private var claimActionLabel: String { blockedBy.map { "\($0) is collecting from this post office" } ?? (ownsClaim ? "Cancel I'm collecting" : "I'm collecting") }
 
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: mailbox.parcelWaiting ? "shippingbox.fill" : "envelope.fill")
-                .foregroundStyle(.white)
-                .frame(width: 32, height: 32)
-                .background(mailbox.parcelWaiting ? PoboxTheme.blue : PoboxTheme.orange, in: RoundedRectangle(cornerRadius: 7))
-
             VStack(alignment: .leading, spacing: 4) {
                 Text(office.name)
                     .font(.headline)
                 Text("PO Box \(mailbox.boxNumber)")
+                    .foregroundStyle(.secondary)
+                Text(office.address)
+                    .foregroundStyle(.secondary)
+                Text(detectedText)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
 
             Button {
-                Task { await collect(mailbox) }
+                openAppleMapsDirections(office)
             } label: {
-                Label("Collected", systemImage: "checkmark.circle")
-            }
-            .disabled(busy || collectionBlocked)
-
-            Button {
-                openAppleMaps(office)
-            } label: {
-                Image(systemName: "map.fill")
+                Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
                     .frame(width: 22, height: 22)
             }
             .buttonStyle(.bordered)
-            .help("Open \(office.name) in Apple Maps")
-            .accessibilityLabel("Open \(office.name) in Apple Maps")
+            .help("Directions")
+            .accessibilityLabel("Directions to \(office.name)")
+
+            Button {
+                Task {
+                    if ownsClaim {
+                        await releaseClaim(office)
+                    } else {
+                        await claim(office)
+                    }
+                }
+            } label: {
+                Image(systemName: ownsClaim ? "person.crop.circle.badge.checkmark" : "person.badge.clock")
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.bordered)
+            .tint(ownsClaim ? PoboxTheme.green : PoboxTheme.blue)
+            .disabled(busyId == "claim:\(office.id)" || blockedBy != nil)
+            .help(claimActionLabel)
+            .accessibilityLabel(claimActionLabel)
+            .accessibilityValue(ownsClaim ? "On" : "Off")
+
+            Button {
+                Task { await collect(mailbox) }
+            } label: {
+                Image(systemName: "checkmark.circle.fill")
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.bordered)
+            .disabled(busyId == mailbox.id || blockedBy != nil)
+            .help(blockedBy.map { "\($0) is collecting from this post office" } ?? "Collected")
+            .accessibilityLabel("Mark PO Box \(mailbox.boxNumber) collected")
         }
         .padding(14)
         .background(PoboxTheme.surface, in: RoundedRectangle(cornerRadius: 8))
@@ -1898,6 +1933,10 @@ private func openAppleMaps(_ office: PostOffice) {
     NSWorkspace.shared.open(appleMapsURL(for: office))
 }
 
+private func openAppleMapsDirections(_ office: PostOffice) {
+    NSWorkspace.shared.open(postOfficeDirectionsURL(name: office.name, address: office.address, latitude: office.latitude, longitude: office.longitude))
+}
+
 private func hasWaitingItem(_ mailbox: Mailbox) -> Bool {
     mailbox.mailWaiting || mailbox.parcelWaiting
 }
@@ -1917,6 +1956,23 @@ private func mailboxStatus(_ mailbox: Mailbox) -> String {
 
 private func mailboxStatusLine(_ mailbox: Mailbox) -> String {
     hasWaitingItem(mailbox) ? "\(mailboxStatus(mailbox)) in PO Box \(mailbox.boxNumber)" : "PO Box \(mailbox.boxNumber) is clear"
+}
+
+private func latestWaitingDetection(_ mailbox: Mailbox) -> String? {
+    [
+        mailbox.mailWaiting ? mailbox.latestNotificationAt : nil,
+        mailbox.parcelWaiting ? mailbox.latestParcelNotificationAt : nil
+    ]
+    .compactMap { $0 }
+    .max { displayDateValue($0) < displayDateValue($1) }
+}
+
+private func displayDateValue(_ value: String) -> Date {
+    let withFractionalSeconds = ISO8601DateFormatter()
+    withFractionalSeconds.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let standard = ISO8601DateFormatter()
+    standard.formatOptions = [.withInternetDateTime]
+    return withFractionalSeconds.date(from: value) ?? standard.date(from: value) ?? .distantPast
 }
 
 private func appleMapsURL(for office: PostOffice) -> URL {

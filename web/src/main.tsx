@@ -632,19 +632,9 @@ function OverviewSection({ snapshot, busyId, mutate }: { snapshot: DashboardSnap
                 if (waiting.length === 0) return null;
                 return (
                   <article className="queue-office" key={office.id}>
-                    <div className="office-title">
-                      <div>
-                        <h3>{office.name}</h3>
-                        <p>{office.address}</p>
-                      </div>
-                      <a className="text-link" href={appleMapsUrl(office)} target="_blank" rel="noreferrer"><Route size={16} />Directions</a>
-                    </div>
-                    <CollectionClaimControl office={office} currentUser={snapshot.currentUser} busy={busyId === `claim:${office.id}`} mutate={mutate} />
-                    <div className="mailbox-list">
-                      {waiting.map((box) => (
-                        <MailboxRow key={box.id} box={box} busy={busyId === box.id} blockedBy={office.collectionClaim?.userId !== snapshot.currentUser.id ? office.collectionClaim?.displayName : undefined} onCollect={() => mutate(() => collectMailbox(box.id, box.updatedAt), box.id)} />
-                      ))}
-                    </div>
+                    {waiting.map((box) => (
+                      <CollectionQueueRow key={box.id} office={office} box={box} currentUser={snapshot.currentUser} busyId={busyId} mutate={mutate} />
+                    ))}
                   </article>
                 );
               })}
@@ -668,6 +658,43 @@ function OverviewSection({ snapshot, busyId, mutate }: { snapshot: DashboardSnap
           </div>
         </Panel>
       </aside>
+    </div>
+  );
+}
+
+function CollectionQueueRow({ office, box, currentUser, busyId, mutate }: {
+  office: PostOffice;
+  box: Mailbox;
+  currentUser: DashboardSnapshot["currentUser"];
+  busyId: string | null;
+  mutate: (action: () => Promise<void>, busyId?: string) => Promise<void>;
+}) {
+  const claim = office.collectionClaim;
+  const ownsClaim = claim?.userId === currentUser.id;
+  const blockedBy = claim && !ownsClaim ? claim.displayName : undefined;
+  const detectedAt = latestWaitingDetection(box);
+  const detectedText = detectedAt ? `Mail detected ${new Date(detectedAt).toLocaleString()}` : "Mail detected time unavailable";
+  const claimBusy = busyId === `claim:${office.id}`;
+  const collectBusy = busyId === box.id;
+  const claimTitle = ownsClaim
+    ? "Cancel I'm collecting"
+    : blockedBy
+      ? `${blockedBy} is collecting from this post office`
+      : "I'm collecting";
+
+  return (
+    <div className="collection-queue-row">
+      <div className="collection-queue-copy">
+        <strong>{office.name}</strong>
+        <span>PO Box {box.boxNumber}</span>
+        <span>{office.address}</span>
+        <small>{detectedText}</small>
+      </div>
+      <div className="collection-queue-actions" aria-label={`Actions for PO Box ${box.boxNumber}`}>
+        <a className="icon-button" href={appleMapsDirectionsUrl(office)} target="_blank" rel="noreferrer" title="Directions" aria-label={`Directions to ${office.name}`}><Route size={18} /></a>
+        <button type="button" className={`icon-button${ownsClaim ? " is-active" : ""}`} aria-pressed={ownsClaim} title={claimTitle} aria-label={claimTitle} disabled={claimBusy || Boolean(blockedBy)} onClick={() => mutate(() => ownsClaim ? releasePostOfficeClaim(office.id) : claimPostOffice(office.id), `claim:${office.id}`)}><UserCheck size={18} /></button>
+        <button type="button" className="icon-button" title={blockedBy ? `${blockedBy} is collecting from this post office` : "Collected"} aria-label={`Mark PO Box ${box.boxNumber} collected`} disabled={collectBusy || Boolean(blockedBy)} onClick={() => mutate(() => collectMailbox(box.id, box.updatedAt), box.id)}><Check size={18} /></button>
+      </div>
     </div>
   );
 }
@@ -2286,6 +2313,18 @@ function appleMapsUrl(office: PostOffice) {
     q: validMapCoordinate(office) ? office.name : `${office.name} ${office.address}`
   });
   return `https://maps.apple.com/?${params.toString()}`;
+}
+
+function appleMapsDirectionsUrl(office: PostOffice) {
+  const destination = validMapCoordinate(office) ? `${office.latitude},${office.longitude}` : `${office.name}, ${office.address}`;
+  return `https://maps.apple.com/?${new URLSearchParams({ daddr: destination, dirflg: "d" }).toString()}`;
+}
+
+function latestWaitingDetection(box: Mailbox) {
+  return [
+    box.mailWaiting ? box.latestNotificationAt : undefined,
+    box.parcelWaiting ? box.latestParcelNotificationAt : undefined
+  ].filter((value): value is string => Boolean(value)).sort((a, b) => Date.parse(b) - Date.parse(a))[0];
 }
 
 function openStreetMapEmbedUrl(offices: PostOffice[], activeOffice: PostOffice) {

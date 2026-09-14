@@ -1,4 +1,4 @@
-export const appVersion = "0.13.22";
+export const appVersion = "0.13.23";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.23-collection-queue-details",
+    version: "0.13.23",
+    releasedAt: "2026-09-14T12:00:00.000Z",
+    title: "Everything needed for a collection",
+    summary: "Each collection item now shows the post office, PO Box, address and mail detection time together. Use the three clear actions for directions, telling the team you're collecting, and marking the box collected.",
+    audience: "ALL"
+  },
   {
     id: "0.13.22-cancellable-collection-plan",
     version: "0.13.22",

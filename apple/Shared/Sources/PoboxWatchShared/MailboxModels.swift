@@ -20,6 +20,17 @@ public func postOfficeMapsURL(name: String, address: String, latitude: Double, l
     return components.url!
 }
 
+public func postOfficeDirectionsURL(name: String, address: String, latitude: Double, longitude: Double) -> URL {
+    var components = URLComponents(string: "https://maps.apple.com/")!
+    let valid = latitude.isFinite && longitude.isFinite && abs(latitude) <= 90 && abs(longitude) <= 180
+    let destination = valid ? "\(latitude),\(longitude)" : "\(name), \(address)"
+    components.queryItems = [
+        URLQueryItem(name: "daddr", value: destination),
+        URLQueryItem(name: "dirflg", value: "d")
+    ]
+    return components.url!
+}
+
 public enum MailboxCollectionSource: String, Codable, Sendable {
     case iPhone = "IPHONE"
     case macOS = "MACOS"

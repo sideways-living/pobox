@@ -643,22 +643,12 @@ struct iPhoneOverviewList: View {
                     if waitingOffices.isEmpty {
                         Label("All shared boxes are clear", systemImage: "checkmark.circle")
                     }
-                }
-                ForEach(waitingOffices) { office in
-                    Section {
-                        iPhoneCollectionClaimControl(model: model, office: office)
+                    ForEach(waitingOffices) { office in
                         ForEach(office.mailboxes.filter(hasWaitingItem)) { mailbox in
-                            iPhoneMailboxRow(mailbox: mailbox, busy: model.busyMailboxId == mailbox.id, collectionBlocked: office.collectionClaim?.userId != nil && office.collectionClaim?.userId != model.snapshot?.currentUser.id) {
-                                await model.collect(mailbox)
-                            }
+                            iPhoneCollectionQueueRow(model: model, office: office, mailbox: mailbox)
                         }
-                    } header: {
-                        Label(office.name, systemImage: "building.2.fill")
-                    } footer: {
-                        Text(office.address)
                     }
                 }
-
             }
         }
         .iPhoneOperationalListStyle()
@@ -673,6 +663,97 @@ struct iPhoneOverviewList: View {
             }
             .disabled(model.isLoading)
         }
+    }
+}
+
+private struct iPhoneCollectionQueueRow: View {
+    @ObservedObject var model: iPhoneMailboxViewModel
+    let office: PostOffice
+    let mailbox: Mailbox
+
+    private var ownsClaim: Bool { office.collectionClaim?.userId == model.snapshot?.currentUser.id }
+    private var blockedBy: String? { ownsClaim ? nil : office.collectionClaim?.displayName }
+    private var detectedText: String { "Mail detected \(iPhoneDisplayDate(iPhoneLatestWaitingDetection(mailbox)))" }
+    private var claimActionLabel: String { blockedBy.map { "\($0) is collecting from this post office" } ?? (ownsClaim ? "Cancel I'm collecting" : "I'm collecting") }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 12) {
+                copy
+                    .frame(minWidth: 210, maxWidth: .infinity, alignment: .leading)
+                actions(vertical: true)
+            }
+            VStack(alignment: .leading, spacing: 12) {
+                copy
+                actions(vertical: false)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var copy: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(office.name)
+                .font(.headline)
+            Text("PO Box \(mailbox.boxNumber)")
+                .foregroundStyle(.secondary)
+            Text(office.address)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text(detectedText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func actions(vertical: Bool) -> some View {
+        if vertical {
+            VStack(spacing: 7) { actionButtons }
+        } else {
+            HStack(spacing: 9) { actionButtons }
+        }
+    }
+
+    @ViewBuilder
+    private var actionButtons: some View {
+        Link(destination: postOfficeDirectionsURL(name: office.name, address: office.address, latitude: office.latitude, longitude: office.longitude)) {
+            Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
+                .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.bordered)
+        .help("Directions")
+        .accessibilityLabel("Directions to \(office.name)")
+
+        Button {
+            Task {
+                if ownsClaim {
+                    await model.releaseClaim(office)
+                } else {
+                    await model.claim(office)
+                }
+            }
+        } label: {
+            Image(systemName: ownsClaim ? "person.crop.circle.badge.checkmark" : "person.badge.clock")
+                .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.bordered)
+        .tint(ownsClaim ? PoboxTheme.green : PoboxTheme.blue)
+        .disabled(model.busyMailboxId == "claim:\(office.id)" || blockedBy != nil)
+        .help(claimActionLabel)
+        .accessibilityLabel(claimActionLabel)
+        .accessibilityValue(ownsClaim ? "On" : "Off")
+
+        Button {
+            Task { await model.collect(mailbox) }
+        } label: {
+            Image(systemName: "checkmark.circle.fill")
+                .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.bordered)
+        .disabled(model.busyMailboxId == mailbox.id || blockedBy != nil)
+        .help(blockedBy.map { "\($0) is collecting from this post office" } ?? "Collected")
+        .accessibilityLabel("Mark PO Box \(mailbox.boxNumber) collected")
     }
 }
 
@@ -1703,6 +1784,23 @@ private func mailboxStatus(_ mailbox: Mailbox) -> String {
 
 private func mailboxStatusLine(_ mailbox: Mailbox) -> String {
     hasWaitingItem(mailbox) ? "\(mailboxStatus(mailbox)) in PO Box \(mailbox.boxNumber)" : "PO Box \(mailbox.boxNumber) is clear"
+}
+
+private func iPhoneLatestWaitingDetection(_ mailbox: Mailbox) -> String? {
+    [
+        mailbox.mailWaiting ? mailbox.latestNotificationAt : nil,
+        mailbox.parcelWaiting ? mailbox.latestParcelNotificationAt : nil
+    ]
+    .compactMap { $0 }
+    .max { iPhoneDateValue($0) < iPhoneDateValue($1) }
+}
+
+private func iPhoneDateValue(_ value: String) -> Date {
+    let withFractionalSeconds = ISO8601DateFormatter()
+    withFractionalSeconds.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let standard = ISO8601DateFormatter()
+    standard.formatOptions = [.withInternetDateTime]
+    return withFractionalSeconds.date(from: value) ?? standard.date(from: value) ?? .distantPast
 }
 
 private func appleMapsURL(for office: PostOffice) -> URL {
