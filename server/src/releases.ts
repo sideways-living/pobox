@@ -1,4 +1,4 @@
-export const appVersion = "0.13.30";
+export const appVersion = "0.13.31";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.31-collection-feedback",
+    version: "0.13.31",
+    releasedAt: "2026-09-14T18:30:00.000Z",
+    title: "Clearer collection actions",
+    summary: "Collection actions now use neutral grey icons across web, iPhone and Mac. Your active collection plan turns green, while other users see it unavailable. After collecting mail, a brief thank-you confirmation confirms it was recorded.",
+    audience: "ALL"
+  },
   {
     id: "0.13.30-larger-mac-logo",
     version: "0.13.30",

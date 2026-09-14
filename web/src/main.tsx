@@ -44,6 +44,8 @@ import {
   updateUser,
   verifySecondFactor
 } from "./api";
+
+type MutateAction = (action: () => Promise<void>, busyId?: string, confirmCollection?: boolean) => Promise<void>;
 import type { AppChangesResponse, CollectionHistoryEvent, DashboardSnapshot, Mailbox, MailHistoryEvent, MemberStatus, PostOffice, PostOfficeDirectoryStatus, PostOfficeLocationResult, ReviewItem, SecurityStatus, TeamMember, TotpSetup } from "./types";
 import "./styles.css";
 
@@ -105,8 +107,13 @@ function App() {
   const [dismissingNotice, setDismissingNotice] = useState(false);
   const [securityGate, setSecurityGate] = useState<{ previousLoginAt?: string } | null>(null);
   const [nativeReturnLink, setNativeReturnLink] = useState<string | null>(null);
+  const [collectionConfirmation, setCollectionConfirmation] = useState(false);
   const refreshGeneration = useRef(0);
+  const collectionConfirmationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nativeReturnUrl = useMemo(nativeReturnUrlFromLocation, []);
+  useEffect(() => () => {
+    if (collectionConfirmationTimer.current) clearTimeout(collectionConfirmationTimer.current);
+  }, []);
   useEffect(() => {
     const expired = () => {
       refreshGeneration.current++;
@@ -276,10 +283,20 @@ function App() {
     return <LoginScreen onLogin={handleLogin} error={error} setError={setError} />;
   }
 
-  async function mutate(action: () => Promise<void>, mailboxId?: string) {
+  function showCollectionConfirmation() {
+    if (collectionConfirmationTimer.current) clearTimeout(collectionConfirmationTimer.current);
+    setCollectionConfirmation(true);
+    collectionConfirmationTimer.current = setTimeout(() => {
+      setCollectionConfirmation(false);
+      collectionConfirmationTimer.current = null;
+    }, 4200);
+  }
+
+  async function mutate(action: () => Promise<void>, mailboxId?: string, confirmCollection = false) {
     try {
       setBusyId(mailboxId ?? "global");
       await action();
+      if (confirmCollection) showCollectionConfirmation();
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -345,6 +362,12 @@ function App() {
           refresh={refresh}
           setError={setError}
         />
+        {collectionConfirmation && (
+          <div className="collection-confirmation" role="status" aria-live="polite">
+            <CircleCheckBig aria-hidden="true" />
+            <span><strong>Mail collected</strong><small>Thank you. Try not to lose the mail before you get home.</small></span>
+          </div>
+        )}
         {nativeReturnLink && <NativeReturnModal returnLink={nativeReturnLink} onContinueWeb={() => void continueOnWeb()} />}
         {changeNotice && <ChangeNoticeModal notice={changeNotice} onClose={dismissChangeNotice} error={changeNoticeError} busy={dismissingNotice} />}
       </section>
@@ -371,7 +394,7 @@ function SectionView({
   members: TeamMember[];
   reviewItems: ReviewItem[];
   busyId: string | null;
-  mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>;
+  mutate: MutateAction;
   refresh: () => Promise<void>;
   setError: (value: string | null) => void;
 }) {
@@ -635,7 +658,7 @@ function MandatorySecuritySetup({
   );
 }
 
-function OverviewSection({ snapshot, busyId, mutate }: { snapshot: DashboardSnapshot; busyId: string | null; mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void> }) {
+function OverviewSection({ snapshot, busyId, mutate }: { snapshot: DashboardSnapshot; busyId: string | null; mutate: MutateAction }) {
   const waitingBoxes = snapshot.postOffices.flatMap((office) => office.mailboxes.filter(hasWaitingItem));
   const nextOffice = snapshot.postOffices.find((office) => office.mailboxes.some(hasWaitingItem));
   return (
@@ -684,7 +707,7 @@ function CollectionQueueRow({ office, box, currentUser, busyId, mutate }: {
   box: Mailbox;
   currentUser: DashboardSnapshot["currentUser"];
   busyId: string | null;
-  mutate: (action: () => Promise<void>, busyId?: string) => Promise<void>;
+  mutate: MutateAction;
 }) {
   const claim = office.collectionClaim;
   const ownsClaim = claim?.userId === currentUser.id;
@@ -710,7 +733,7 @@ function CollectionQueueRow({ office, box, currentUser, busyId, mutate }: {
       <div className="collection-queue-actions" aria-label={`Actions for PO Box ${box.boxNumber}`}>
         <a className="icon-button large-action-icon" href={appleMapsDirectionsUrl(office)} target="_blank" rel="noreferrer" title="Directions" aria-label={`Directions to ${office.name}`}><Navigation size={24} /></a>
         <button type="button" className={`icon-button large-action-icon${ownsClaim ? " is-active" : ""}`} aria-pressed={ownsClaim} title={claimTitle} aria-label={claimTitle} disabled={claimBusy || Boolean(blockedBy)} onClick={() => mutate(() => ownsClaim ? releasePostOfficeClaim(office.id) : claimPostOffice(office.id), `claim:${office.id}`)}><CalendarCheck2 size={24} /></button>
-        <button type="button" className="icon-button large-action-icon" title={blockedBy ? `${blockedBy} is collecting from this post office` : "Collected"} aria-label={`Mark PO Box ${box.boxNumber} collected`} disabled={collectBusy || Boolean(blockedBy)} onClick={() => mutate(() => collectMailbox(box.id, box.updatedAt), box.id)}><CircleCheckBig size={24} /></button>
+        <button type="button" className="icon-button large-action-icon" title={blockedBy ? `${blockedBy} is collecting from this post office` : "Collected"} aria-label={`Mark PO Box ${box.boxNumber} collected`} disabled={collectBusy || Boolean(blockedBy)} onClick={() => mutate(() => collectMailbox(box.id, box.updatedAt), box.id, true)}><CircleCheckBig size={24} /></button>
       </div>
     </div>
   );
@@ -727,7 +750,7 @@ function MailboxSection({
   snapshot: DashboardSnapshot;
   busyId: string | null;
   compact?: boolean;
-  mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>;
+  mutate: MutateAction;
   refresh?: () => Promise<void>;
   setError?: (value: string | null) => void;
 }) {
@@ -878,7 +901,7 @@ function OfficeSection({
   postOffices: PostOffice[];
   filter: MailboxFilter;
   busyId: string | null;
-  mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>;
+  mutate: MutateAction;
   currentUser: DashboardSnapshot["currentUser"];
   canManage: boolean;
   onSaveOffice: (officeId: string, input: { expectedUpdatedAt: string; name: string; address: string; phone?: string; latitude: number; longitude: number; geofenceRadius: number }) => Promise<boolean>;
@@ -973,7 +996,7 @@ function OfficeSection({
             box={box}
             busy={busyId === box.id}
             blockedBy={office.collectionClaim?.userId !== currentUser.id ? office.collectionClaim?.displayName : undefined}
-            onCollect={() => mutate(() => collectMailbox(box.id, box.updatedAt), box.id)}
+            onCollect={() => mutate(() => collectMailbox(box.id, box.updatedAt), box.id, true)}
             postOffices={postOffices}
             canManage={canManage}
             onSave={onSaveMailbox}
@@ -1001,7 +1024,7 @@ function CollectionClaimControl({ office, currentUser, busy, mutate, compact = f
   office: PostOffice;
   currentUser: DashboardSnapshot["currentUser"];
   busy: boolean;
-  mutate: (action: () => Promise<void>, busyId?: string) => Promise<void>;
+  mutate: MutateAction;
   compact?: boolean;
 }) {
   const claim = office.collectionClaim;
@@ -1566,7 +1589,7 @@ function HistorySection({ snapshot }: { snapshot: DashboardSnapshot }) {
   );
 }
 
-function NeedsReviewSection({ snapshot, reviewItems, refresh }: { snapshot: DashboardSnapshot; reviewItems: ReviewItem[]; mutate: (action: () => Promise<void>, mailboxId?: string) => Promise<void>; refresh: () => Promise<void> }) {
+function NeedsReviewSection({ snapshot, reviewItems, refresh }: { snapshot: DashboardSnapshot; reviewItems: ReviewItem[]; mutate: MutateAction; refresh: () => Promise<void> }) {
   const mailboxes = snapshot.postOffices.flatMap((office) => office.mailboxes.map((box) => ({ ...box, officeName: office.name })));
 
   return (

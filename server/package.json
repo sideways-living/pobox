@@ -1,6 +1,6 @@
 {
   "name": "@pobox-watch/server",
-  "version": "0.13.30",
+  "version": "0.13.31",
   "type": "module",
   "private": true,
   "scripts": {

@@ -77,10 +77,12 @@ final class MacMailboxViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var busyMailboxId: String?
     @Published var passwordMode = false
+    @Published var collectionConfirmation: String?
 
     private let client = PoboxWatchAPIClient.live
     private let workspaceId = "ws_company"
     private var loadGeneration = 0
+    private var collectionConfirmationGeneration = 0
     private var nativeSignInProof: NativeSignInProof?
 
     func openPasskeySignIn() {
@@ -162,6 +164,7 @@ final class MacMailboxViewModel: ObservableObject {
         defer { busyMailboxId = nil }
         await run {
             try await client.collectMailbox(workspaceId: workspaceId, mailboxId: mailbox.id, source: .macOS, expectedUpdatedAt: mailbox.updatedAt)
+            showCollectionConfirmation()
             try await loadWorkspace()
         }
     }
@@ -196,6 +199,23 @@ final class MacMailboxViewModel: ObservableObject {
             twoFactorCode = ""
             password = ""
             passwordMode = false
+            collectionConfirmationGeneration += 1
+            collectionConfirmation = nil
+        }
+    }
+
+    private func showCollectionConfirmation() {
+        collectionConfirmationGeneration += 1
+        let generation = collectionConfirmationGeneration
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+            collectionConfirmation = "Thank you. Try not to lose the mail before you get home."
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(4.2))
+            guard generation == collectionConfirmationGeneration else { return }
+            withAnimation(.easeOut(duration: 0.25)) {
+                collectionConfirmation = nil
+            }
         }
     }
 
@@ -438,6 +458,14 @@ struct MacRootView: View {
             }
         }
         .preferredColorScheme(selectedAppearance.colorScheme)
+        .overlay(alignment: .top) {
+            if let message = model.collectionConfirmation {
+                MacCollectionConfirmationBanner(message: message)
+                    .padding(.top, 18)
+                    .transition(.move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.96)))
+                    .zIndex(20)
+            }
+        }
     }
 
     private var selectedAppearance: MacAppearancePreference {
@@ -845,6 +873,7 @@ private struct MacCollectionQueueRow: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
+                .tint(.gray)
                 .help("Directions")
                 .accessibilityLabel("Directions to \(office.name)")
 
@@ -861,7 +890,7 @@ private struct MacCollectionQueueRow: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
-                .tint(ownsClaim ? PoboxTheme.green : PoboxTheme.blue)
+                .tint(ownsClaim ? PoboxTheme.green : .gray)
                 .disabled(busyId == "claim:\(office.id)" || blockedBy != nil)
                 .help(claimActionLabel)
                 .accessibilityLabel(claimActionLabel)
@@ -874,7 +903,7 @@ private struct MacCollectionQueueRow: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
-                .tint(PoboxTheme.green)
+                .tint(.gray)
                 .disabled(busyId == mailbox.id || blockedBy != nil)
                 .help(blockedBy.map { "\($0) is collecting from this post office" } ?? "Collected")
                 .accessibilityLabel("Mark PO Box \(mailbox.boxNumber) collected")
@@ -1034,7 +1063,7 @@ private struct MacCollectionClaimControl: View {
                 } else {
                     Label("\(activeClaim.displayName) is collecting until 3:00 am tomorrow", systemImage: "person.badge.clock")
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(PoboxTheme.blue)
+                        .foregroundStyle(.secondary)
                     Spacer()
                     if currentUser?.role == "ADMIN" {
                         Button("Cancel plan") { Task { await releaseClaim(office) } }
@@ -1046,6 +1075,7 @@ private struct MacCollectionClaimControl: View {
                     Label("I'll collect today", systemImage: "person.badge.clock")
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(.gray)
                 .disabled(busy)
                 .help("Tell the team you will collect from this post office today")
                 .accessibilityValue("Off")
@@ -2151,6 +2181,33 @@ private struct MacActionIcon: View {
         Image(systemName: systemName)
             .font(.system(size: 44, weight: .semibold))
             .frame(width: 60, height: 60)
+    }
+}
+
+private struct MacCollectionConfirmationBanner: View {
+    let message: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundStyle(PoboxTheme.green)
+                .symbolEffect(.bounce, value: message)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Mail collected")
+                    .font(.headline)
+                Text(message)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(PoboxTheme.green.opacity(0.55)))
+        .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isStaticText)
     }
 }
 
