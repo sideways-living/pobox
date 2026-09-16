@@ -25,6 +25,31 @@ describe("password recovery", () => {
       expect(known.body).not.toContain("reset-password=");
     } finally { await app.close(); }
   });
+  it("uses the unauthenticated local Postfix relay without TLS", async () => {
+    for (const [key, value] of Object.entries({ SMTP_HOST: "127.0.0.1", SMTP_PORT: "25", SMTP_FROM: "pobox.watch <noreply@pobox.watch>", APP_BASE_URL: "https://pobox.watch" })) vi.stubEnv(key, value);
+    const sendMail = vi.fn().mockResolvedValue({});
+    const transport = vi.spyOn(nodemailer, "createTransport").mockReturnValue({ sendMail } as unknown as ReturnType<typeof nodemailer.createTransport>);
+    const app = await buildServer(store);
+    try {
+      const response = await app.inject({ method: "POST", url: "/api/v1/auth/password/forgot", payload: { email: "daniel@example.com" } });
+      expect(response.statusCode).toBe(200);
+      expect(transport.mock.calls[0][0]).toMatchObject({
+        host: "127.0.0.1", port: 25, secure: false, ignoreTLS: true, requireTLS: false
+      });
+      expect(transport.mock.calls[0][0]).not.toHaveProperty("auth.user");
+      expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ from: "pobox.watch <noreply@pobox.watch>" }));
+    } finally { await app.close(); }
+  });
+  it("rejects an incomplete authenticated SMTP configuration", async () => {
+    for (const [key, value] of Object.entries({ SMTP_HOST: "smtp.example.test", SMTP_USER: "mailer", SMTP_FROM: "pobox@example.test", APP_BASE_URL: "https://pobox.watch" })) vi.stubEnv(key, value);
+    const transport = vi.spyOn(nodemailer, "createTransport");
+    const app = await buildServer(store);
+    try {
+      const response = await app.inject({ method: "POST", url: "/api/v1/auth/password/forgot", payload: { email: "daniel@example.com" } });
+      expect(response.statusCode).toBe(503);
+      expect(transport).not.toHaveBeenCalled();
+    } finally { await app.close(); }
+  });
   it("does not issue links for missing or disabled accounts", async () => {
     expect(await store.requestPasswordReset("unknown@example.com")).toBeUndefined();
     const admin = await store.createSessionForUser("usr_daniel");

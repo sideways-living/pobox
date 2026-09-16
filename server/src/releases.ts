@@ -1,4 +1,4 @@
-export const appVersion = "0.13.34";
+export const appVersion = "0.13.35";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.35-local-email-delivery",
+    version: "0.13.35",
+    releasedAt: "2026-09-16T19:51:39.000Z",
+    title: "Password reset email delivery",
+    summary: "Password reset messages can now be delivered through the secure pobox.watch server mail service without storing a separate SMTP username or password.",
+    audience: "ADMIN"
+  },
   {
     id: "0.13.34-public-home-and-privacy",
     version: "0.13.34",

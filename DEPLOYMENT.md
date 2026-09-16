@@ -34,6 +34,21 @@ Replace placeholders; preserve existing real secrets during upgrades. Rotating `
 
 For Gmail, enable polling only with `MAIL_PROVIDER=gmail`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `MAIL_POLL_WORKSPACE_ID` and an interval such as `MAIL_POLL_INTERVAL_MS=1800000`. OAuth authorization and inbox access require a separate live test.
 
+For the VPS's local Postfix relay, password-reset delivery uses no SMTP authentication or local TLS:
+
+```dotenv
+SMTP_HOST=127.0.0.1
+SMTP_PORT=25
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM='pobox.watch <noreply@pobox.watch>'
+SMTP_SECURE=false
+SMTP_REQUIRE_TLS=false
+SMTP_IGNORE_TLS=true
+```
+
+Authenticated external SMTP remains supported by setting `SMTP_USER`, `SMTP_PASSWORD`, and the appropriate TLS options. Confirm SPF and DKIM on a received test message before treating external delivery as verified.
+
 `VITE_MAPKIT_TOKEN` is optional. Set a restricted public Apple Maps token before building, not an Apple private key. See [map/directory/release checks](docs/maps-directory-releases.md). An absent token provides location links.
 
 ## Repeatable deploy
