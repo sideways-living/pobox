@@ -1,4 +1,4 @@
-export const appVersion = "0.13.35";
+export const appVersion = "0.13.36";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.36-user-onboarding-and-web-badges",
+    version: "0.13.36",
+    releasedAt: "2026-09-16T20:00:30.000Z",
+    title: "New user setup and Home Screen badges",
+    summary: "New users now receive a secure account setup email with web-app and iPhone Home Screen instructions. Installed web apps can show the current collection count on their icon after notification permission is enabled in Settings.",
+    audience: "ALL"
+  },
   {
     id: "0.13.35-local-email-delivery",
     version: "0.13.35",

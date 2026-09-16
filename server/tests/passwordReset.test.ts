@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import nodemailer from "nodemailer";
 import { MemoryStore } from "../src/store/memoryStore.js";
-import { resetDigest } from "../src/auth/passwordReset.js";
+import { resetDigest, sendUserWelcome } from "../src/auth/passwordReset.js";
 import { buildServer } from "../src/api/server.js";
 
 describe("password recovery", () => {
@@ -48,6 +48,40 @@ describe("password recovery", () => {
       const response = await app.inject({ method: "POST", url: "/api/v1/auth/password/forgot", payload: { email: "daniel@example.com" } });
       expect(response.statusCode).toBe(503);
       expect(transport).not.toHaveBeenCalled();
+    } finally { await app.close(); }
+  });
+  it("sends new users secure web and iPhone setup instructions without exposing the initial password", async () => {
+    for (const [key, value] of Object.entries({ SMTP_HOST: "127.0.0.1", SMTP_PORT: "25", SMTP_FROM: "pobox.watch <noreply@pobox.watch>", APP_BASE_URL: "https://pobox.watch" })) vi.stubEnv(key, value);
+    const sendMail = vi.fn().mockResolvedValue({});
+    vi.spyOn(nodemailer, "createTransport").mockReturnValue({ sendMail } as unknown as ReturnType<typeof nodemailer.createTransport>);
+    await sendUserWelcome({ email: "new.user@example.test", displayName: "New User", role: "MEMBER", token: "one-time-token" });
+    const message = sendMail.mock.calls[0][0];
+    expect(message.to).toBe("new.user@example.test");
+    expect(message.text).toContain("https://pobox.watch/#reset-password=one-time-token");
+    expect(message.text).toContain("https://pobox.watch/app/");
+    expect(message.text).toContain("Add to Home Screen");
+    expect(message.text).toContain("Open as Web App");
+    expect(message.text).toContain("native iPhone app");
+    expect(message.text).not.toContain("Temporary123!");
+  });
+  it("reports successful onboarding delivery when an admin creates a user", async () => {
+    for (const [key, value] of Object.entries({ SMTP_HOST: "127.0.0.1", SMTP_PORT: "25", SMTP_FROM: "pobox.watch <noreply@pobox.watch>", APP_BASE_URL: "https://pobox.watch" })) vi.stubEnv(key, value);
+    const sendMail = vi.fn().mockResolvedValue({});
+    vi.spyOn(nodemailer, "createTransport").mockReturnValue({ sendMail } as unknown as ReturnType<typeof nodemailer.createTransport>);
+    const session = await store.createSessionForUser("usr_daniel");
+    store.users.get(session.userId)!.totpEnabled = true;
+    store.passkeyCredentials.set(session.userId, { id: session.userId, userId: session.userId, credentialId: session.userId, publicKey: Buffer.from("fixture"), counter: 0, transports: [], friendlyName: "Fixture" });
+    const app = await buildServer(store);
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/workspaces/ws_company/team/users",
+        headers: { cookie: `pobox_watch_session=${session.id}` },
+        payload: { email: "new.user@example.test", displayName: "New User", password: "Temporary123!", role: "MEMBER" }
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ email: "new.user@example.test", onboardingEmailSent: true });
+      expect(sendMail).toHaveBeenCalledTimes(1);
     } finally { await app.close(); }
   });
   it("does not issue links for missing or disabled accounts", async () => {

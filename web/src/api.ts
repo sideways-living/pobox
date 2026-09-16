@@ -3,6 +3,7 @@ import type {
   CreateMailboxInput,
   CreatePostOfficeInput,
   CreateUserInput,
+  CreateUserResult,
   DashboardSnapshot,
   InviteUserResult,
   LoginResult,
@@ -231,7 +232,7 @@ export async function dismissReviewItem(reviewItemId: string): Promise<void> {
   if (!response.ok) throw new Error(await errorMessage(response));
 }
 
-export async function createUser(input: CreateUserInput): Promise<TeamMember> {
+export async function createUser(input: CreateUserInput): Promise<CreateUserResult> {
   const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/team/users`, {
     method: "POST",
     credentials: "include",

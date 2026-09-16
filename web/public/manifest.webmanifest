@@ -1,6 +1,7 @@
 {
   "name": "pobox.watch",
   "short_name": "pobox.watch",
+  "id": "/app/",
   "description": "Shared PO Box mail collection tracking.",
   "start_url": "/app/",
   "scope": "/",

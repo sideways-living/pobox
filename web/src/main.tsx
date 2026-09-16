@@ -23,7 +23,6 @@ import {
   dismissReviewItem,
   loadAppChanges,
   loadDashboard,
-  inviteUser,
   loadMembers,
   loadPostOfficeDirectoryStatus,
   loadReviewItems,
@@ -52,6 +51,23 @@ import "./styles.css";
 type Section = "Overview" | "Mailboxes" | "Map" | "History" | "Needs Review" | "Team" | "Settings";
 type MailboxFilter = "all" | "waiting" | "clear";
 const allowedNativeReturnSchemes = new Set(["poboxwatch:", "pobox.watch:"]);
+
+type BadgeNavigator = Navigator & {
+  standalone?: boolean;
+  setAppBadge?: (count?: number) => Promise<void>;
+  clearAppBadge?: () => Promise<void>;
+};
+
+function installedWebApp() {
+  const badgeNavigator = navigator as BadgeNavigator;
+  return window.matchMedia("(display-mode: standalone)").matches || badgeNavigator.standalone === true;
+}
+
+async function syncHomeScreenBadge(count: number) {
+  const badgeNavigator = navigator as BadgeNavigator;
+  if (count > 0 && badgeNavigator.setAppBadge) await badgeNavigator.setAppBadge(count);
+  else if (badgeNavigator.clearAppBadge) await badgeNavigator.clearAppBadge();
+}
 
 function nativeReturnUrlFromLocation() {
   const value = new URLSearchParams(window.location.search).get("nativeReturn");
@@ -115,6 +131,9 @@ function App() {
   const refreshGeneration = useRef(0);
   const collectionConfirmationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nativeReturnUrl = useMemo(nativeReturnUrlFromLocation, []);
+  useEffect(() => {
+    void syncHomeScreenBadge(snapshot?.outstandingMailboxCount ?? 0).catch(() => undefined);
+  }, [snapshot?.outstandingMailboxCount]);
   useEffect(() => () => {
     if (collectionConfirmationTimer.current) clearTimeout(collectionConfirmationTimer.current);
   }, []);
@@ -1320,35 +1339,23 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"ADMIN" | "MEMBER">("MEMBER");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"ADMIN" | "MEMBER">("MEMBER");
   const [notice, setNotice] = useState<string | null>(null);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     try {
-      await createUser({ email, displayName, password, role });
+      const result = await createUser({ email, displayName, password, role });
+      const createdName = displayName;
       setEmail("");
       setDisplayName("");
       setPassword("");
       setRole("MEMBER");
-      setNotice(`${displayName} can now sign in after completing mandatory passkey and authenticator setup.`);
+      setNotice(result.onboardingEmailSent
+        ? `${createdName}'s account was created and their secure setup instructions were emailed.`
+        : `${createdName}'s account was created, but the setup email could not be sent. Use Reset Password after checking the mail configuration.`);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create user.");
-    }
-  }
-
-  async function invite(event: React.FormEvent) {
-    event.preventDefault();
-    try {
-      const result = await inviteUser(inviteEmail, inviteRole);
-      setInviteEmail("");
-      setInviteRole("MEMBER");
-      setNotice(`Invitation prepared for ${result.email}. Email delivery still needs to be connected before this is sent automatically.`);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to invite user.");
     }
   }
 
@@ -1416,23 +1423,14 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
           <p className="muted-line">Only admins can manage users. Disabling or deleting a user turns off access while keeping historical audit records.</p>
         </Panel>
         {snapshot.currentUser.role === "ADMIN" && (
-          <Panel title="Invite User">
-            <form className="form-grid" onSubmit={invite}>
-              <label>Email<input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} required /></label>
-              <label>Role<select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as "ADMIN" | "MEMBER")}><option value="MEMBER">Member</option><option value="ADMIN">Admin</option></select></label>
-              <button className="primary"><Plus size={17} />Prepare Invite</button>
-              <p className="muted-line">Use this when email delivery is ready. Until then, create a user with a temporary password below.</p>
-            </form>
-          </Panel>
-        )}
-        {snapshot.currentUser.role === "ADMIN" && (
-          <Panel title="Create User">
+          <Panel title="Add User">
             <form className="form-grid" onSubmit={submit}>
               <label>Name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></label>
               <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
-              <label>Temporary password<input type="password" value={password} minLength={12} onChange={(event) => setPassword(event.target.value)} required /></label>
+              <label>Initial password (not emailed)<input type="password" value={password} minLength={12} onChange={(event) => setPassword(event.target.value)} required /></label>
               <label>Role<select value={role} onChange={(event) => setRole(event.target.value as "ADMIN" | "MEMBER")}><option value="MEMBER">Member</option><option value="ADMIN">Admin</option></select></label>
-              <button className="primary"><Plus size={17} />Create User</button>
+              <button className="primary"><Plus size={17} />Create User & Send Setup Email</button>
+              <p className="muted-line">The email contains a one-time password setup link, web-app access details, security setup instructions and iPhone Home Screen steps.</p>
             </form>
             {notice && <p className="muted-line">{notice}</p>}
           </Panel>
@@ -1618,6 +1616,7 @@ function SettingsSection({ snapshot, refresh, setError }: { snapshot: DashboardS
             <button className="primary" type="submit" disabled={savingAvatar}><Save size={16} />{savingAvatar ? "Saving..." : "Save Profile Image"}</button>
           </form>
         </Panel>
+        <HomeScreenBadgePanel count={snapshot.outstandingMailboxCount} />
         <SecurityPanel setError={setError} />
         <Panel title="Change Password"><PasswordForm mode="change" /><details><summary>Forgot your current password?</summary><PasswordForm mode="forgot" email={snapshot.currentUser.email} /></details></Panel>
         <Panel title="Workspace">
@@ -1630,6 +1629,44 @@ function SettingsSection({ snapshot, refresh, setError }: { snapshot: DashboardS
         </Panel>
       </section>
     </div>
+  );
+}
+
+function HomeScreenBadgePanel({ count }: { count: number }) {
+  const supported = "setAppBadge" in navigator && "Notification" in window;
+  const installed = installedWebApp();
+  const [permission, setPermission] = useState<NotificationPermission>(() => "Notification" in window ? Notification.permission : "denied");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function enableBadge() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const nextPermission = await Notification.requestPermission();
+      setPermission(nextPermission);
+      if (nextPermission === "granted") {
+        await syncHomeScreenBadge(count);
+        setMessage("The Home Screen badge is enabled on this device.");
+      } else {
+        setMessage("Badge permission was not granted. You can change it in iPhone Settings under Notifications.");
+      }
+    } catch {
+      setMessage("The badge could not be enabled on this device.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Panel title="Home Screen Badge">
+      {!installed && <p className="muted-line">On iPhone, open pobox.watch in Safari, choose Share, Add to Home Screen, and leave Open as Web App turned on.</p>}
+      {installed && !supported && <p className="muted-line">This device or browser does not provide Home Screen badge support.</p>}
+      {installed && supported && permission === "default" && <button type="button" className="primary" disabled={busy} onClick={() => void enableBadge()}><Bell size={16} />{busy ? "Enabling..." : "Enable Home Screen Badge"}</button>}
+      {installed && supported && permission === "granted" && <p className="muted-line"><Check size={16} /> Badge enabled. The count updates whenever the web app receives current mailbox information.</p>}
+      {installed && supported && permission === "denied" && <p className="muted-line">Badge permission is off. Open iPhone Settings, Notifications, pobox.watch to enable it.</p>}
+      {message && <p className="muted-line">{message}</p>}
+    </Panel>
   );
 }
 

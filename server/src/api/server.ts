@@ -16,7 +16,7 @@ import { MemoryStore } from "../store/memoryStore.js";
 import type { AppStore } from "../store/types.js";
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "../store/types.js";
 
-import { resetEmailConfigured, sendPasswordReset } from "../auth/passwordReset.js";
+import { resetEmailConfigured, sendPasswordReset, sendUserWelcome } from "../auth/passwordReset.js";
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
 const twoFactorSchema = z.object({ challengeId: z.string().min(16), code: z.string().min(6).max(32) });
 const totpConfirmSchema = z.object({ code: z.string().min(6).max(32) });
@@ -411,8 +411,20 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     const body = createUserSchema.parse(request.body);
     const session = await securedSession(request, workspaceId);
     const member = await store.createUser(session, workspaceId, body);
+    let onboardingEmailSent = false;
+    if (resetEmailConfigured()) {
+      try {
+        const token = await store.requestPasswordReset(body.email);
+        if (token) {
+          await sendUserWelcome({ email: body.email, displayName: body.displayName, role: body.role, token });
+          onboardingEmailSent = true;
+        }
+      } catch {
+        app.log.error("New user onboarding email could not be delivered.");
+      }
+    }
     realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
-    return member;
+    return { ...member, onboardingEmailSent };
   });
 
   app.patch("/api/v1/workspaces/:workspaceId/team/users/:userId", async (request) => {

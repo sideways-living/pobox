@@ -109,6 +109,10 @@ export interface CreateUserInput {
   role: "ADMIN" | "MEMBER";
 }
 
+export interface CreateUserResult extends TeamMember {
+  onboardingEmailSent: boolean;
+}
+
 export interface UpdateUserInput {
   expectedVersion: string;
   email?: string;
