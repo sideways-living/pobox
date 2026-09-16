@@ -2,7 +2,7 @@
   "name": "pobox.watch",
   "short_name": "pobox.watch",
   "description": "Shared PO Box mail collection tracking.",
-  "start_url": "/",
+  "start_url": "/app/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f5f6f2",

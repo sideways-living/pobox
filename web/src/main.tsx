@@ -70,6 +70,10 @@ function loginEmailFromLocation() {
 }
 
 function App() {
+  const publicHomepage = window.location.pathname === "/" &&
+    !new URLSearchParams(window.location.search).has("nativeReturn") &&
+    !new URLSearchParams(window.location.search).has("forgot-password") &&
+    !window.location.hash.includes("reset-password");
   const [menuOpen, setMenuOpen] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -265,6 +269,7 @@ function App() {
 
   if (resetToken) return <main className="login-shell"><section className="login-panel"><h1>Reset password</h1><PasswordForm key={resetToken} mode="reset" token={resetToken} /></section></main>;
   if (new URLSearchParams(window.location.search).has("forgot-password")) return <main className="login-shell"><section className="login-panel"><h1>Forgot password?</h1><PasswordForm mode="forgot" email={loginEmailFromLocation()} /><a href="/">Return to pobox.watch</a></section></main>;
+  if (publicHomepage) return <PublicHomepage />;
   if (securityGate) {
     return (
       <MandatorySecuritySetup
@@ -370,7 +375,63 @@ function App() {
         )}
         {nativeReturnLink && <NativeReturnModal returnLink={nativeReturnLink} onContinueWeb={() => void continueOnWeb()} />}
         {changeNotice && <ChangeNoticeModal notice={changeNotice} onClose={dismissChangeNotice} error={changeNoticeError} busy={dismissingNotice} />}
+        <footer className="app-footer"><a href="/docs/privacy/">Privacy</a><a href="/">About pobox.watch</a></footer>
       </section>
+    </main>
+  );
+}
+
+function PublicHomepage() {
+  useEffect(() => {
+    document.title = "pobox.watch - Shared PO Box collection tracking";
+    const description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    description?.setAttribute("content", "pobox.watch securely reads authorised mail notification emails, matches them to shared PO boxes, and coordinates collection without duplicate trips.");
+  }, []);
+
+  return (
+    <main className="public-site">
+      <header className="public-header">
+        <a className="public-brand" href="/" aria-label="pobox.watch home"><img src="/icons/icon-192.png" alt="" />pobox.watch</a>
+        <nav aria-label="Public navigation"><a href="#how-it-works">How it works</a><a href="/docs/privacy/">Privacy</a><a className="public-sign-in" href="/app/">Sign in</a></nav>
+      </header>
+
+      <section className="public-hero">
+        <div>
+          <p className="public-eyebrow">Shared mail collection</p>
+          <h1>Know when your PO boxes have mail.</h1>
+          <p className="public-lead">pobox.watch turns authorised Australia Post notification emails into a shared collection queue, so your team knows what is waiting, where to collect it, and who is already on the way.</p>
+          <div className="public-actions"><a className="public-primary" href="/app/">Sign in to pobox.watch</a><a href="#google-data">How Gmail access is used</a></div>
+        </div>
+        <img className="public-app-icon" src="/icons/icon-512.png" alt="pobox.watch app icon" />
+      </section>
+
+      <section className="public-section" id="how-it-works">
+        <div className="public-section-heading"><p className="public-eyebrow">How it works</p><h2>A clear operational view of shared PO boxes</h2></div>
+        <div className="public-feature-grid">
+          <article><Mail aria-hidden="true" /><h3>Recognises notifications</h3><p>Matches supported mail and parcel notification emails to PO boxes and post offices saved in your workspace.</p></article>
+          <article><Users aria-hidden="true" /><h3>Coordinates the team</h3><p>Shows who intends to collect from a post office and lets everyone see when mail has been collected.</p></article>
+          <article><Clock aria-hidden="true" /><h3>Keeps useful history</h3><p>Records detections and collections so authorised workspace members can review recent activity.</p></article>
+        </div>
+      </section>
+
+      <section className="public-data-band" id="google-data">
+        <div>
+          <p className="public-eyebrow">Google user data</p>
+          <h2>Gmail access is limited to processing mail notifications.</h2>
+        </div>
+        <div className="public-data-copy">
+          <p>When a workspace administrator connects a Gmail inbox, pobox.watch reads unread message identifiers, sender, subject, received time, and relevant message content to identify supported PO Box notifications.</p>
+          <p>Matched notifications update the relevant mail or parcel status. After durable processing, pobox.watch removes the unread label from that source message so it is not processed repeatedly. It does not send email, access contacts, use Gmail data for advertising, or train AI models.</p>
+          <a href="/docs/privacy/">Read the full privacy policy</a>
+        </div>
+      </section>
+
+      <section className="public-section public-security">
+        <div className="public-section-heading"><p className="public-eyebrow">Security</p><h2>Access is restricted to your workspace.</h2></div>
+        <p>Operational data is available only to authorised workspace members. User accounts use passkeys and authenticator-based two-factor authentication, and administrative actions are permission controlled.</p>
+      </section>
+
+      <footer className="public-footer"><span>pobox.watch</span><nav aria-label="Footer navigation"><a href="/docs/privacy/">Privacy Policy</a><a href="/app/">Sign in</a></nav></footer>
     </main>
   );
 }
@@ -501,6 +562,7 @@ function LoginScreen({ onLogin, error, setError }: { onLogin: (previousLoginAt?:
         {!challengeId && passwordMode && <button type="button" className="secondary" disabled={busy} onClick={usePasskeyMode}><KeyRound size={18} />Back to Passkey</button>}
         <button type="button" className="secondary" onClick={() => setForgotPassword(true)}>Forgot Password?</button>
         <details className="small"><summary>Lost a passkey or authenticator?</summary><p>Use your password if your passkey is unavailable. Use an unused recovery code instead of your authenticator code, then replace the authenticator in Settings. If you have neither an authenticator nor recovery codes, access cannot be restored from this screen. Contact your administrator; security checks cannot be skipped.</p></details>
+        <div className="login-links"><a href="/">About pobox.watch</a><a href="/docs/privacy/">Privacy Policy</a></div>
       </form>
     </main>
   );

@@ -1,4 +1,4 @@
-export const appVersion = "0.13.33";
+export const appVersion = "0.13.34";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "0.13.34-public-home-and-privacy",
+    version: "0.13.34",
+    releasedAt: "2026-09-16T02:30:00.000Z",
+    title: "Clearer public information and privacy details",
+    summary: "pobox.watch now has a public introduction explaining the service and a detailed privacy policy describing exactly how connected Gmail notification data is handled. The secure app remains available from the Sign in button.",
+    audience: "ALL"
+  },
   {
     id: "0.13.33-collector-profile-badges",
     version: "0.13.33",
