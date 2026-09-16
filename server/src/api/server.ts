@@ -119,6 +119,11 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
   await app.register(rateLimit, { max: 100, timeWindow: "1 minute" });
   await app.register(websocket);
 
+  app.addHook("onSend", async (request, reply, payload) => {
+    if (request.url.startsWith("/api/")) reply.header("Cache-Control", "no-store");
+    return payload;
+  });
+
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof UnauthorizedError) return reply.code(401).send({ error: error.message });
     if (error instanceof ForbiddenError) return reply.code(403).send({ error: error.message });
@@ -521,7 +526,14 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     );
   if (process.env.NODE_ENV === "production" && webDistPath && existsSync(webDistPath)) {
     await app.register(fastifyStatic, {
-      root: webDistPath
+      root: webDistPath,
+      setHeaders(response, filePath) {
+        if (/[/\\]assets[/\\].+\.(?:js|css)$/.test(filePath)) {
+          response.header("Cache-Control", "public, max-age=31536000, immutable");
+        } else if (filePath.endsWith("index.html") || filePath.endsWith("manifest.webmanifest")) {
+          response.header("Cache-Control", "no-cache");
+        }
+      }
     });
     app.get("/docs/privacy/", async (_request, reply) => reply.sendFile("docs/privacy/index.html"));
     app.setNotFoundHandler(async (request, reply) => {

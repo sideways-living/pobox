@@ -8,6 +8,9 @@ if (process.env.NODE_ENV === "production") throw new Error("Test fixture cannot 
 const store = new MemoryStore();
 const app = await buildServer(store);
 await app.register(fastifyStatic, { root: fileURLToPath(new URL("../../../web/dist", import.meta.url)) });
+app.setNotFoundHandler((request, reply) => request.url.startsWith("/api/")
+  ? reply.code(404).send({ error: "Not found." })
+  : reply.sendFile("index.html"));
 const session = await store.login("daniel@example.com", "Password123!");
 if (session.kind !== "session") throw new Error("Expected fixture session");
 store.sessions.get(session.id)!.secondFactorVerified = true;

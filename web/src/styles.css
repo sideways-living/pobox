@@ -1417,6 +1417,18 @@ a.icon-button {
   color: #606f7c;
 }
 
+.map-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 4px;
+}
+
+.map-card-meta span + span::before {
+  content: "\00b7";
+  margin-right: 12px;
+}
+
 .map-card-footer {
   display: flex;
   align-items: center;

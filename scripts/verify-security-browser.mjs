@@ -11,7 +11,7 @@ try {
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   await cdp.send("WebAuthn.addVirtualAuthenticator", { options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
-  await page.goto("http://localhost:4190/?email=daniel%40example.com");
+  await page.goto("http://localhost:4190/app/?email=daniel%40example.com");
   assert.equal(await page.getByLabel("Email", { exact: true }).inputValue(), "daniel@example.com");
   assert.equal(await page.getByLabel("Password", { exact: true }).count(), 0);
   await page.getByRole("button", { name: "Use Password to Set Up Security" }).click();

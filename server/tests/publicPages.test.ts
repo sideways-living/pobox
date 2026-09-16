@@ -21,19 +21,26 @@ describe("public web pages", () => {
   it("serves the dedicated privacy document at Google's trailing-slash URL", async () => {
     temporaryDirectory = await mkdtemp(path.join(tmpdir(), "pobox-public-pages-"));
     await mkdir(path.join(temporaryDirectory, "docs/privacy"), { recursive: true });
+    await mkdir(path.join(temporaryDirectory, "assets"), { recursive: true });
     await writeFile(path.join(temporaryDirectory, "index.html"), "<h1>Public homepage</h1>");
     await writeFile(path.join(temporaryDirectory, "docs/privacy/index.html"), "<h1>Privacy Policy</h1><p>Google user data</p>");
+    await writeFile(path.join(temporaryDirectory, "assets/index-Abcdef12.js"), "console.log('release');");
     process.env.NODE_ENV = "production";
     process.env.WEB_DIST_PATH = temporaryDirectory;
 
     const app = await buildServer(new MemoryStore());
     const privacy = await app.inject({ method: "GET", url: "/docs/privacy/" });
     const homepage = await app.inject({ method: "GET", url: "/" });
+    const asset = await app.inject({ method: "GET", url: "/assets/index-Abcdef12.js" });
+    const health = await app.inject({ method: "GET", url: "/api/health" });
     await app.close();
 
     expect(privacy.statusCode).toBe(200);
     expect(privacy.headers["content-type"]).toContain("text/html");
     expect(privacy.body).toContain("Privacy Policy");
     expect(homepage.body).toContain("Public homepage");
+    expect(homepage.headers["cache-control"]).toBe("no-cache");
+    expect(asset.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
+    expect(health.headers["cache-control"]).toBe("no-store");
   });
 });

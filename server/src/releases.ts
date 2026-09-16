@@ -1,4 +1,4 @@
-export const appVersion = "0.13.36";
+export const appVersion = "1.0.0-rc.1";
 
 export interface AppChange {
   id: string;
@@ -10,6 +10,14 @@ export interface AppChange {
 }
 
 export const appChanges: AppChange[] = [
+  {
+    id: "1.0.0-rc.1-production-readiness",
+    version: "1.0.0-rc.1",
+    releasedAt: "2026-09-16T21:23:39.000Z",
+    title: "Release Candidate 1",
+    summary: "pobox.watch is now in release-candidate testing. This update improves loading efficiency, strengthens browser privacy controls, speeds up growing activity and review data, and completes the automated web, server, iPhone and Mac release checks.",
+    audience: "ALL"
+  },
   {
     id: "0.13.36-user-onboarding-and-web-badges",
     version: "0.13.36",
@@ -714,11 +722,31 @@ export function changesAfterVersion(lastSeenVersion?: string, role: "ADMIN" | "M
 }
 
 export function compareVersions(a: string, b: string): number {
-  const left = a.split(".").map(Number), right = b.split(".").map(Number);
+  const left = parseVersion(a), right = parseVersion(b);
   for (let index = 0; index < 3; index++) {
-    if (left[index] !== right[index]) return left[index] - right[index];
+    if (left.core[index] !== right.core[index]) return left.core[index] - right.core[index];
+  }
+  if (!left.prerelease.length || !right.prerelease.length) {
+    if (left.prerelease.length === right.prerelease.length) return 0;
+    return left.prerelease.length ? -1 : 1;
+  }
+  for (let index = 0; index < Math.max(left.prerelease.length, right.prerelease.length); index++) {
+    const leftPart = left.prerelease[index], rightPart = right.prerelease[index];
+    if (leftPart === undefined || rightPart === undefined) return leftPart === undefined ? -1 : 1;
+    if (leftPart === rightPart) continue;
+    const leftNumber = /^\d+$/.test(leftPart) ? Number(leftPart) : undefined;
+    const rightNumber = /^\d+$/.test(rightPart) ? Number(rightPart) : undefined;
+    if (leftNumber !== undefined && rightNumber !== undefined) return leftNumber - rightNumber;
+    if (leftNumber !== undefined || rightNumber !== undefined) return leftNumber !== undefined ? -1 : 1;
+    return leftPart.localeCompare(rightPart);
   }
   return 0;
+}
+
+function parseVersion(version: string) {
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/.exec(version);
+  if (!match) return { core: [0, 0, 0], prerelease: [version] };
+  return { core: match.slice(1, 4).map(Number), prerelease: match[4]?.split(".") ?? [] };
 }
 
 export function isReleaseVersion(version: string): boolean {

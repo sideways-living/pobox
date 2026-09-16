@@ -9,4 +9,7 @@ process.env.WEBAUTHN_ORIGIN = "http://localhost:4190";
 process.env.WEBAUTHN_RP_ID = "localhost";
 const app = await buildServer(new MemoryStore());
 await app.register(fastifyStatic, { root: fileURLToPath(new URL("../../../web/dist", import.meta.url)) });
+app.setNotFoundHandler((request, reply) => request.url.startsWith("/api/")
+  ? reply.code(404).send({ error: "Not found." })
+  : reply.sendFile("index.html"));
 await app.listen({ host: "127.0.0.1", port: 4190 });

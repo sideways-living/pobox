@@ -15,7 +15,7 @@ try {
     });
     // Login is isolated fixture setup; all workspace requests and sockets are real.
     await page.route("**/auth/login", route => route.fulfill({ json: { ok: true } }));
-    await page.goto("http://127.0.0.1:4189");
+    await page.goto("http://127.0.0.1:4189/app/");
     await page.getByRole("button", { name: "Use Password to Set Up Security" }).click();
     await page.getByLabel("Email", { exact: true }).fill(email);
     await page.getByLabel("Password", { exact: true }).fill("fixture");

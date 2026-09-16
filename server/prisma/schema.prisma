@@ -186,7 +186,7 @@ model PostOffice {
   mailboxes       Mailbox[]
   collectionClaim CollectionClaim?
 
-  @@index([workspaceId])
+  @@index([workspaceId, active, name])
 }
 
 model CollectionClaim {
@@ -277,6 +277,7 @@ model MailEvent {
 
   @@unique([workspaceId, provider, providerMessageId])
   @@index([workspaceId, mailboxId])
+  @@index([workspaceId, processedAt])
 }
 
 model MailAcknowledgement {
@@ -307,6 +308,7 @@ model CollectionEvent {
   user        User             @relation(fields: [collectedBy], references: [id])
 
   @@index([workspaceId, mailboxId])
+  @@index([workspaceId, collectedAt])
 }
 
 model ManualStatusEvent {
@@ -399,4 +401,6 @@ model AuditEvent {
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
   @@index([workspaceId, createdAt])
+  @@index([workspaceId, eventType, createdAt])
+  @@index([workspaceId, entityId, eventType])
 }

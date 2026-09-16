@@ -572,7 +572,7 @@ export class PrismaStore implements AppStore {
 
   async dashboard(session: Session, workspaceId: string): Promise<DashboardSnapshot> {
     const member = await this.requireMember(session, workspaceId);
-    const [workspace, user, offices, mailEvents, collectionEvents] = await Promise.all([
+    const [workspace, user, offices, mailEvents, collectionEvents, outstandingMailboxCount] = await Promise.all([
       this.prisma.workspace.findUnique({ where: { id: workspaceId } }),
       this.prisma.user.findUnique({ where: { id: session.userId }, include: { profile: true } }),
       this.prisma.postOffice.findMany({
@@ -584,7 +584,8 @@ export class PrismaStore implements AppStore {
         }
       }),
       this.prisma.mailEvent.findMany({ where: { workspaceId }, orderBy: { processedAt: "desc" }, take: 50 }),
-      this.prisma.collectionEvent.findMany({ where: { workspaceId }, orderBy: { collectedAt: "desc" }, take: 50 })
+      this.prisma.collectionEvent.findMany({ where: { workspaceId }, orderBy: { collectedAt: "desc" }, take: 50 }),
+      this.outstandingMailboxCount(workspaceId)
     ]);
     if (!workspace || !user) throw new NotFoundError("Workspace not found.");
     const history = [...mailEvents.map(this.toMailEvent), ...collectionEvents.map(this.toCollectionEvent)].sort((a, b) => {
@@ -601,7 +602,7 @@ export class PrismaStore implements AppStore {
         avatar: user.profile?.avatar ?? undefined,
         role: member.role
       },
-      outstandingMailboxCount: await this.outstandingMailboxCount(workspaceId),
+      outstandingMailboxCount,
       postOffices: offices.map((office: (typeof offices)[number]) => ({
         ...this.toPostOffice(office),
         collectionClaim: office.collectionClaim && office.collectionClaim.expiresAt > new Date() ? {

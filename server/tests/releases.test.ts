@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { appVersion } from "../src/releases.js";
+import { appVersion, compareVersions } from "../src/releases.js";
 import { buildServer } from "../src/api/server.js";
 import { MemoryStore } from "../src/store/memoryStore.js";
 import { createHash } from "node:crypto";
@@ -139,5 +139,14 @@ describe("release notices", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().version).toBe(appVersion);
+  });
+});
+
+describe("release version ordering", () => {
+  it("orders release candidates without hiding them behind the last numeric release", () => {
+    expect(compareVersions("1.0.0-rc.1", "0.13.36")).toBeGreaterThan(0);
+    expect(compareVersions("1.0.0-rc.2", "1.0.0-rc.1")).toBeGreaterThan(0);
+    expect(compareVersions("1.0.0", "1.0.0-rc.2")).toBeGreaterThan(0);
+    expect(compareVersions("1.0.0-rc.1", "1.0.0-rc.1")).toBe(0);
   });
 });

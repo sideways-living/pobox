@@ -10,7 +10,7 @@ try {
   page.on("pageerror", (error) => errors.push(error.message));
   // Authentication is fixture-only; all review/dashboard requests use the real local API.
   await page.route("**/api/v1/auth/login", (route) => route.fulfill({ json: { ok: true } }));
-  await page.goto("http://127.0.0.1:4189");
+  await page.goto("http://127.0.0.1:4189/app/");
   await page.getByRole("button", { name: "Use Password to Set Up Security" }).click();
   await page.getByLabel("Email", { exact: true }).fill("daniel@example.com");
   await page.getByLabel("Password", { exact: true }).fill("fixture");

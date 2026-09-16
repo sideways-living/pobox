@@ -16,7 +16,7 @@ try {
     if (query === "old") await new Promise((resolve) => setTimeout(resolve, 700));
     await route.fulfill({ json: [{ sourceId: "fixture", name: query === "old" ? "Stale Office" : "South Test LPO", address: "181 Clarendon Street, South Melbourne VIC 3205", phone: "+61 3 9000 1111", latitude: -37.832, longitude: 144.96, suburb: "South Melbourne", state: "VIC", postcode: "3205" }] });
   });
-  await page.goto("http://127.0.0.1:4189");
+  await page.goto("http://127.0.0.1:4189/app/");
   await page.getByRole("button", { name: "Use Password to Set Up Security" }).click();
   await page.getByLabel("Email", { exact: true }).fill("daniel@example.com");
   await page.getByLabel("Password", { exact: true }).fill("fixture");

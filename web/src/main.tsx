@@ -155,8 +155,10 @@ function App() {
   async function refresh() {
     const generation = ++refreshGeneration.current;
     const nextSnapshot = await loadDashboard();
-    const nextMembers = nextSnapshot.currentUser.role === "ADMIN" ? await loadMembers() : [];
-    const nextReviews = await loadReviewItems();
+    const [nextMembers, nextReviews] = await Promise.all([
+      nextSnapshot.currentUser.role === "ADMIN" ? loadMembers() : Promise.resolve([]),
+      loadReviewItems()
+    ]);
     if (generation !== refreshGeneration.current) return;
     setSnapshot(nextSnapshot);
     setMembers(nextMembers);
@@ -198,7 +200,9 @@ function App() {
       };
     };
     connect();
-    const poll = setInterval(() => { void reload(); }, 30000);
+    const poll = setInterval(() => {
+      if (!socket || socket.readyState !== WebSocket.OPEN) void reload();
+    }, 30000);
     return () => { stopped = true; clearTimeout(retry); clearInterval(poll); socket?.close(); };
   }, [snapshot?.workspace.id]);
 
@@ -1860,8 +1864,10 @@ function OfficeMapCard({ office }: { office: PostOffice }) {
       <div>
         <h3>{office.name}</h3>
         <p>{office.address}</p>
-        {office.phone && <span>{office.phone}</span>}
-        <span>{office.geofenceRadius}m geofence radius</span>
+        <div className="map-card-meta">
+          {office.phone && <span>{office.phone}</span>}
+          <span>{office.geofenceRadius} m geofence radius</span>
+        </div>
       </div>
       <div className="map-card-footer">
         <StatusPill tone={waiting > 0 ? "warning" : "ok"}>{waiting > 0 ? `${waiting} waiting` : "Clear"}</StatusPill>

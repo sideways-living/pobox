@@ -31,7 +31,7 @@ try {
     await page.route("**/auth/login", route => route.fulfill({ json: { ok: true } }));
     const base = "http://127.0.0.1:4189/api/v1/workspaces/ws_company/app/changes";
     const before = await (await context.request.get(base)).json();
-    const appResponse = await page.goto("http://127.0.0.1:4189");
+    const appResponse = await page.goto("http://127.0.0.1:4189/app/");
     assert.match(appResponse?.headers()["content-security-policy"] ?? "", /frame-src 'self' https:\/\/www\.openstreetmap\.org/);
     await page.getByRole("button", { name: "Use Password to Set Up Security" }).click();
     await page.getByLabel("Email", { exact: true }).fill(admin ? "daniel@example.com" : "john@example.com");
