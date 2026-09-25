@@ -95,6 +95,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "54BAC908F278B9E5641724F2";
 		};
+		"C1A000000000000000000001" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "C1A000000000000000000003";
+		};
 		"618456F2879A9861CBC16692" = {
 			"isa" = "PBXGroup";
 			"name" = "Products";
@@ -542,6 +546,9 @@
 			"hasScannedForEncodings" = "0";
 			"projectRoot" = "";
 			"mainGroup" = "B2DE9839B8DE6DF7D9A9BF5C";
+			"packageReferences" = (
+				"C1A000000000000000000002",
+			);
 		};
 		"1699F8903E81A884E231D1A5" = {
 			"path" = "LocationReminderPolicy.swift";
@@ -658,6 +665,7 @@
 			"buildActionMask" = "2147483647";
 			"files" = (
 				"B46E0F92B23D440DC59C86E1",
+				"C1A000000000000000000001",
 			);
 			"runOnlyForDeploymentPostprocessing" = "0";
 		};
@@ -710,6 +718,9 @@
 			);
 			"dependencies" = (
 				"FE71DA29D7F64AF41A8C4203",
+			);
+			"packageProductDependencies" = (
+				"C1A000000000000000000003",
 			);
 			"name" = "pobox.watch macOS";
 			"buildRules" = (
@@ -1164,6 +1175,19 @@
 			"remoteGlobalIDString" = "96780FC2CBFA144B55520C7E";
 			"remoteInfo" = "PoboxWatchShared";
 			"proxyType" = "1";
+		};
+		"C1A000000000000000000002" = {
+			"isa" = "XCRemoteSwiftPackageReference";
+			"repositoryURL" = "https://github.com/sparkle-project/Sparkle";
+			"requirement" = {
+				"kind" = "upToNextMajorVersion";
+				"minimumVersion" = "2.10.0";
+			};
+		};
+		"C1A000000000000000000003" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "C1A000000000000000000002";
+			"productName" = "Sparkle";
 		};
 	};
 	"rootObject" = "58D6D3DE8D70B08749A14163";

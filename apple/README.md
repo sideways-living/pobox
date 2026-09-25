@@ -36,3 +36,10 @@ xcodebuild -project apple/PoboxWatch.xcodeproj -scheme "pobox.watch macOS" -dest
 
 These unsigned builds check compilation, resources and framework embedding. They
 do not verify physical-device signing, passkey handoff or App Store submission.
+
+## Mac Updates
+
+The macOS target uses Sparkle for signed updates distributed outside the Mac
+App Store. See `docs/macos-sparkle-updates.md` for the Developer ID, notarisation,
+appcast signing, publication and end-to-end update test procedure. iOS updates
+continue through the App Store.

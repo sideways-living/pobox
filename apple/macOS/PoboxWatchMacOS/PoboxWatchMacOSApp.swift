@@ -1,6 +1,8 @@
 import SwiftUI
 import PoboxWatchShared
 import AppKit
+import Combine
+import Sparkle
 import UniformTypeIdentifiers
 
 @main
@@ -19,6 +21,7 @@ final class PoboxWatchMacOSAppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
     private var settingsWindow: NSWindow?
     private let model = MacMailboxViewModel()
+    private let softwareUpdater = MacSoftwareUpdater.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSAppleEventManager.shared().setEventHandler(
@@ -41,7 +44,7 @@ final class PoboxWatchMacOSAppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         self.window = window
         DispatchQueue.main.async { [weak self] in
-            self?.installSettingsMenuAction()
+            self?.installApplicationMenuActions()
         }
     }
 
@@ -49,8 +52,18 @@ final class PoboxWatchMacOSAppDelegate: NSObject, NSApplicationDelegate {
         true
     }
 
-    private func installSettingsMenuAction() {
-        guard let settingsItem = NSApp.mainMenu?.items.first?.submenu?.items.first(where: { $0.keyEquivalent == "," }) else { return }
+    private func installApplicationMenuActions() {
+        guard let applicationMenu = NSApp.mainMenu?.items.first?.submenu else { return }
+        if !applicationMenu.items.contains(where: { $0.action == #selector(SPUStandardUpdaterController.checkForUpdates(_:)) }) {
+            let updateItem = NSMenuItem(
+                title: "Check for Updates…",
+                action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+                keyEquivalent: ""
+            )
+            updateItem.target = softwareUpdater.controller
+            applicationMenu.insertItem(updateItem, at: min(1, applicationMenu.items.count))
+        }
+        guard let settingsItem = applicationMenu.items.first(where: { $0.keyEquivalent == "," }) else { return }
         settingsItem.target = self
         settingsItem.action = #selector(showSettingsWindow)
     }
@@ -82,6 +95,29 @@ final class PoboxWatchMacOSAppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             await model.consumeNativeHandoff(from: url)
         }
+    }
+}
+
+@MainActor
+final class MacSoftwareUpdater: ObservableObject {
+    static let shared = MacSoftwareUpdater()
+
+    let controller: SPUStandardUpdaterController
+    @Published private(set) var canCheckForUpdates = false
+
+    private init() {
+        controller = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: nil,
+            userDriverDelegate: nil
+        )
+        controller.updater.publisher(for: \.canCheckForUpdates)
+            .receive(on: RunLoop.main)
+            .assign(to: &$canCheckForUpdates)
+    }
+
+    func checkForUpdates() {
+        controller.updater.checkForUpdates()
     }
 }
 
@@ -1588,6 +1624,7 @@ struct MacSettingsView: View {
             MacPanel(title: "Appearance", aside: "Mac") {
                 MacAppearancePicker()
             }
+            MacSoftwareUpdateSettings(updater: MacSoftwareUpdater.shared)
             MacInfoRow(title: "Server", detail: "https://pobox.watch", systemImage: "network", tint: .blue)
             MacInfoRow(title: "Workspace", detail: snapshot?.workspace.name ?? "Unknown", systemImage: "building.2", tint: PoboxTheme.green)
             MacInfoRow(title: "Security", detail: "Passkey and authenticator setup is mandatory. Use the web app to add passkeys and manage setup.", systemImage: "key.fill", tint: PoboxTheme.orange)
@@ -1607,6 +1644,45 @@ struct MacSettingsView: View {
             }
             .buttonStyle(.borderedProminent)
         }
+    }
+}
+
+private struct MacSoftwareUpdateSettings: View {
+    @ObservedObject var updater: MacSoftwareUpdater
+    @State private var automaticallyChecksForUpdates: Bool
+    @State private var automaticallyDownloadsUpdates: Bool
+
+    init(updater: MacSoftwareUpdater) {
+        self.updater = updater
+        _automaticallyChecksForUpdates = State(initialValue: updater.controller.updater.automaticallyChecksForUpdates)
+        _automaticallyDownloadsUpdates = State(initialValue: updater.controller.updater.automaticallyDownloadsUpdates)
+    }
+
+    var body: some View {
+        MacPanel(title: "Software Updates", aside: currentVersion) {
+            Toggle("Automatically check for updates", isOn: $automaticallyChecksForUpdates)
+                .onChange(of: automaticallyChecksForUpdates) { _, enabled in
+                    updater.controller.updater.automaticallyChecksForUpdates = enabled
+                }
+            Toggle("Automatically download updates", isOn: $automaticallyDownloadsUpdates)
+                .disabled(!automaticallyChecksForUpdates)
+                .onChange(of: automaticallyDownloadsUpdates) { _, enabled in
+                    updater.controller.updater.automaticallyDownloadsUpdates = enabled
+                }
+            Button {
+                updater.checkForUpdates()
+            } label: {
+                Label("Check for Updates", systemImage: "arrow.triangle.2.circlepath")
+            }
+            .buttonStyle(.bordered)
+            .disabled(!updater.canCheckForUpdates)
+        }
+    }
+
+    private var currentVersion: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
+        return "Version \(version) (\(build))"
     }
 }
 
