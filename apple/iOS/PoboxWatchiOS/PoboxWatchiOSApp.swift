@@ -1,5 +1,6 @@
 import SwiftUI
 import PoboxWatchShared
+import MapKit
 import UIKit
 
 @main
@@ -523,11 +524,7 @@ struct iPhoneDashboardView: View {
                 iPhoneMailboxList(model: model)
 
             case "Map":
-                iPhoneMapList(snapshot: model.snapshot, updatePostOffice: { office, name, address, phone, latitude, longitude, radius in
-                    await model.updatePostOffice(office, name: name, address: address, phone: phone, latitude: latitude, longitude: longitude, geofenceRadius: radius)
-                }, deletePostOffice: { office in
-                    await model.deletePostOffice(office)
-                })
+                iPhoneMapList(snapshot: model.snapshot)
 
             case "History":
                 iPhoneHistoryList(snapshot: model.snapshot, mode: .history)
@@ -992,16 +989,106 @@ private struct iPhoneCollectionClaimControl: View {
 
 struct iPhoneMapList: View {
     let snapshot: MailboxDashboardSnapshot?
-    let updatePostOffice: (PostOffice, String, String, String?, Double, Double, Int) async -> Void
-    let deletePostOffice: (PostOffice) async -> Void
+    @State private var position: MapCameraPosition = .automatic
+    @State private var selectedOfficeID: String?
 
     var body: some View {
-        List {
-            ForEach(snapshot?.postOffices ?? []) { office in
-                iPhonePostOfficeSection(office: office, updatePostOffice: updatePostOffice, deletePostOffice: deletePostOffice)
+        let offices = (snapshot?.postOffices ?? []).filter(hasValidMapCoordinate)
+        ZStack(alignment: .topLeading) {
+            if offices.isEmpty {
+                ContentUnavailableView(
+                    "No mapped post offices",
+                    systemImage: "map",
+                    description: Text("Add coordinates to a post office to show it here.")
+                )
+            } else {
+                Map(position: $position) {
+                    ForEach(offices) { office in
+                        Annotation("", coordinate: office.coordinate, anchor: .bottom) {
+                            Button {
+                                selectedOfficeID = office.id
+                            } label: {
+                                Image(systemName: "mappin.circle.fill")
+                                    .font(.system(size: 34, weight: .semibold))
+                                    .foregroundStyle(office.hasWaitingCollection ? PoboxTheme.green : Color.black)
+                                    .shadow(color: .black.opacity(0.24), radius: 3, y: 2)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("\(office.name), \(office.boxSummary)")
+                            .accessibilityHint("Shows post office details")
+                            .popover(isPresented: selectionBinding(for: office.id), arrowEdge: .bottom) {
+                                iPhoneMapOfficeCallout(office: office)
+                                    .presentationCompactAdaptation(.popover)
+                            }
+                        }
+                    }
+                }
+                .mapStyle(.standard(pointsOfInterest: .excludingAll))
+                .mapControls {
+                    MapCompass()
+                    MapScaleView()
+                }
             }
+
+            HStack(spacing: 12) {
+                Label("Mail", systemImage: "mappin.circle.fill")
+                    .foregroundStyle(PoboxTheme.green)
+                Label("Clear", systemImage: "mappin.circle.fill")
+                    .foregroundStyle(.black)
+                Spacer(minLength: 4)
+                Text("\(offices.count) offices")
+                    .fontWeight(.semibold)
+            }
+            .font(.caption)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 7))
+            .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+            .padding(12)
         }
-        .iPhoneOperationalListStyle()
+        .ignoresSafeArea(edges: .bottom)
+        .accessibilityLabel("Post office collection map")
+    }
+
+    private func selectionBinding(for officeID: String) -> Binding<Bool> {
+        Binding(
+            get: { selectedOfficeID == officeID },
+            set: { isPresented in
+                if !isPresented && selectedOfficeID == officeID { selectedOfficeID = nil }
+            }
+        )
+    }
+}
+
+private struct iPhoneMapOfficeCallout: View {
+    let office: PostOffice
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(office.name)
+                .font(.headline)
+            Text(office.boxSummary)
+                .fontWeight(.semibold)
+            Label(office.address, systemImage: "mappin.and.ellipse")
+                .font(.subheadline)
+            if let phone = office.phone, !phone.isEmpty {
+                Label(phone, systemImage: "phone")
+                    .font(.subheadline)
+            }
+            Label(
+                office.hasWaitingCollection ? "Mail awaiting collection" : "No collection waiting",
+                systemImage: office.hasWaitingCollection ? "tray.full.fill" : "checkmark.circle"
+            )
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(office.hasWaitingCollection ? PoboxTheme.green : .secondary)
+            Link(destination: postOfficeDirectionsURL(name: office.name, address: office.address, latitude: office.latitude, longitude: office.longitude)) {
+                Label("Directions", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(width: 280, alignment: .leading)
+        .padding(16)
     }
 }
 
@@ -1935,6 +2022,25 @@ private struct iPhoneCollectionConfirmationBanner: View {
 
 private func hasWaitingItem(_ mailbox: Mailbox) -> Bool {
     mailbox.mailWaiting || mailbox.parcelWaiting
+}
+
+private func hasValidMapCoordinate(_ office: PostOffice) -> Bool {
+    office.latitude.isFinite && office.longitude.isFinite && abs(office.latitude) <= 90 && abs(office.longitude) <= 180
+}
+
+private extension PostOffice {
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    var hasWaitingCollection: Bool {
+        mailboxes.contains(where: hasWaitingItem)
+    }
+
+    var boxSummary: String {
+        guard !mailboxes.isEmpty else { return "No PO box assigned" }
+        return mailboxes.map { "PO Box \($0.boxNumber)" }.joined(separator: ", ")
+    }
 }
 
 private func mailboxStatus(_ mailbox: Mailbox) -> String {

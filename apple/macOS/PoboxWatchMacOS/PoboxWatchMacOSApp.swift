@@ -2,6 +2,7 @@ import SwiftUI
 import PoboxWatchShared
 import AppKit
 import Combine
+import MapKit
 import Sparkle
 import UniformTypeIdentifiers
 
@@ -780,11 +781,7 @@ struct MacOverviewView: View {
                 await model.deleteMailbox(mailbox)
             })
         case "Map":
-            MacMapView(snapshot: model.snapshot, updatePostOffice: { office, name, address, phone, latitude, longitude, radius in
-                await model.updatePostOffice(office, name: name, address: address, phone: phone, latitude: latitude, longitude: longitude, geofenceRadius: radius)
-            }, deletePostOffice: { office in
-                await model.deletePostOffice(office)
-            })
+            MacMapView(snapshot: model.snapshot)
         case "History":
             MacHistoryView(snapshot: model.snapshot, mode: .history)
         case "Activity":
@@ -1216,15 +1213,127 @@ private struct MacCollectionClaimControl: View {
 
 struct MacMapView: View {
     let snapshot: MailboxDashboardSnapshot?
-    let updatePostOffice: (PostOffice, String, String, String?, Double, Double, Int) async -> Void
-    let deletePostOffice: (PostOffice) async -> Void
+    @State private var position: MapCameraPosition = .automatic
+    @State private var selectedOfficeID: String?
+    @State private var hoveredOfficeID: String?
 
     var body: some View {
-        MacPage(title: "Map", subtitle: "Open post office locations in Apple Maps.") {
-            ForEach(snapshot?.postOffices ?? []) { office in
-                MacOfficeRow(office: office, updatePostOffice: updatePostOffice, deletePostOffice: deletePostOffice)
+        let offices = (snapshot?.postOffices ?? []).filter(hasValidMapCoordinate)
+        ZStack(alignment: .topLeading) {
+            if offices.isEmpty {
+                MacEmptyStateView(title: "No mapped post offices", subtitle: "Add coordinates to a post office to show it here.")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(PoboxTheme.pageBackground)
+            } else {
+                Map(position: $position) {
+                    ForEach(offices) { office in
+                        Annotation("", coordinate: office.coordinate, anchor: .bottom) {
+                            VStack(spacing: 5) {
+                                if hoveredOfficeID == office.id && selectedOfficeID != office.id {
+                                    MacMapHoverLabel(office: office)
+                                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottom)))
+                                }
+                                Button {
+                                    selectedOfficeID = office.id
+                                } label: {
+                                    Image(systemName: "mappin.circle.fill")
+                                        .font(.system(size: 34, weight: .semibold))
+                                        .foregroundStyle(office.hasWaitingCollection ? PoboxTheme.green : Color.black)
+                                        .shadow(color: .black.opacity(0.24), radius: 3, y: 2)
+                                }
+                                .buttonStyle(.plain)
+                                .help("\(office.name), \(office.boxSummary)")
+                                .onHover { hovering in
+                                    withAnimation(.easeOut(duration: 0.12)) {
+                                        hoveredOfficeID = hovering ? office.id : (hoveredOfficeID == office.id ? nil : hoveredOfficeID)
+                                    }
+                                }
+                                .popover(isPresented: selectionBinding(for: office.id), arrowEdge: .bottom) {
+                                    MacMapOfficeCallout(office: office)
+                                }
+                            }
+                        }
+                    }
+                }
+                .mapStyle(.standard(pointsOfInterest: .excludingAll))
+                .mapControls {
+                    MapCompass()
+                    MapScaleView()
+                    MapZoomStepper()
+                }
             }
+
+            HStack(spacing: 16) {
+                Label("Mail to collect", systemImage: "mappin.circle.fill")
+                    .foregroundStyle(PoboxTheme.green)
+                Label("No collection", systemImage: "mappin.circle.fill")
+                    .foregroundStyle(.black)
+                Text("\(offices.count) post offices")
+                    .fontWeight(.semibold)
+            }
+            .font(.caption)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 7))
+            .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+            .padding(16)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityLabel("Post office collection map")
+    }
+
+    private func selectionBinding(for officeID: String) -> Binding<Bool> {
+        Binding(
+            get: { selectedOfficeID == officeID },
+            set: { isPresented in
+                if !isPresented && selectedOfficeID == officeID { selectedOfficeID = nil }
+            }
+        )
+    }
+}
+
+private struct MacMapHoverLabel: View {
+    let office: PostOffice
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(office.name).fontWeight(.semibold)
+            Text(office.boxSummary).foregroundStyle(.secondary)
+        }
+        .font(.caption)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+        .shadow(color: .black.opacity(0.15), radius: 5, y: 2)
+        .fixedSize()
+    }
+}
+
+private struct MacMapOfficeCallout: View {
+    let office: PostOffice
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(office.name)
+                .font(.headline)
+            Text(office.boxSummary)
+                .fontWeight(.semibold)
+            Label(office.address, systemImage: "mappin.and.ellipse")
+            if let phone = office.phone, !phone.isEmpty {
+                Label(phone, systemImage: "phone")
+            }
+            Label(
+                office.hasWaitingCollection ? "Mail awaiting collection" : "No collection waiting",
+                systemImage: office.hasWaitingCollection ? "tray.full.fill" : "checkmark.circle"
+            )
+            .foregroundStyle(office.hasWaitingCollection ? PoboxTheme.green : .secondary)
+            Link(destination: postOfficeDirectionsURL(name: office.name, address: office.address, latitude: office.latitude, longitude: office.longitude)) {
+                Label("Directions", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(width: 300, alignment: .leading)
+        .padding(16)
     }
 }
 
@@ -2435,6 +2544,25 @@ private func chooseAvatarImage() -> String? {
 
 private func hasWaitingItem(_ mailbox: Mailbox) -> Bool {
     mailbox.mailWaiting || mailbox.parcelWaiting
+}
+
+private func hasValidMapCoordinate(_ office: PostOffice) -> Bool {
+    office.latitude.isFinite && office.longitude.isFinite && abs(office.latitude) <= 90 && abs(office.longitude) <= 180
+}
+
+private extension PostOffice {
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    var hasWaitingCollection: Bool {
+        mailboxes.contains(where: hasWaitingItem)
+    }
+
+    var boxSummary: String {
+        guard !mailboxes.isEmpty else { return "No PO box assigned" }
+        return mailboxes.map { "PO Box \($0.boxNumber)" }.joined(separator: ", ")
+    }
 }
 
 private func mailboxStatus(_ mailbox: Mailbox) -> String {

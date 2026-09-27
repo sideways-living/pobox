@@ -1289,6 +1289,75 @@ a.icon-button {
   background: #dfe7df;
 }
 
+.full-map-page {
+  position: relative;
+  min-height: 560px;
+  height: calc(100vh - 170px);
+  overflow: hidden;
+  border: 1px solid #cbd5df;
+  border-radius: 8px;
+  background: #dfe7df;
+}
+
+.full-map-page .mapkit-panel,
+.full-map-page .mapkit-canvas,
+.full-map-page .map-fallback,
+.full-map-page .leaflet-map-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 560px;
+  border: 0;
+  border-radius: 0;
+}
+
+.map-page-legend {
+  position: absolute;
+  z-index: 700;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  max-width: calc(100% - 28px);
+  padding: 10px 13px;
+  border: 1px solid rgba(29, 35, 41, 0.18);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 4px 18px rgba(29, 35, 41, 0.15);
+  color: #26323a;
+  font-size: 0.86rem;
+}
+
+.map-page-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.map-legend-pin {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #1d2329;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(29, 35, 41, 0.22);
+}
+
+.map-legend-pin.waiting { background: #168a4b; }
+.map-legend-pin.clear { background: #1d2329; }
+
+.map-empty-state {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 7px;
+  height: 100%;
+  color: #52616d;
+}
+
+.map-empty-state strong { color: #20272e; }
+
 .mapkit-canvas {
   width: 100%;
   min-height: 260px;
@@ -1304,6 +1373,109 @@ a.icon-button {
   border: 1px solid rgba(20, 51, 41, 0.12);
   border-radius: 8px;
 }
+
+.full-map-fallback {
+  position: relative;
+  display: block;
+  padding: 0;
+}
+
+.full-map-fallback .map-fallback-notice {
+  position: absolute;
+  z-index: 710;
+  top: 66px;
+  left: 14px;
+  max-width: min(520px, calc(100% - 28px));
+  box-shadow: 0 4px 18px rgba(29, 35, 41, 0.12);
+}
+
+.leaflet-map-canvas { background: #dfe7df; }
+
+.office-map-marker {
+  border: 0;
+  background: transparent;
+}
+
+.office-map-pin {
+  position: relative;
+  display: block;
+  width: 26px;
+  height: 26px;
+  border: 3px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  background: #1d2329;
+  box-shadow: 0 3px 8px rgba(20, 28, 33, 0.35);
+  transform: rotate(-45deg);
+}
+
+.office-map-pin::after {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.office-map-pin.waiting { background: #168a4b; }
+.office-map-pin.clear { background: #1d2329; }
+
+.mapkit-office-marker {
+  position: relative;
+  display: block;
+  width: 30px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.mapkit-hover-label {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  z-index: 2;
+  display: none;
+  width: max-content;
+  max-width: 260px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 3px 12px rgba(29, 35, 41, 0.22);
+  color: #26323a;
+  text-align: left;
+  transform: translateX(-50%);
+}
+
+.mapkit-hover-label strong,
+.mapkit-hover-label span { display: block; }
+.mapkit-hover-label span { margin-top: 3px; color: #5a6873; }
+.mapkit-office-marker:hover .mapkit-hover-label,
+.mapkit-office-marker:focus-visible .mapkit-hover-label { display: block; }
+
+.map-hover-label,
+.map-callout {
+  display: grid;
+  gap: 4px;
+  color: #26323a;
+}
+
+.map-hover-label span,
+.map-callout span { color: #5a6873; }
+
+.map-callout { min-width: 220px; padding: 4px; }
+.map-callout > strong { font-size: 1rem; }
+.map-callout a { color: #075b91; font-weight: 800; }
+.map-callout-status { margin-top: 4px; font-weight: 800; }
+.map-callout-status.waiting { color: #126d3c; }
+
+.leaflet-tooltip {
+  border: 0;
+  border-radius: 6px;
+  box-shadow: 0 3px 12px rgba(29, 35, 41, 0.2);
+}
+
+.leaflet-popup-content { margin: 14px 16px; }
 
 .map-fallback-links {
   display: grid;
@@ -1978,6 +2150,27 @@ a.icon-button {
 
   .map-board-copy {
     grid-template-columns: 1fr;
+  }
+
+  .full-map-page {
+    min-height: 480px;
+    height: calc(100dvh - 215px);
+  }
+
+  .full-map-page .mapkit-panel,
+  .full-map-page .mapkit-canvas,
+  .full-map-page .map-fallback,
+  .full-map-page .leaflet-map-canvas {
+    min-height: 480px;
+  }
+
+  .map-page-legend {
+    gap: 8px 12px;
+    font-size: 0.78rem;
+  }
+
+  .full-map-fallback .map-fallback-notice {
+    top: 94px;
   }
 
   .post-office-summary {

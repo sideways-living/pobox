@@ -4,6 +4,8 @@ import { createRoot } from "react-dom/client";
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import { load as loadMapKit } from "@apple/mapkit-loader";
 import type { Annotation, Map as AppleMap } from "@apple/mapkit-loader";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { AlertTriangle, Bell, CalendarCheck2, Check, CircleCheckBig, Clock, Edit2, ExternalLink, KeyRound, LogIn, LogOut, Mail, MapPin, Menu, Navigation, Package, Plus, RefreshCw, Save, Shield, Trash2, UserCheck, UserPen, UserRoundCheck, UserRoundX, Users, X } from "lucide-react";
 import {
   authenticatePasskey,
@@ -1163,60 +1165,25 @@ function MapSummary({ snapshot }: { snapshot: DashboardSnapshot }) {
 }
 
 function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
-  const activeOffice = snapshot.postOffices.find((office) => office.mailboxes.some(hasWaitingItem)) ?? snapshot.postOffices[0];
   const isAdmin = snapshot.currentUser.role === "ADMIN";
+  const mappedOffices = snapshot.postOffices.filter(validMapCoordinate);
   return (
-    <div className="page-grid map-page">
-      <section className="page-main">
-        <Panel title="Collection Map" aside={activeOffice ? `${activeOffice.latitude.toFixed(4)}, ${activeOffice.longitude.toFixed(4)}` : undefined}>
-          {activeOffice ? (
-            <div className="apple-map-board" aria-label="Post office map overview">
-              <div className="map-board-copy">
-                <MapPin size={22} />
-                <div>
-                  <strong>{activeOffice.name}</strong>
-                  <span>{activeOffice.address}</span>
-                </div>
-                <a className="primary map-button" href={appleMapsUrl(activeOffice)} target="_blank" rel="noreferrer"><ExternalLink size={17} />Open in Apple Maps</a>
-              </div>
-              <AppleMapPanel offices={snapshot.postOffices} activeOffice={activeOffice} isAdmin={isAdmin} />
-            </div>
-          ) : (
-            <p className="small">Add a post office to show the operational map.</p>
-          )}
-        </Panel>
-        <Panel title="Collection Routes">
-          <div className="route-list">
-            {snapshot.postOffices.map((office) => <OfficeMapCard office={office} key={office.id} />)}
-          </div>
-        </Panel>
-      </section>
-      <aside className="side-panels">
-        <Panel title="Map Summary">
-          <div className="detail-list">
-            <DetailRow label="Tracked locations" value={String(snapshot.postOffices.length)} />
-            <DetailRow label="Boxes mapped" value={String(totalMailboxes(snapshot))} />
-            <DetailRow label="Needs collection" value={String(snapshot.outstandingMailboxCount)} />
-            <DetailRow label="Map provider" value="Apple Maps with OpenStreetMap fallback" />
-          </div>
-        </Panel>
-        <Panel title="Priority Stops">
-          {snapshot.postOffices.filter((office) => office.mailboxes.some(hasWaitingItem)).length > 0 ? (
-            <div className="priority-list">
-              {snapshot.postOffices
-                .filter((office) => office.mailboxes.some(hasWaitingItem))
-                .map((office) => <a href={appleMapsUrl(office)} target="_blank" rel="noreferrer" key={office.id}>{office.name}</a>)}
-            </div>
-          ) : (
-            <p className="small">No priority stops right now.</p>
-          )}
-        </Panel>
-      </aside>
+    <div className="full-map-page">
+      <div className="map-page-legend" aria-label="Map legend">
+        <span><i className="map-legend-pin waiting" />Mail to collect</span>
+        <span><i className="map-legend-pin clear" />No collection</span>
+        <strong>{mappedOffices.length} post offices</strong>
+      </div>
+      {mappedOffices.length > 0 ? (
+        <AppleMapPanel offices={mappedOffices} isAdmin={isAdmin} />
+      ) : (
+        <div className="map-empty-state"><MapPin size={28} /><strong>No mapped post offices</strong><span>Add coordinates to a post office to show it here.</span></div>
+      )}
     </div>
   );
 }
 
-function AppleMapPanel({ offices, activeOffice, isAdmin }: { offices: PostOffice[]; activeOffice: PostOffice; isAdmin: boolean }) {
+function AppleMapPanel({ offices, isAdmin }: { offices: PostOffice[]; isAdmin: boolean }) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const [mapStatus, setMapStatus] = useState<"loading" | "ready" | "unconfigured" | "failed">("loading");
   const token = (import.meta.env.VITE_MAPKIT_TOKEN as string | undefined)?.trim();
@@ -1243,23 +1210,38 @@ function AppleMapPanel({ offices, activeOffice, isAdmin }: { offices: PostOffice
       const onError = () => { if (!cancelled) setMapStatus("failed"); };
       mapkit.addEventListener("configuration-error", onError);
       removeErrorListener = () => mapkit.removeEventListener("configuration-error", onError);
-      if (!validMapCoordinate(activeOffice)) throw new Error("Invalid map coordinates");
-      const center = new mapkit.Coordinate(activeOffice.latitude, activeOffice.longitude);
-      const span = new mapkit.CoordinateSpan(0.08, 0.08);
       const nextMap = new mapkit.Map(mapRef.current);
-      nextMap.region = new mapkit.CoordinateRegion(center, span);
       map = nextMap;
       const annotations: Annotation[] = offices.filter(validMapCoordinate).map((office) => {
         const waiting = office.mailboxes.filter(hasWaitingItem).length;
-        return new mapkit.MarkerAnnotation(new mapkit.Coordinate(office.latitude, office.longitude), {
+        return new mapkit.Annotation(new mapkit.Coordinate(office.latitude, office.longitude), () => {
+          const marker = document.createElement("button");
+          marker.type = "button";
+          marker.className = "mapkit-office-marker";
+          marker.setAttribute("aria-label", `${office.name}, ${officeBoxSummary(office)}`);
+          const pin = document.createElement("span");
+          pin.className = `office-map-pin ${waiting > 0 ? "waiting" : "clear"}`;
+          pin.setAttribute("aria-hidden", "true");
+          const hover = document.createElement("span");
+          hover.className = "mapkit-hover-label";
+          const hoverName = document.createElement("strong");
+          hoverName.textContent = office.name;
+          const hoverBoxes = document.createElement("span");
+          hoverBoxes.textContent = officeBoxSummary(office);
+          hover.append(hoverName, hoverBoxes);
+          marker.append(pin, hover);
+          return marker;
+        }, {
           title: office.name,
-          subtitle: waiting > 0 ? `${waiting} waiting` : "Clear",
-          color: waiting > 0 ? "#c74337" : "#34855f",
-          glyphText: waiting > 0 ? String(waiting) : ""
+          subtitle: officeBoxSummary(office),
+          accessibilityLabel: `${office.name}, ${waiting > 0 ? `${waiting} boxes awaiting collection` : "no collection waiting"}`,
+          anchorOffset: new DOMPoint(0, -19),
+          calloutEnabled: true,
+          callout: { calloutContentForAnnotation: () => mapCalloutContent(office) }
         });
       });
       nextMap.addAnnotations(annotations);
-      map = nextMap;
+      nextMap.showItems(annotations);
       setMapStatus("ready");
       clearTimeout(timeout);
     }).catch(() => {
@@ -1273,67 +1255,111 @@ function AppleMapPanel({ offices, activeOffice, isAdmin }: { offices: PostOffice
       removeErrorListener?.();
       map?.destroy?.();
     };
-  }, [activeOffice.id, activeOffice.latitude, activeOffice.longitude, mapDataKey, token]);
+  }, [mapDataKey, token]);
 
   if (!token) {
     return (
       <MapFallback
         offices={offices}
-        activeOffice={activeOffice}
         message={isAdmin ? "Apple Maps is not configured. OpenStreetMap is being used temporarily." : undefined}
       />
     );
   }
   if (mapStatus === "failed") {
-    return <MapFallback offices={offices} activeOffice={activeOffice} message={isAdmin ? "Apple Maps could not load. OpenStreetMap is being used temporarily; check the MapKit token and allowed website origins." : undefined} />;
+    return <MapFallback offices={offices} message={isAdmin ? "Apple Maps could not load. OpenStreetMap is being used temporarily; check the MapKit token and allowed website origins." : undefined} />;
   }
 
   return (
     <div className="mapkit-panel">
       <div ref={mapRef} className="mapkit-canvas" aria-label="Interactive Apple map" />
-      {mapStatus !== "ready" && (
-        isAdmin || mapStatus === "loading" ? (
-          <div className="mapkit-status">
-            Loading Apple Maps...
-          </div>
-        ) : (
-          <MapFallback offices={offices} activeOffice={activeOffice} />
-        )
-      )}
+      {mapStatus !== "ready" && <div className="mapkit-status">Loading Apple Maps...</div>}
     </div>
   );
 }
 
-function MapFallback({ offices, activeOffice, message }: { offices: PostOffice[]; activeOffice: PostOffice; message?: string }) {
+function MapFallback({ offices, message }: { offices: PostOffice[]; message?: string }) {
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const mapDataKey = JSON.stringify(offices.map(office => [office.id, office.name, office.address, office.phone, office.latitude, office.longitude, office.mailboxes.map(box => [box.boxNumber, box.mailWaiting, box.parcelWaiting])]));
+
+  useEffect(() => {
+    if (!mapRef.current) return undefined;
+    const map = L.map(mapRef.current, { zoomControl: true });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
+      maxZoom: 19
+    }).addTo(map);
+    const bounds = L.latLngBounds([]);
+    offices.filter(validMapCoordinate).forEach((office) => {
+      const waiting = office.mailboxes.some(hasWaitingItem);
+      const marker = L.marker([office.latitude, office.longitude], {
+        icon: L.divIcon({
+          className: "office-map-marker",
+          html: `<span class="office-map-pin ${waiting ? "waiting" : "clear"}" aria-hidden="true"></span>`,
+          iconSize: [30, 40],
+          iconAnchor: [15, 38],
+          popupAnchor: [0, -34],
+          tooltipAnchor: [0, -32]
+        }),
+        title: `${office.name} - ${officeBoxSummary(office)}`,
+        alt: office.name
+      });
+      const tooltip = document.createElement("div");
+      tooltip.className = "map-hover-label";
+      const tooltipName = document.createElement("strong");
+      tooltipName.textContent = office.name;
+      const tooltipBoxes = document.createElement("span");
+      tooltipBoxes.textContent = officeBoxSummary(office);
+      tooltip.append(tooltipName, tooltipBoxes);
+      marker.bindTooltip(tooltip, { direction: "top", opacity: 1 });
+      marker.bindPopup(mapCalloutContent(office), { minWidth: 250, maxWidth: 340 });
+      marker.addTo(map);
+      bounds.extend([office.latitude, office.longitude]);
+    });
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [42, 42], maxZoom: 14 });
+    queueMicrotask(() => map.invalidateSize());
+    return () => { map.remove(); };
+  }, [mapDataKey]);
+
   return (
-    <div className="map-fallback">
+    <div className="map-fallback full-map-fallback">
       {message && <p className="map-fallback-notice">{message}</p>}
-      <iframe
-        className="osm-map-frame"
-        src={openStreetMapEmbedUrl(offices, activeOffice)}
-        title={`OpenStreetMap showing ${activeOffice.name}`}
-        loading="lazy"
-        referrerPolicy="strict-origin-when-cross-origin"
-      />
-      <div className="map-fallback-links">
-        {offices.map((office) => {
-          const waiting = office.mailboxes.filter(hasWaitingItem).length;
-          return (
-            <a
-              href={appleMapsUrl(office)}
-              key={office.id}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`${office.name}, ${waiting > 0 ? `${waiting} waiting` : "clear"}`}
-            >
-              <MapPin size={18} /><span>{office.name}</span><span>{waiting > 0 ? `${waiting} waiting` : "Clear"}</span>
-            </a>
-          );
-        })}
-      </div>
-      <a className="osm-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">Map data © OpenStreetMap contributors</a>
+      <div ref={mapRef} className="leaflet-map-canvas" aria-label="Interactive map of all post offices" />
     </div>
   );
+}
+
+function officeBoxSummary(office: PostOffice) {
+  if (office.mailboxes.length === 0) return "No PO box assigned";
+  return office.mailboxes.map(box => `PO Box ${box.boxNumber}`).join(", ");
+}
+
+function mapCalloutContent(office: PostOffice) {
+  const content = document.createElement("div");
+  content.className = "map-callout";
+  const title = document.createElement("strong");
+  title.textContent = office.name;
+  const boxes = document.createElement("span");
+  boxes.textContent = officeBoxSummary(office);
+  const address = document.createElement("span");
+  address.textContent = office.address;
+  content.append(title, boxes, address);
+  if (office.phone) {
+    const phone = document.createElement("a");
+    phone.href = `tel:${office.phone.replace(/[^+\d]/g, "")}`;
+    phone.textContent = office.phone;
+    content.append(phone);
+  }
+  const waiting = office.mailboxes.filter(hasWaitingItem).length;
+  const status = document.createElement("span");
+  status.className = waiting > 0 ? "map-callout-status waiting" : "map-callout-status";
+  status.textContent = waiting > 0 ? `${waiting} ${waiting === 1 ? "box" : "boxes"} awaiting collection` : "No collection waiting";
+  const directions = document.createElement("a");
+  directions.href = appleMapsDirectionsUrl(office);
+  directions.target = "_blank";
+  directions.rel = "noreferrer";
+  directions.textContent = "Directions";
+  content.append(status, directions);
+  return content;
 }
 
 function TeamSection({ snapshot, members, refresh, setError }: { snapshot: DashboardSnapshot; members: TeamMember[]; refresh: () => Promise<void>; setError: (value: string | null) => void }) {
@@ -2482,25 +2508,6 @@ function latestWaitingDetection(box: Mailbox) {
     box.mailWaiting ? box.latestNotificationAt : undefined,
     box.parcelWaiting ? box.latestParcelNotificationAt : undefined
   ].filter((value): value is string => Boolean(value)).sort((a, b) => Date.parse(b) - Date.parse(a))[0];
-}
-
-function openStreetMapEmbedUrl(offices: PostOffice[], activeOffice: PostOffice) {
-  const located = offices.filter(validMapCoordinate);
-  const latitudes = located.map(office => office.latitude);
-  const longitudes = located.map(office => office.longitude);
-  const latitudePadding = Math.max((Math.max(...latitudes) - Math.min(...latitudes)) * 0.15, 0.02);
-  const longitudePadding = Math.max((Math.max(...longitudes) - Math.min(...longitudes)) * 0.15, 0.02);
-  const params = new URLSearchParams({
-    bbox: [
-      Math.min(...longitudes) - longitudePadding,
-      Math.min(...latitudes) - latitudePadding,
-      Math.max(...longitudes) + longitudePadding,
-      Math.max(...latitudes) + latitudePadding
-    ].join(","),
-    layer: "mapnik",
-    marker: `${activeOffice.latitude},${activeOffice.longitude}`
-  });
-  return `https://www.openstreetmap.org/export/embed.html?${params.toString()}`;
 }
 
 function validMapCoordinate(office: PostOffice) {
