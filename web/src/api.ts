@@ -284,6 +284,15 @@ export async function deleteUser(userId: string): Promise<void> {
   if (!response.ok) throw new Error(await errorMessage(response));
 }
 
+export async function restoreUser(userId: string): Promise<TeamMember> {
+  const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/team/users/${userId}/restore`, {
+    method: "POST",
+    credentials: "include"
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
 export async function createPostOffice(input: CreatePostOfficeInput) {
   const response = await fetch(`${apiBase}/api/v1/workspaces/${workspaceId}/post-offices`, {
     method: "POST",

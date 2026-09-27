@@ -458,6 +458,14 @@ export async function buildServer(store: AppStore = new MemoryStore()) {
     return reply.code(204).send();
   });
 
+  app.post("/api/v1/workspaces/:workspaceId/team/users/:userId/restore", async (request) => {
+    const { workspaceId, userId } = request.params as { workspaceId: string; userId: string };
+    const session = await securedSession(request, workspaceId);
+    const member = await store.restoreUser(session, workspaceId, userId);
+    realtimeHub.emitWorkspace(workspaceId, { type: "workspace.changed" });
+    return member;
+  });
+
   app.post("/api/v1/workspaces/:workspaceId/post-offices", async (request) => {
     const { workspaceId } = request.params as { workspaceId: string };
     const body = createPostOfficeSchema.parse(request.body);

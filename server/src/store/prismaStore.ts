@@ -1205,6 +1205,38 @@ export class PrismaStore implements AppStore {
     });
   }
 
+  async restoreUser(session: Session, workspaceId: string, userId: string): Promise<TeamMemberSummary> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockManagement(tx, workspaceId, session);
+      const member = await tx.workspaceMember.findUnique({
+        where: { workspaceId_userId: { workspaceId, userId } },
+        include: { user: { include: { profile: true } } }
+      });
+      if (!member) throw new NotFoundError("User not found.");
+      if (!member.deletedAt) throw new ConflictError("This user is already in the team directory.");
+      const restored = await tx.workspaceMember.update({
+        where: { id: member.id },
+        data: {
+          status: "ACTIVE",
+          deletedAt: null,
+          updatedAt: new Date(Math.max(Date.now(), member.updatedAt.getTime() + 1))
+        }
+      });
+      await this.audit(session.userId, workspaceId, "member.restored", "user", userId, { previousDeletedAt: member.deletedAt.toISOString() }, tx);
+      return {
+        id: member.user.id,
+        version: restored.updatedAt.toISOString(),
+        email: member.user.email,
+        displayName: member.user.profile?.displayName ?? member.user.email,
+        avatar: member.user.profile?.avatar ?? undefined,
+        role: restored.role,
+        status: restored.status,
+        active: member.user.active && restored.status === "ACTIVE"
+      };
+    });
+  }
+
   async createPostOffice(session: Session, workspaceId: string, input: CreatePostOfficeInput): Promise<PostOffice> {
     await this.requireMember(session, workspaceId, "ADMIN");
     return this.prisma.$transaction(async (tx) => {

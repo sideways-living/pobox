@@ -37,6 +37,7 @@ import {
   realtimeUrl,
   releasePostOfficeClaim,
   resolveReviewItem,
+  restoreUser,
   searchPostOfficeLocations,
   syncPostOfficeDirectory,
   updateMailbox,
@@ -1170,8 +1171,8 @@ function MapSection({ snapshot }: { snapshot: DashboardSnapshot }) {
   return (
     <div className="full-map-page">
       <div className="map-page-legend" aria-label="Map legend">
-        <span><i className="map-legend-pin waiting" />Mail to collect</span>
-        <span><i className="map-legend-pin clear" />No collection</span>
+        <span><img className="map-legend-logo waiting" src="/icons/icon-192.png" alt="" />Mail to collect</span>
+        <span><img className="map-legend-logo clear" src="/icons/icon-192.png" alt="" />No collection</span>
         <strong>{mappedOffices.length} post offices</strong>
       </div>
       {mappedOffices.length > 0 ? (
@@ -1219,9 +1220,10 @@ function AppleMapPanel({ offices, isAdmin }: { offices: PostOffice[]; isAdmin: b
           marker.type = "button";
           marker.className = "mapkit-office-marker";
           marker.setAttribute("aria-label", `${office.name}, ${officeBoxSummary(office)}`);
-          const pin = document.createElement("span");
-          pin.className = `office-map-pin ${waiting > 0 ? "waiting" : "clear"}`;
-          pin.setAttribute("aria-hidden", "true");
+          const pin = document.createElement("img");
+          pin.className = `office-map-logo ${waiting > 0 ? "waiting" : "clear"}`;
+          pin.src = "/icons/icon-192.png";
+          pin.alt = "";
           const hover = document.createElement("span");
           hover.className = "mapkit-hover-label";
           const hoverName = document.createElement("strong");
@@ -1235,7 +1237,6 @@ function AppleMapPanel({ offices, isAdmin }: { offices: PostOffice[]; isAdmin: b
           title: office.name,
           subtitle: officeBoxSummary(office),
           accessibilityLabel: `${office.name}, ${waiting > 0 ? `${waiting} boxes awaiting collection` : "no collection waiting"}`,
-          anchorOffset: new DOMPoint(0, -19),
           calloutEnabled: true,
           callout: { calloutContentForAnnotation: () => mapCalloutContent(office) }
         });
@@ -1294,11 +1295,11 @@ function MapFallback({ offices, message }: { offices: PostOffice[]; message?: st
       const marker = L.marker([office.latitude, office.longitude], {
         icon: L.divIcon({
           className: "office-map-marker",
-          html: `<span class="office-map-pin ${waiting ? "waiting" : "clear"}" aria-hidden="true"></span>`,
-          iconSize: [30, 40],
-          iconAnchor: [15, 38],
-          popupAnchor: [0, -34],
-          tooltipAnchor: [0, -32]
+          html: `<img class="office-map-logo ${waiting ? "waiting" : "clear"}" src="/icons/icon-192.png" alt="">`,
+          iconSize: [42, 42],
+          iconAnchor: [21, 21],
+          popupAnchor: [0, -22],
+          tooltipAnchor: [0, -22]
         }),
         title: `${office.name} - ${officeBoxSummary(office)}`,
         alt: office.name
@@ -1412,6 +1413,17 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
     }
   }
 
+  async function restoreMember(member: TeamMember) {
+    if (!window.confirm(`Restore ${member.displayName} as an active ${member.role === "ADMIN" ? "admin" : "member"}?`)) return;
+    try {
+      await restoreUser(member.id);
+      await refresh();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to restore user.");
+    }
+  }
+
   return (
     <div className="page-grid">
       <section className="page-main">
@@ -1430,16 +1442,22 @@ function TeamSection({ snapshot, members, refresh, setError }: { snapshot: Dashb
           </div>
         </Panel>
         <Panel title="Deleted Users" aside={`${deletedMembers.length} ${deletedMembers.length === 1 ? "user" : "users"}`}>
-          {deletedMembers.length === 0 ? <p className="muted-line">No deleted users.</p> : (
-            <div className="team-list">
-              {deletedMembers.map((member) => (
-                <div className="team-member deleted-team-member" key={member.id}>
-                  <div className="team-identity"><UserAvatar avatar={member.avatar} name={member.displayName} /><div><strong>{member.displayName}</strong><span>{member.email}</span><small>Deleted {new Date(member.deletedAt!).toLocaleString("en-AU")}</small></div></div>
-                  <StatusPill tone="muted">Deleted</StatusPill>
-                </div>
-              ))}
-            </div>
-          )}
+          <details className="deleted-users-disclosure">
+            <summary>{deletedMembers.length === 0 ? "No deleted users" : "Show deleted users"}</summary>
+            {deletedMembers.length > 0 && (
+              <div className="team-list">
+                {deletedMembers.map((member) => (
+                  <div className="team-member deleted-team-member" key={member.id}>
+                    <div className="team-identity"><UserAvatar avatar={member.avatar} name={member.displayName} /><div><strong>{member.displayName}</strong><span>{member.email}</span><small>Deleted {new Date(member.deletedAt!).toLocaleString("en-AU")}</small></div></div>
+                    <div className="row-actions">
+                      <StatusPill tone="muted">Deleted</StatusPill>
+                      {snapshot.currentUser.role === "ADMIN" && <button type="button" className="icon-button large-action-icon" title="Restore user" aria-label={`Restore ${member.displayName}`} onClick={() => restoreMember(member)}><UserRoundCheck size={24} /></button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </details>
         </Panel>
       </section>
       <aside className="side-panels">

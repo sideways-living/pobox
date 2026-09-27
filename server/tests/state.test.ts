@@ -542,6 +542,13 @@ describe("shared mailbox state", () => {
     expect((await store.listMembers(daniel, "ws_company")).find((candidate) => candidate.id === user.id)?.deletedAt).toBe(deletedAt);
     await expect(store.updateUser(daniel, "ws_company", user.id, { status: "ACTIVE" })).rejects.toThrow("Deleted users cannot be edited or reactivated.");
     expect([...store.auditEvents.values()].some((event) => event.eventType === "member.deleted" && event.entityId === user.id)).toBe(true);
+
+    const restored = await store.restoreUser(daniel, "ws_company", user.id);
+    expect(restored.status).toBe("ACTIVE");
+    expect(restored.active).toBe(true);
+    expect((await store.listMembers(daniel, "ws_company")).find((candidate) => candidate.id === user.id)?.deletedAt).toBeUndefined();
+    expect([...store.auditEvents.values()].some((event) => event.eventType === "member.restored" && event.entityId === user.id)).toBe(true);
+    await expect(store.restoreUser(daniel, "ws_company", user.id)).rejects.toThrow("already in the team directory");
   });
 
   it("does not allow admins to delete themselves", async () => {

@@ -926,6 +926,16 @@ input, select {
   grid-template-rows: auto;
 }
 
+.deleted-users-disclosure summary {
+  cursor: pointer;
+  color: #31423b;
+  font-weight: 750;
+}
+
+.deleted-users-disclosure[open] summary {
+  margin-bottom: 14px;
+}
+
 .team-status-text {
   color: #46534e;
   font-size: 0.86rem;
@@ -1335,17 +1345,14 @@ a.icon-button {
   gap: 7px;
 }
 
-.map-legend-pin {
-  display: inline-block;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: #1d2329;
-  box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(29, 35, 41, 0.22);
+.map-legend-logo {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(29, 35, 41, 0.2));
 }
 
-.map-legend-pin.waiting { background: #168a4b; }
-.map-legend-pin.clear { background: #1d2329; }
+.map-legend-logo.clear { filter: grayscale(1) contrast(0.9) drop-shadow(0 1px 2px rgba(29, 35, 41, 0.18)); }
 
 .map-empty-state {
   display: grid;
@@ -1396,34 +1403,21 @@ a.icon-button {
   background: transparent;
 }
 
-.office-map-pin {
-  position: relative;
+.office-map-logo {
   display: block;
-  width: 26px;
-  height: 26px;
-  border: 3px solid #fff;
-  border-radius: 50% 50% 50% 0;
-  background: #1d2329;
-  box-shadow: 0 3px 8px rgba(20, 28, 33, 0.35);
-  transform: rotate(-45deg);
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 5px rgba(20, 28, 33, 0.36));
 }
 
-.office-map-pin::after {
-  content: "";
-  position: absolute;
-  inset: 7px;
-  border-radius: 50%;
-  background: #fff;
-}
-
-.office-map-pin.waiting { background: #168a4b; }
-.office-map-pin.clear { background: #1d2329; }
+.office-map-logo.clear { filter: grayscale(1) contrast(0.88) drop-shadow(0 3px 5px rgba(20, 28, 33, 0.3)); }
 
 .mapkit-office-marker {
   position: relative;
   display: block;
-  width: 30px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -2177,12 +2171,74 @@ a.icon-button {
     grid-template-columns: 1fr;
   }
 
+  .post-offices-page .panel {
+    padding: 14px;
+  }
+
+  .post-offices-page .panel-heading {
+    gap: 5px;
+    margin-bottom: 14px;
+  }
+
+  .post-offices-page .office {
+    margin-top: 22px;
+    padding-top: 20px;
+  }
+
+  .post-offices-page .office:first-child {
+    margin-top: 0;
+    padding-top: 0;
+  }
+
+  .post-offices-page .office-title {
+    gap: 12px;
+  }
+
+  .post-offices-page .office-title h3 {
+    margin: 0;
+    line-height: 1.28;
+  }
+
+  .post-offices-page .office-title p {
+    margin: 5px 0 0;
+    line-height: 1.45;
+  }
+
+  .post-offices-page .office-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 12px;
+    margin-top: 10px;
+    line-height: 1.4;
+  }
+
+  .post-offices-page .office-actions {
+    justify-content: flex-start;
+  }
+
+  .post-offices-page .mailbox-table {
+    margin-top: 16px;
+  }
+
   .mailbox-table-head {
     display: none;
   }
 
   .mailbox-row, .mailbox-row.editable-row, .office-edit .edit-fields, .mailbox-row.editable-row .edit-fields {
     grid-template-columns: 1fr;
+  }
+
+  .post-offices-page .mailbox-row {
+    gap: 10px;
+    padding: 14px 12px;
+  }
+
+  .post-offices-page .mailbox-row > div {
+    gap: 4px;
+  }
+
+  .post-offices-page .mailbox-row > span {
+    line-height: 1.4;
   }
 
   .review-item {

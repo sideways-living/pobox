@@ -222,6 +222,13 @@ final class iPhoneMailboxViewModel: ObservableObject {
         }
     }
 
+    func restoreUser(_ member: TeamMember) async {
+        await run {
+            _ = try await client.restoreUser(workspaceId: workspaceId, userId: member.id)
+            try await loadWorkspace()
+        }
+    }
+
     func searchPostOfficeLocations(query: String) async {
         await run {
             postOfficeLocationResults = try await client.searchPostOfficeLocations(workspaceId: workspaceId, query: query)
@@ -557,6 +564,8 @@ struct iPhoneDashboardView: View {
                     await model.updateUser(member, email: email, displayName: displayName, role: role, status: status)
                 }, deleteUser: { member in
                     await model.deleteUser(member)
+                }, restoreUser: { member in
+                    await model.restoreUser(member)
                 })
 
             default:
@@ -817,11 +826,17 @@ struct iPhoneMailboxList: View {
                         ContentUnavailableView("No PO box assigned", systemImage: "mail.stack", description: Text("This post office can be deleted or given a PO box."))
                     }
                 } header: {
-                    Label(office.name, systemImage: "building.2.fill")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                } footer: {
-                    Text(office.address)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label(office.name, systemImage: "building.2.fill")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        Text(office.address)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textCase(nil)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.bottom, 4)
                 }
             }
         }
@@ -912,6 +927,7 @@ struct iPhoneMailboxRow: View {
                 .disabled(postOfficeId.isEmpty || boxNumber.isEmpty)
             }
         }
+        .padding(.vertical, 4)
         .confirmationDialog("Delete PO Box \(mailbox.boxNumber)?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete PO Box", role: .destructive) {
                 Task { await deleteMailbox?(mailbox) }
@@ -1008,9 +1024,11 @@ struct iPhoneMapList: View {
                             Button {
                                 selectedOfficeID = office.id
                             } label: {
-                                Image(systemName: "mappin.circle.fill")
-                                    .font(.system(size: 34, weight: .semibold))
-                                    .foregroundStyle(office.hasWaitingCollection ? PoboxTheme.green : Color.black)
+                                Image("HeaderIcon")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 44, height: 44)
+                                    .grayscale(office.hasWaitingCollection ? 0 : 1)
                                     .shadow(color: .black.opacity(0.24), radius: 3, y: 2)
                             }
                             .buttonStyle(.plain)
@@ -1031,10 +1049,8 @@ struct iPhoneMapList: View {
             }
 
             HStack(spacing: 12) {
-                Label("Mail", systemImage: "mappin.circle.fill")
-                    .foregroundStyle(PoboxTheme.green)
-                Label("Clear", systemImage: "mappin.circle.fill")
-                    .foregroundStyle(.black)
+                iPhoneMapLegendItem(title: "Mail", grayscale: false)
+                iPhoneMapLegendItem(title: "Clear", grayscale: true)
                 Spacer(minLength: 4)
                 Text("\(offices.count) offices")
                     .fontWeight(.semibold)
@@ -1057,6 +1073,22 @@ struct iPhoneMapList: View {
                 if !isPresented && selectedOfficeID == officeID { selectedOfficeID = nil }
             }
         )
+    }
+}
+
+private struct iPhoneMapLegendItem: View {
+    let title: String
+    let grayscale: Bool
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image("HeaderIcon")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 22, height: 22)
+                .grayscale(grayscale ? 1 : 0)
+            Text(title)
+        }
     }
 }
 
@@ -1467,6 +1499,8 @@ struct iPhoneTeamView: View {
     let createUser: (String, String, String, String) async -> Void
     let updateUser: (TeamMember, String, String, String, String) async -> Void
     let deleteUser: (TeamMember) async -> Void
+    let restoreUser: (TeamMember) async -> Void
+    @State private var deletedUsersExpanded = false
 
     var body: some View {
         Form {
@@ -1488,24 +1522,25 @@ struct iPhoneTeamView: View {
                 }
             }
 
-            Section("Deleted Users") {
-                if !members.contains(where: { $0.deletedAt != nil }) {
-                    Text("No deleted users.").foregroundStyle(.secondary)
-                }
-                ForEach(members.filter { $0.deletedAt != nil }) { member in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(member.displayName).font(.headline)
-                        Text(member.email).foregroundStyle(.secondary)
-                        Text("Deleted").foregroundStyle(.secondary)
-                    }
-                }
-            }
-
             if snapshot?.currentUser.role == "ADMIN" {
                 iPhoneCreateUserForm(createUser: createUser)
             } else {
                 Section("Add User") {
                     Label("Admin required", systemImage: "lock")
+                }
+            }
+
+            Section {
+                DisclosureGroup(isExpanded: $deletedUsersExpanded) {
+                    if !members.contains(where: { $0.deletedAt != nil }) {
+                        Text("No deleted users.").foregroundStyle(.secondary)
+                    }
+                    ForEach(members.filter { $0.deletedAt != nil }) { member in
+                        iPhoneDeletedTeamMemberRow(member: member, canRestore: snapshot?.currentUser.role == "ADMIN", restoreUser: restoreUser)
+                    }
+                } label: {
+                    Label("Deleted Users (\(members.filter { $0.deletedAt != nil }.count))", systemImage: "archivebox")
+                        .font(.headline)
                 }
             }
         }
@@ -1608,9 +1643,15 @@ struct iPhoneTeamMemberRow: View {
                         editing = false
                     }
                 } label: {
-                    Label("Save", systemImage: "checkmark")
+                    Label(member.id == currentUserId ? "Save My Details" : "Save User", systemImage: "checkmark")
                 }
+                .buttonStyle(.borderedProminent)
                 .disabled(displayName.isEmpty || email.isEmpty)
+                if member.id == currentUserId {
+                    Text("You can update your name and email. Your own admin role and access status are protected.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .task(id: member.id) {
@@ -1640,6 +1681,44 @@ struct iPhoneTeamMemberRow: View {
             URLQueryItem(name: "email", value: member.email)
         ]
         return components.url!
+    }
+}
+
+private struct iPhoneDeletedTeamMemberRow: View {
+    let member: TeamMember
+    let canRestore: Bool
+    let restoreUser: (TeamMember) async -> Void
+    @State private var confirmRestore = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            iPhoneTeamAvatar(avatar: member.avatar, name: member.displayName, active: false, size: 38)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(member.displayName).font(.headline)
+                Text(member.email).font(.caption).foregroundStyle(.secondary)
+                Text("Deleted · \(member.role.capitalized)").font(.caption2).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if canRestore {
+                Button {
+                    confirmRestore = true
+                } label: {
+                    Image(systemName: "person.badge.plus")
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.circle)
+                .help("Restore user")
+                .accessibilityLabel("Restore \(member.displayName)")
+            }
+        }
+        .confirmationDialog("Restore \(member.displayName)?", isPresented: $confirmRestore, titleVisibility: .visible) {
+            Button("Restore as \(member.role.capitalized)") {
+                Task { await restoreUser(member) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This returns the user to the active team directory and restores their workspace access.")
+        }
     }
 }
 
@@ -1777,7 +1856,7 @@ struct iPhoneCreateUserForm: View {
     @State private var role = "MEMBER"
 
     var body: some View {
-        Section("Add User") {
+        Section {
             TextField("Name", text: $displayName)
                 .textContentType(.name)
             TextField("Email", text: $email)
@@ -1799,9 +1878,15 @@ struct iPhoneCreateUserForm: View {
                     role = "MEMBER"
                 }
             } label: {
-                Label("Create User", systemImage: "plus")
+                Label("Create User and Send Setup Email", systemImage: "person.badge.plus")
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.borderedProminent)
             .disabled(displayName.isEmpty || email.isEmpty || password.count < 12)
+        } header: {
+            Text("Create New User")
+        } footer: {
+            Text("Complete all fields, then use the blue Create User button. The temporary password must contain at least 12 characters.")
         }
     }
 }

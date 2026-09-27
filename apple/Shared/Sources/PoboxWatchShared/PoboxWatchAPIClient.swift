@@ -206,6 +206,15 @@ public actor PoboxWatchAPIClient {
         try validate(response, data: data)
     }
 
+    public func restoreUser(workspaceId: String, userId: String) async throws -> TeamMember {
+        let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/team/users/\(userId)/restore")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        let (data, response) = try await session.data(for: request)
+        try validate(response, data: data)
+        return try decoder.decode(TeamMember.self, from: data)
+    }
+
     public func createPostOffice(workspaceId: String, input: CreatePostOfficeInput) async throws -> PostOffice {
         let url = baseURL.appending(path: "/api/v1/workspaces/\(workspaceId)/post-offices")
         var request = URLRequest(url: url)

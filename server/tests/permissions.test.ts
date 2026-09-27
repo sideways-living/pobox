@@ -64,6 +64,7 @@ describe("workspace permissions and live updates", () => {
   it("rejects member administration and cross-workspace resource IDs", async () => {
     expect((await request(member, "POST", "ws_company/mailboxes", { postOfficeId: "po_melbourne_gpo", boxNumber: "99" })).statusCode).toBe(403);
     expect((await request(member, "DELETE", `ws_company/team/users/${admin.userId}`)).statusCode).toBe(403);
+    expect((await request(member, "POST", `ws_company/team/users/${admin.userId}/restore`, {})).statusCode).toBe(403);
     expect((await request(member, "POST", "ws_company/post-office-locations/sync", {})).statusCode).toBe(403);
     store.postOffices.set("foreign", { ...store.postOffices.get("po_melbourne_gpo")!, id: "foreign", workspaceId: "other" });
     expect((await request(admin, "POST", "ws_company/mailboxes", { postOfficeId: "foreign", boxNumber: "1" })).statusCode).toBe(404);

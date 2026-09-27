@@ -183,6 +183,7 @@ export interface AppStore {
   updateUser(session: Session, workspaceId: string, userId: string, input: UpdateUserInput): Promise<TeamMemberSummary>;
   updateProfile(session: Session, workspaceId: string, avatar: string): Promise<{ avatar?: string }>;
   deleteUser(session: Session, workspaceId: string, userId: string): Promise<void>;
+  restoreUser(session: Session, workspaceId: string, userId: string): Promise<TeamMemberSummary>;
   createPostOffice(session: Session, workspaceId: string, input: CreatePostOfficeInput): Promise<PostOffice>;
   updatePostOffice(session: Session, workspaceId: string, postOfficeId: string, input: UpdatePostOfficeInput): Promise<PostOffice>;
   deletePostOffice(session: Session, workspaceId: string, postOfficeId: string): Promise<void>;

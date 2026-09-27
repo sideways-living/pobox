@@ -977,6 +977,27 @@ export class MemoryStore implements AppStore {
     this.audit(session.userId, workspaceId, "member.deleted", "user", userId, {});
   }
 
+  async restoreUser(session: Session, workspaceId: string, userId: string): Promise<TeamMemberSummary> {
+    await this.requireMember(session, workspaceId, "ADMIN");
+    const member = [...this.members.values()].find((candidate) => candidate.workspaceId === workspaceId && candidate.userId === userId);
+    const user = this.users.get(userId);
+    if (!member || !user) throw new NotFoundError("User not found.");
+    if (!member.deletedAt) throw new ConflictError("This user is already in the team directory.");
+    const restoredMember = { ...member, version: nanoid(), status: "ACTIVE" as const, deletedAt: undefined };
+    this.members.set(member.id, restoredMember);
+    this.audit(session.userId, workspaceId, "member.restored", "user", userId, { previousDeletedAt: member.deletedAt });
+    return {
+      id: user.id,
+      version: restoredMember.version,
+      email: user.email,
+      displayName: user.displayName,
+      avatar: user.avatar,
+      role: restoredMember.role,
+      status: restoredMember.status,
+      active: user.active
+    };
+  }
+
   async createPostOffice(session: Session, workspaceId: string, input: CreatePostOfficeInput): Promise<PostOffice> {
     await this.requireMember(session, workspaceId, "ADMIN");
     const office: PostOffice = {

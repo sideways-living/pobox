@@ -343,6 +343,13 @@ final class MacMailboxViewModel: ObservableObject {
         }
     }
 
+    func restoreUser(_ member: TeamMember) async {
+        await run {
+            _ = try await client.restoreUser(workspaceId: workspaceId, userId: member.id)
+            try await loadWorkspace()
+        }
+    }
+
     func searchPostOfficeLocations(query: String) async {
         await run {
             postOfficeLocationResults = try await client.searchPostOfficeLocations(workspaceId: workspaceId, query: query)
@@ -810,6 +817,8 @@ struct MacOverviewView: View {
                 await model.updateUser(member, email: email, displayName: displayName, avatar: avatar, role: role, status: status)
             } deleteUser: { member in
                 await model.deleteUser(member)
+            } restoreUser: { member in
+                await model.restoreUser(member)
             }
         case "Settings":
             MacSettingsView(snapshot: model.snapshot, logout: {
@@ -1236,9 +1245,11 @@ struct MacMapView: View {
                                 Button {
                                     selectedOfficeID = office.id
                                 } label: {
-                                    Image(systemName: "mappin.circle.fill")
-                                        .font(.system(size: 34, weight: .semibold))
-                                        .foregroundStyle(office.hasWaitingCollection ? PoboxTheme.green : Color.black)
+                                    Image(nsImage: NSApplication.shared.applicationIconImage)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 44, height: 44)
+                                        .grayscale(office.hasWaitingCollection ? 0 : 1)
                                         .shadow(color: .black.opacity(0.24), radius: 3, y: 2)
                                 }
                                 .buttonStyle(.plain)
@@ -1264,10 +1275,8 @@ struct MacMapView: View {
             }
 
             HStack(spacing: 16) {
-                Label("Mail to collect", systemImage: "mappin.circle.fill")
-                    .foregroundStyle(PoboxTheme.green)
-                Label("No collection", systemImage: "mappin.circle.fill")
-                    .foregroundStyle(.black)
+                MacMapLegendItem(title: "Mail to collect", grayscale: false)
+                MacMapLegendItem(title: "No collection", grayscale: true)
                 Text("\(offices.count) post offices")
                     .fontWeight(.semibold)
             }
@@ -1289,6 +1298,22 @@ struct MacMapView: View {
                 if !isPresented && selectedOfficeID == officeID { selectedOfficeID = nil }
             }
         )
+    }
+}
+
+private struct MacMapLegendItem: View {
+    let title: String
+    let grayscale: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(nsImage: NSApplication.shared.applicationIconImage)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 22, height: 22)
+                .grayscale(grayscale ? 1 : 0)
+            Text(title)
+        }
     }
 }
 
@@ -1664,6 +1689,8 @@ struct MacTeamView: View {
     let createUser: (String, String, String, String) async -> Void
     let updateUser: (TeamMember, String, String, String, String, String) async -> Void
     let deleteUser: (TeamMember) async -> Void
+    let restoreUser: (TeamMember) async -> Void
+    @State private var deletedUsersExpanded = false
 
     var body: some View {
         MacPage(title: "Team", subtitle: "Users with access to this pobox.watch workspace.") {
@@ -1684,24 +1711,34 @@ struct MacTeamView: View {
             }
 
             MacPanel(title: "Deleted Users", aside: "\(members.filter { $0.deletedAt != nil }.count) users") {
-                if !members.contains(where: { $0.deletedAt != nil }) {
-                    Text("No deleted users.").foregroundStyle(.secondary)
-                }
-                ForEach(members.filter { $0.deletedAt != nil }) { member in
-                    HStack(spacing: 12) {
-                        MacUserAvatar(avatar: member.avatar, name: member.displayName)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(member.displayName).font(.headline)
-                            Text(member.email).foregroundStyle(.secondary)
-                            Text("Deleted \(displayDate(member.deletedAt))")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text("Deleted")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                DisclosureGroup(isExpanded: $deletedUsersExpanded) {
+                    if !members.contains(where: { $0.deletedAt != nil }) {
+                        Text("No deleted users.").foregroundStyle(.secondary)
                     }
+                    ForEach(members.filter { $0.deletedAt != nil }) { member in
+                        HStack(spacing: 12) {
+                            MacUserAvatar(avatar: member.avatar, name: member.displayName)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(member.displayName).font(.headline)
+                                Text(member.email).foregroundStyle(.secondary)
+                                Text("Deleted \(displayDate(member.deletedAt))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button {
+                                Task { await restoreUser(member) }
+                            } label: {
+                                Label("Restore", systemImage: "arrow.uturn.backward.circle.fill")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(snapshot?.currentUser.role != "ADMIN")
+                            .help("Restore user access")
+                        }
+                    }
+                } label: {
+                    Text(members.contains(where: { $0.deletedAt != nil }) ? "Show deleted users" : "No deleted users")
+                        .font(.headline)
                 }
             }
 
